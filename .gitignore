@@ -1,0 +1,26 @@
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Local caches
+.gocache/
+.gomodcache/
+coverage.out
+coverage.html
+
+# Runtime data
+cache/
+data/
+
+# Temporary files
+.tmp_*
+*.tmp
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

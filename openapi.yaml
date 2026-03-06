@@ -1,0 +1,728 @@
+﻿openapi: 3.1.0
+info:
+  title: Venera Home Server API
+  version: 0.1.0
+  description: >-
+    Initial API contract for a lightweight local-library server used by a Venera
+    source script. The server unifies local filesystem, SMB, and WebDAV-backed
+    comic libraries behind a stable HTTP API.
+servers:
+  - url: http://localhost:34123/api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: system
+  - name: discovery
+  - name: comics
+  - name: favorites
+  - name: admin
+paths:
+  /bootstrap:
+    get:
+      tags: [system]
+      summary: Load server bootstrap information
+      operationId: getBootstrap
+      responses:
+        '200':
+          description: Bootstrap data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+  /home:
+    get:
+      tags: [discovery]
+      summary: Load home page sections
+      operationId: getHome
+      parameters:
+        - $ref: '#/components/parameters/LibraryId'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Home sections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResponse'
+  /categories:
+    get:
+      tags: [discovery]
+      summary: Load dynamic category groups
+      operationId: getCategories
+      responses:
+        '200':
+          description: Category groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoriesResponse'
+  /comics:
+    get:
+      tags: [comics]
+      summary: Load comics for a category or a filtered list
+      operationId: listComics
+      parameters:
+        - $ref: '#/components/parameters/LibraryId'
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [library, tag, author, storage, all]
+        - name: param
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Comic list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComicListResponse'
+  /search:
+    get:
+      tags: [comics]
+      summary: Search comics
+      operationId: searchComics
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LibraryId'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Search result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+  /comics/{comic_id}:
+    get:
+      tags: [comics]
+      summary: Load comic details
+      operationId: getComic
+      parameters:
+        - $ref: '#/components/parameters/ComicId'
+      responses:
+        '200':
+          description: Comic details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComicDetailsResponse'
+        '404':
+          description: Comic not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /comics/{comic_id}/thumbnails:
+    get:
+      tags: [comics]
+      summary: Load paged thumbnails for a comic or chapter list
+      operationId: getComicThumbnails
+      parameters:
+        - $ref: '#/components/parameters/ComicId'
+        - name: next
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thumbnails
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThumbnailsResponse'
+  /comics/{comic_id}/chapters/{chapter_id}/pages:
+    get:
+      tags: [comics]
+      summary: Load image URLs for a chapter
+      operationId: getChapterPages
+      parameters:
+        - $ref: '#/components/parameters/ComicId'
+        - $ref: '#/components/parameters/ChapterId'
+      responses:
+        '200':
+          description: Page images
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagesResponse'
+  /favorites/folders:
+    get:
+      tags: [favorites]
+      summary: Load favorite folders
+      operationId: getFavoriteFolders
+      parameters:
+        - name: comic_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Favorite folders and membership
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteFoldersResponse'
+    post:
+      tags: [favorites]
+      summary: Create a favorite folder
+      operationId: createFavoriteFolder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFolderRequest'
+      responses:
+        '200':
+          description: Folder created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderMutationResponse'
+  /favorites/folders/{folder_id}:
+    delete:
+      tags: [favorites]
+      summary: Delete a favorite folder
+      operationId: deleteFavoriteFolder
+      parameters:
+        - $ref: '#/components/parameters/FolderId'
+      responses:
+        '200':
+          description: Folder deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /favorites/comics:
+    get:
+      tags: [favorites]
+      summary: Load comics within a favorite folder
+      operationId: getFavoriteComics
+      parameters:
+        - name: folder_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Favorite comics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComicListResponse'
+  /favorites/items:
+    post:
+      tags: [favorites]
+      summary: Add a comic to a favorite folder
+      operationId: addFavoriteItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FavoriteItemRequest'
+      responses:
+        '200':
+          description: Comic added to favorites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+    delete:
+      tags: [favorites]
+      summary: Remove a comic from a favorite folder
+      operationId: removeFavoriteItem
+      parameters:
+        - name: comic_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: folder_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comic removed from favorites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+  /admin/rescan:
+    post:
+      tags: [admin]
+      summary: Request a library rescan
+      operationId: requestRescan
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RescanRequest'
+      responses:
+        '200':
+          description: Rescan job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+  /admin/metadata/refresh:
+    post:
+      tags: [admin]
+      summary: Request metadata refresh
+      operationId: requestMetadataRefresh
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataRefreshRequest'
+      responses:
+        '200':
+          description: Refresh job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-token
+  parameters:
+    LibraryId:
+      name: library_id
+      in: query
+      schema:
+        type: string
+    Sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+        enum: [updated_desc, added_desc, title_asc, title_desc, random]
+        default: updated_desc
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 24
+    ComicId:
+      name: comic_id
+      in: path
+      required: true
+      schema:
+        type: string
+    ChapterId:
+      name: chapter_id
+      in: path
+      required: true
+      schema:
+        type: string
+    FolderId:
+      name: folder_id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    OkResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          properties:
+            ok:
+              type: boolean
+              const: true
+    Library:
+      type: object
+      required: [id, name, kind, series_count]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [local, smb, webdav]
+        series_count:
+          type: integer
+    CapabilityMap:
+      type: object
+      required: [favorites, thumbnails, rescan, metadata_fetch]
+      properties:
+        favorites:
+          type: boolean
+        thumbnails:
+          type: boolean
+        rescan:
+          type: boolean
+        metadata_fetch:
+          type: boolean
+    BootstrapResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [server, capabilities, libraries, defaults]
+          properties:
+            server:
+              type: object
+              required: [name, version]
+              properties:
+                name:
+                  type: string
+                version:
+                  type: string
+            capabilities:
+              $ref: '#/components/schemas/CapabilityMap'
+            libraries:
+              type: array
+              items:
+                $ref: '#/components/schemas/Library'
+            defaults:
+              type: object
+              required: [sort, page_size]
+              properties:
+                sort:
+                  type: string
+                page_size:
+                  type: integer
+    CategoryItem:
+      type: object
+      required: [id, label]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        count:
+          type: integer
+    CategoryGroup:
+      type: object
+      required: [key, title, items]
+      properties:
+        key:
+          type: string
+          enum: [library, tag, author, storage]
+        title:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryItem'
+    CategoriesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [groups]
+          properties:
+            groups:
+              type: array
+              items:
+                $ref: '#/components/schemas/CategoryGroup'
+    ComicCard:
+      type: object
+      required: [id, title, cover_url]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        subtitle:
+          type: string
+        cover_url:
+          type: string
+          format: uri
+        tags:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        favorite_id:
+          type: string
+        stars:
+          type: number
+    Paging:
+      type: object
+      required: [page, page_size, max_page, total]
+      properties:
+        page:
+          type: integer
+        page_size:
+          type: integer
+        max_page:
+          type: integer
+        total:
+          type: integer
+    ComicListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [items, paging]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ComicCard'
+            paging:
+              $ref: '#/components/schemas/Paging'
+    SearchResponse:
+      allOf:
+        - $ref: '#/components/schemas/ComicListResponse'
+    HomeSection:
+      type: object
+      required: [id, title, items]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComicCard'
+        view_more:
+          type: object
+          properties:
+            category:
+              type: string
+            param:
+              type: string
+            library_id:
+              type: string
+    HomeResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [sections]
+          properties:
+            sections:
+              type: array
+              items:
+                $ref: '#/components/schemas/HomeSection'
+    Chapter:
+      type: object
+      required: [id, title, index, page_count]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        index:
+          type: integer
+        page_count:
+          type: integer
+    FavoriteState:
+      type: object
+      required: [is_favorited, folder_ids]
+      properties:
+        is_favorited:
+          type: boolean
+        folder_ids:
+          type: array
+          items:
+            type: string
+    ComicDetailsPayload:
+      type: object
+      required: [id, title, cover_url, chapters, tags, favorite]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        subtitle:
+          type: string
+        cover_url:
+          type: string
+          format: uri
+        description:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        chapters:
+          type: array
+          items:
+            $ref: '#/components/schemas/Chapter'
+        favorite:
+          $ref: '#/components/schemas/FavoriteState'
+        recommend:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComicCard'
+        update_time:
+          type: string
+        upload_time:
+          type: string
+        source_url:
+          type: string
+          format: uri
+        stars:
+          type: number
+    ComicDetailsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ComicDetailsPayload'
+    ThumbnailsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [thumbnails]
+          properties:
+            thumbnails:
+              type: array
+              items:
+                type: string
+                format: uri
+            next:
+              type: string
+              nullable: true
+    PagesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [images]
+          properties:
+            images:
+              type: array
+              items:
+                type: string
+                format: uri
+    FavoriteFolder:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    FavoriteFoldersResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [folders, favorited]
+          properties:
+            folders:
+              type: array
+              items:
+                $ref: '#/components/schemas/FavoriteFolder'
+            favorited:
+              type: array
+              items:
+                type: string
+    CreateFolderRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+    FolderMutationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, name]
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+    FavoriteItemRequest:
+      type: object
+      required: [comic_id, folder_id]
+      properties:
+        comic_id:
+          type: string
+        folder_id:
+          type: string
+    RescanRequest:
+      type: object
+      properties:
+        library_id:
+          type: string
+          nullable: true
+    MetadataRefreshRequest:
+      type: object
+      properties:
+        library_id:
+          type: string
+          nullable: true
+        comic_id:
+          type: string
+          nullable: true
+    JobResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [job_id, status]
+          properties:
+            job_id:
+              type: string
+            status:
+              type: string
+              enum: [queued, running]

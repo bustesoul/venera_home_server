@@ -1,0 +1,45 @@
+﻿[server]
+listen = "0.0.0.0:34123"
+token = "change-me"
+data_dir = "./data"
+cache_dir = "./cache"
+log_level = "info"
+
+[scan]
+concurrency = 4
+extract_archives = true
+watch_local = false
+rescan_interval_minutes = 30
+
+[metadata]
+read_comicinfo = true
+read_sidecar = true
+allow_remote_fetch = false
+
+[[libraries]]
+id = "local-main"
+name = "Local Manga"
+kind = "local"
+root = "D:/Comics"
+scan_mode = "auto"
+
+[[libraries]]
+id = "nas-manga"
+name = "NAS Manga"
+kind = "smb"
+host = "192.168.1.10"
+share = "Media"
+path = "Comics"
+username = "reader"
+password_env = "SMB_PASS"
+scan_mode = "auto"
+
+[[libraries]]
+id = "dav-manga"
+name = "WebDAV Manga"
+kind = "webdav"
+url = "https://dav.example.com/remote.php/dav/files/user"
+path = "/Comics"
+username = "reader"
+password_env = "WEBDAV_PASS"
+scan_mode = "auto"
