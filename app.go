@@ -146,6 +146,33 @@ func (a *App) Rescan(ctx context.Context, libraryID string) error {
 	return nil
 }
 
+func normalizeScanMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "auto":
+		return "auto"
+	case "flat":
+		return "flat"
+	default:
+		return "auto"
+	}
+}
+
+func (a *App) effectiveScanMode(ctx context.Context, lib LibraryConfig, backend Backend, rel string) string {
+	mode := normalizeScanMode(lib.ScanMode)
+	if !a.cfg.Metadata.ReadSidecar {
+		return mode
+	}
+	raw, err := backend.ReadSmallFile(ctx, relJoin(rel, ".venera.json"), 64*1024)
+	if err != nil {
+		return mode
+	}
+	var override ParsedMetadata
+	if json.Unmarshal(raw, &override) != nil || strings.TrimSpace(override.ScanMode) == "" {
+		return mode
+	}
+	return normalizeScanMode(override.ScanMode)
+}
+
 func (a *App) scanLibrary(ctx context.Context, lib LibraryConfig, backend Backend) ([]*Comic, error) {
 	return a.scanDir(ctx, lib, backend, "")
 }
@@ -173,6 +200,7 @@ func (a *App) scanDir(ctx context.Context, lib LibraryConfig, backend Backend, r
 		return []*Comic{comic}, nil
 	}
 
+	scanMode := a.effectiveScanMode(ctx, lib, backend, rel)
 	chapterDirs := make([]Entry, 0, len(dirs))
 	for _, dir := range dirs {
 		ok, err := a.dirLooksLikeChapter(ctx, backend, dir.RelPath)
@@ -180,10 +208,26 @@ func (a *App) scanDir(ctx context.Context, lib LibraryConfig, backend Backend, r
 			chapterDirs = append(chapterDirs, dir)
 		}
 	}
-	if rel != "" && len(archives)+len(chapterDirs) >= 2 {
-		comic, err := a.buildSeriesComic(ctx, lib, backend, rel, archives, chapterDirs)
-		if err == nil {
-			return []*Comic{comic}, nil
+	if scanMode == "auto" && rel != "" && len(dirs) == len(chapterDirs) && len(archives)+len(chapterDirs) >= 2 {
+		parentMeta, _ := a.loadMetadataForDir(ctx, backend, rel, baseNameTitle(rel))
+		candidates := make([]chapterCandidate, 0, len(archives)+len(chapterDirs))
+		for _, dir := range chapterDirs {
+			candidate, err := a.inspectChapterDirCandidate(ctx, backend, dir.RelPath)
+			if err == nil {
+				candidates = append(candidates, candidate)
+			}
+		}
+		for _, archive := range archives {
+			candidate, err := a.inspectArchiveCandidate(ctx, backend, archive.RelPath, baseNameTitle(archive.Name))
+			if err == nil {
+				candidates = append(candidates, candidate)
+			}
+		}
+		if meta, groupKey, ok := shouldBuildSeries(parentMeta, candidates); ok {
+			comic, err := a.buildSeriesComicFromCandidates(lib, rel, groupKey, meta, candidates)
+			if err == nil {
+				return []*Comic{comic}, nil
+			}
 		}
 	}
 
@@ -261,9 +305,271 @@ func (a *App) buildBaseComic(lib LibraryConfig, rel string, title string, rootTy
 	}
 }
 
+type chapterCandidate struct {
+	Meta         ParsedMetadata
+	GroupKey     string
+	GroupTitle   string
+	ChapterTitle string
+	SourceType   string
+	SourceRef    string
+	EntryPrefix  string
+	PageCount    int
+	SortKey      string
+}
+
+type archiveFolderGroup struct {
+	Prefix    string
+	Title     string
+	PageCount int
+}
+
+func normalizeMetaKey(value string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(value))), " ")
+}
+
+func explicitSeriesKey(meta ParsedMetadata) string {
+	switch {
+	case meta.hasExplicitSeries && strings.TrimSpace(meta.Series) != "":
+		return normalizeMetaKey(meta.Series)
+	case meta.hasExplicitTitle && strings.TrimSpace(meta.Title) != "":
+		return normalizeMetaKey(meta.Title)
+	default:
+		return ""
+	}
+}
+
+func resolveComicTitle(meta ParsedMetadata, fallback string) string {
+	return firstNonEmpty(meta.Series, meta.Title, fallback)
+}
+
+func resolveChapterTitle(meta ParsedMetadata, fallback string, groupTitle string) string {
+	title := firstNonEmpty(meta.Title, fallback)
+	if normalizeMetaKey(title) != "" && normalizeMetaKey(title) == normalizeMetaKey(groupTitle) {
+		return fallback
+	}
+	return title
+}
+
+func mergeMetadata(base ParsedMetadata, override ParsedMetadata) ParsedMetadata {
+	out := base
+	out.Title = firstNonEmpty(override.Title, out.Title)
+	out.Series = firstNonEmpty(override.Series, out.Series)
+	out.Subtitle = firstNonEmpty(override.Subtitle, out.Subtitle)
+	out.Description = firstNonEmpty(override.Description, out.Description)
+	if len(override.Authors) > 0 {
+		out.Authors = uniqueStrings(override.Authors)
+	} else {
+		out.Authors = uniqueStrings(out.Authors)
+	}
+	if len(override.Tags) > 0 {
+		out.Tags = uniqueStrings(override.Tags)
+	} else {
+		out.Tags = uniqueStrings(out.Tags)
+	}
+	out.Language = firstNonEmpty(override.Language, out.Language)
+	out.ScanMode = firstNonEmpty(override.ScanMode, out.ScanMode)
+	out.hasExplicitTitle = out.hasExplicitTitle || override.hasExplicitTitle
+	out.hasExplicitSeries = out.hasExplicitSeries || override.hasExplicitSeries
+	return out
+}
+
+func metadataCompatible(left ParsedMetadata, right ParsedMetadata) bool {
+	if left.Language != "" && right.Language != "" && !strings.EqualFold(left.Language, right.Language) {
+		return false
+	}
+	if len(left.Authors) > 0 && len(right.Authors) > 0 && !shareAny(left.Authors, right.Authors) {
+		return false
+	}
+	return true
+}
+
+func (a *App) inspectChapterDirCandidate(ctx context.Context, backend Backend, rel string) (chapterCandidate, error) {
+	fallback := baseNameTitle(rel)
+	dirMeta, _ := a.loadMetadataForDir(ctx, backend, rel, fallback)
+	entries, err := backend.ListDir(ctx, rel)
+	if err != nil {
+		return chapterCandidate{}, err
+	}
+	count := 0
+	archiveRef := ""
+	archiveName := ""
+	dirCount := 0
+	for _, item := range entries {
+		if item.IsDir {
+			dirCount++
+			continue
+		}
+		if isImageFile(item.Name) {
+			count++
+		}
+		if isArchiveFile(item.Name) {
+			archiveRef = item.RelPath
+			archiveName = item.Name
+		}
+	}
+	sourceType := "dir"
+	sourceRef := cleanRel(rel)
+	meta := dirMeta
+	if count == 0 && archiveRef != "" && dirCount == 0 {
+		sourceType = "archive"
+		sourceRef = cleanRel(archiveRef)
+		archiveMeta, count2, err := a.loadMetadataForArchive(ctx, backend, archiveRef, baseNameTitle(archiveName))
+		if err == nil {
+			meta = mergeMetadata(archiveMeta, dirMeta)
+			count = count2
+		}
+	}
+	groupTitle := resolveComicTitle(meta, fallback)
+	return chapterCandidate{
+		Meta:         meta,
+		GroupKey:     explicitSeriesKey(meta),
+		GroupTitle:   groupTitle,
+		ChapterTitle: resolveChapterTitle(meta, fallback, groupTitle),
+		SourceType:   sourceType,
+		SourceRef:    sourceRef,
+		PageCount:    count,
+		SortKey:      fallback,
+	}, nil
+}
+
+func (a *App) inspectArchiveCandidate(ctx context.Context, backend Backend, rel string, fallback string) (chapterCandidate, error) {
+	meta, pageCount, err := a.loadMetadataForArchive(ctx, backend, rel, fallback)
+	if err != nil {
+		return chapterCandidate{}, err
+	}
+	groupTitle := resolveComicTitle(meta, fallback)
+	return chapterCandidate{
+		Meta:         meta,
+		GroupKey:     explicitSeriesKey(meta),
+		GroupTitle:   groupTitle,
+		ChapterTitle: resolveChapterTitle(meta, fallback, groupTitle),
+		SourceType:   "archive",
+		SourceRef:    cleanRel(rel),
+		PageCount:    pageCount,
+		SortKey:      fallback,
+	}, nil
+}
+
+func shouldBuildSeries(parentMeta ParsedMetadata, candidates []chapterCandidate) (ParsedMetadata, string, bool) {
+	if len(candidates) < 2 {
+		return ParsedMetadata{}, "", false
+	}
+	parentKey := explicitSeriesKey(parentMeta)
+	if parentKey != "" {
+		for _, candidate := range candidates {
+			if candidate.GroupKey != "" && candidate.GroupKey != parentKey {
+				return ParsedMetadata{}, "", false
+			}
+			if !metadataCompatible(parentMeta, candidate.Meta) {
+				return ParsedMetadata{}, "", false
+			}
+		}
+		return parentMeta, parentKey, true
+	}
+	rootMeta := candidates[0].Meta
+	key := candidates[0].GroupKey
+	if key == "" {
+		return ParsedMetadata{}, "", false
+	}
+	for _, candidate := range candidates[1:] {
+		if candidate.GroupKey == "" || candidate.GroupKey != key {
+			return ParsedMetadata{}, "", false
+		}
+		if !metadataCompatible(rootMeta, candidate.Meta) {
+			return ParsedMetadata{}, "", false
+		}
+	}
+	return rootMeta, key, true
+}
+
+func (a *App) buildSeriesComicFromCandidates(lib LibraryConfig, rel string, groupKey string, meta ParsedMetadata, candidates []chapterCandidate) (*Comic, error) {
+	if len(candidates) == 0 {
+		return nil, errors.New("empty series")
+	}
+	title := resolveComicTitle(meta, baseNameTitle(rel))
+	comic := a.buildBaseComic(lib, rel, title, "series")
+	comic.ID = shaID(lib.ID, "series", rel, groupKey)
+	applyMetadata(comic, meta)
+	sort.Slice(candidates, func(i, j int) bool { return naturalLess(candidates[i].SortKey, candidates[j].SortKey) })
+	chapters := make([]*Chapter, 0, len(candidates))
+	for i, candidate := range candidates {
+		chapters = append(chapters, &Chapter{
+			ID:          shaID(comic.ID, "chapter", candidate.SourceRef, candidate.EntryPrefix),
+			ComicID:     comic.ID,
+			Title:       candidate.ChapterTitle,
+			Index:       i + 1,
+			SourceType:  candidate.SourceType,
+			SourceRef:   candidate.SourceRef,
+			EntryPrefix: candidate.EntryPrefix,
+			PageCount:   candidate.PageCount,
+		})
+	}
+	comic.Chapters = chapters
+	comic.UpdatedAt = time.Now()
+	comic.AddedAt = comic.UpdatedAt
+	return comic, nil
+}
+
+func (a *App) detectArchiveFolderGroups(ctx context.Context, backend Backend, rel string) ([]archiveFolderGroup, error) {
+	archive, err := openArchive(ctx, backend, rel, a.cfg.Server.CacheDir)
+	if err != nil {
+		return nil, err
+	}
+	defer archive.Close()
+	topLevelImages := 0
+	counts := map[string]int{}
+	for _, entry := range archive.Entries() {
+		if entry.IsDir || !isImageFile(entry.Name) {
+			continue
+		}
+		name := cleanRel(strings.ReplaceAll(entry.Name, "\\", "/"))
+		parts := strings.Split(name, "/")
+		if len(parts) <= 1 {
+			topLevelImages++
+			continue
+		}
+		counts[parts[0]]++
+	}
+	if topLevelImages > 0 || len(counts) < 2 {
+		return nil, nil
+	}
+	groups := make([]archiveFolderGroup, 0, len(counts))
+	for prefix, count := range counts {
+		groups = append(groups, archiveFolderGroup{Prefix: prefix, Title: baseNameTitle(prefix), PageCount: count})
+	}
+	sort.Slice(groups, func(i, j int) bool { return naturalLess(groups[i].Title, groups[j].Title) })
+	return groups, nil
+}
+
+func (a *App) buildArchiveSeriesComic(ctx context.Context, lib LibraryConfig, backend Backend, rel string, fallbackTitle string, meta ParsedMetadata) (*Comic, error) {
+	groups, err := a.detectArchiveFolderGroups(ctx, backend, rel)
+	if err != nil || len(groups) < 2 {
+		return nil, err
+	}
+	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, fallbackTitle), "archive")
+	applyMetadata(comic, meta)
+	chapters := make([]*Chapter, 0, len(groups))
+	for i, group := range groups {
+		chapters = append(chapters, &Chapter{
+			ID:          shaID(comic.ID, "chapter", rel, group.Prefix),
+			ComicID:     comic.ID,
+			Title:       group.Title,
+			Index:       i + 1,
+			SourceType:  "archive",
+			SourceRef:   cleanRel(rel),
+			EntryPrefix: cleanRel(group.Prefix),
+			PageCount:   group.PageCount,
+		})
+	}
+	comic.Chapters = chapters
+	comic.UpdatedAt = time.Now()
+	comic.AddedAt = comic.UpdatedAt
+	return comic, nil
+}
+
 func (a *App) buildDirComic(ctx context.Context, lib LibraryConfig, backend Backend, rel string, images []Entry) (*Comic, error) {
 	meta, _ := a.loadMetadataForDir(ctx, backend, rel, baseNameTitle(rel))
-	comic := a.buildBaseComic(lib, rel, meta.Title, "dir")
+	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, baseNameTitle(rel)), "dir")
 	applyMetadata(comic, meta)
 	chapter := &Chapter{
 		ID:         shaID(comic.ID, "chapter", rel),
@@ -285,7 +591,10 @@ func (a *App) buildArchiveComic(ctx context.Context, lib LibraryConfig, backend 
 	if err != nil {
 		return nil, err
 	}
-	comic := a.buildBaseComic(lib, rel, meta.Title, "archive")
+	if comic, err := a.buildArchiveSeriesComic(ctx, lib, backend, rel, fallbackTitle, meta); err == nil && comic != nil {
+		return comic, nil
+	}
+	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, fallbackTitle), "archive")
 	applyMetadata(comic, meta)
 	chapter := &Chapter{
 		ID:         shaID(comic.ID, "chapter", rel),
@@ -302,81 +611,8 @@ func (a *App) buildArchiveComic(ctx context.Context, lib LibraryConfig, backend 
 	return comic, nil
 }
 
-func (a *App) buildSeriesComic(ctx context.Context, lib LibraryConfig, backend Backend, rel string, archives []Entry, chapterDirs []Entry) (*Comic, error) {
-	meta, _ := a.loadMetadataForDir(ctx, backend, rel, baseNameTitle(rel))
-	comic := a.buildBaseComic(lib, rel, meta.Title, "series")
-	applyMetadata(comic, meta)
-
-	chapters := []*Chapter{}
-	for _, dir := range chapterDirs {
-		title := baseNameTitle(dir.Name)
-		md, _ := a.loadMetadataForDir(ctx, backend, dir.RelPath, title)
-		title = firstNonEmpty(md.Title, title)
-		entries, _ := backend.ListDir(ctx, dir.RelPath)
-		count := 0
-		archiveRef := ""
-		archiveName := ""
-		dirCount := 0
-		for _, item := range entries {
-			if item.IsDir {
-				dirCount++
-				continue
-			}
-			if isImageFile(item.Name) {
-				count++
-			}
-			if isArchiveFile(item.Name) {
-				archiveRef = item.RelPath
-				archiveName = item.Name
-			}
-		}
-		sourceType := "dir"
-		sourceRef := cleanRel(dir.RelPath)
-		if count == 0 && archiveRef != "" && dirCount == 0 {
-			sourceType = "archive"
-			sourceRef = cleanRel(archiveRef)
-			if md2, count2, err := a.loadMetadataForArchive(ctx, backend, archiveRef, baseNameTitle(archiveName)); err == nil {
-				title = firstNonEmpty(md2.Title, title)
-				count = count2
-			}
-		}
-		chapters = append(chapters, &Chapter{
-			ID:         shaID(comic.ID, "chapter", sourceRef),
-			ComicID:    comic.ID,
-			Title:      title,
-			SourceType: sourceType,
-			SourceRef:  sourceRef,
-			PageCount:  count,
-		})
-	}
-	for _, archive := range archives {
-		title := baseNameTitle(archive.Name)
-		md, count, _ := a.loadMetadataForArchive(ctx, backend, archive.RelPath, title)
-		title = firstNonEmpty(md.Title, title)
-		chapters = append(chapters, &Chapter{
-			ID:         shaID(comic.ID, "chapter", archive.RelPath),
-			ComicID:    comic.ID,
-			Title:      title,
-			SourceType: "archive",
-			SourceRef:  cleanRel(archive.RelPath),
-			PageCount:  count,
-		})
-	}
-	sort.Slice(chapters, func(i, j int) bool { return naturalLess(chapters[i].Title, chapters[j].Title) })
-	for i, chapter := range chapters {
-		chapter.Index = i + 1
-	}
-	comic.Chapters = chapters
-	if len(chapters) == 0 {
-		return nil, errors.New("empty series")
-	}
-	comic.UpdatedAt = time.Now()
-	comic.AddedAt = comic.UpdatedAt
-	return comic, nil
-}
-
 func applyMetadata(comic *Comic, meta ParsedMetadata) {
-	comic.Title = firstNonEmpty(meta.Title, comic.Title)
+	comic.Title = firstNonEmpty(meta.Series, meta.Title, comic.Title)
 	comic.Subtitle = firstNonEmpty(meta.Subtitle, firstFrom(meta.Authors))
 	comic.Description = firstNonEmpty(meta.Description, comic.Description)
 	comic.Authors = uniqueStrings(meta.Authors)
@@ -472,7 +708,14 @@ func applyComicInfo(meta *ParsedMetadata, raw []byte) {
 	if xml.Unmarshal(raw, &info) != nil {
 		return
 	}
-	meta.Title = firstNonEmpty(info.Title, info.Series, meta.Title)
+	if strings.TrimSpace(info.Title) != "" {
+		meta.Title = strings.TrimSpace(info.Title)
+		meta.hasExplicitTitle = true
+	}
+	if strings.TrimSpace(info.Series) != "" {
+		meta.Series = strings.TrimSpace(info.Series)
+		meta.hasExplicitSeries = true
+	}
 	meta.Description = firstNonEmpty(info.Summary, meta.Description)
 	meta.Authors = uniqueStrings(append(meta.Authors, splitCSVish(info.Writer)...))
 	meta.Authors = uniqueStrings(append(meta.Authors, splitCSVish(info.Penciller)...))
@@ -485,7 +728,14 @@ func applySidecar(meta *ParsedMetadata, raw []byte) {
 	if json.Unmarshal(raw, &override) != nil {
 		return
 	}
-	meta.Title = firstNonEmpty(override.Title, meta.Title)
+	if strings.TrimSpace(override.Title) != "" {
+		meta.Title = strings.TrimSpace(override.Title)
+		meta.hasExplicitTitle = true
+	}
+	if strings.TrimSpace(override.Series) != "" {
+		meta.Series = strings.TrimSpace(override.Series)
+		meta.hasExplicitSeries = true
+	}
 	meta.Subtitle = firstNonEmpty(override.Subtitle, meta.Subtitle)
 	meta.Description = firstNonEmpty(override.Description, meta.Description)
 	if len(override.Authors) > 0 {
@@ -495,6 +745,7 @@ func applySidecar(meta *ParsedMetadata, raw []byte) {
 		meta.Tags = uniqueStrings(override.Tags)
 	}
 	meta.Language = firstNonEmpty(override.Language, meta.Language)
+	meta.ScanMode = firstNonEmpty(override.ScanMode, meta.ScanMode)
 }
 
 func (a *App) materializeChapterPages(ctx context.Context, chapter *Chapter) ([]PageRef, error) {
@@ -526,11 +777,16 @@ func (a *App) materializeChapterPages(ctx context.Context, chapter *Chapter) ([]
 		}
 		defer archive.Close()
 		pages := []PageRef{}
+		prefix := cleanRel(chapter.EntryPrefix)
 		for _, entry := range archive.Entries() {
 			if entry.IsDir || !isImageFile(entry.Name) {
 				continue
 			}
-			pages = append(pages, PageRef{PageIndex: len(pages), SourceType: "archive", SourceRef: chapter.SourceRef, EntryName: entry.Name, Name: path.Base(entry.Name)})
+			entryName := cleanRel(strings.ReplaceAll(entry.Name, "\\", "/"))
+			if prefix != "" && entryName != prefix && !strings.HasPrefix(entryName, prefix+"/") {
+				continue
+			}
+			pages = append(pages, PageRef{PageIndex: len(pages), SourceType: "archive", SourceRef: chapter.SourceRef, EntryName: entry.Name, Name: path.Base(entryName)})
 		}
 		sort.Slice(pages, func(i, j int) bool { return naturalLess(pages[i].Name, pages[j].Name) })
 		for i := range pages {

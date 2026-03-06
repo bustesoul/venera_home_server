@@ -1,179 +1,181 @@
-﻿package main
+package main
 
 import (
-    "archive/zip"
-    "bytes"
-    "encoding/json"
-    "io"
-    "log"
-    "net/http"
-    "net/http/httptest"
-    "os"
-    "path/filepath"
-    "testing"
+	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
 )
 
 func TestLocalServerFlow(t *testing.T) {
-    root := t.TempDir()
-    mustWriteFile(t, filepath.Join(root, "Series Alpha", "01", "001.jpg"), []byte("img1"))
-    mustWriteFile(t, filepath.Join(root, "Series Alpha", "01", "002.jpg"), []byte("img2"))
-    mustWriteFile(t, filepath.Join(root, "Series Alpha", "02", "001.jpg"), []byte("img3"))
-    mustWriteFile(t, filepath.Join(root, "Standalone", "001.jpg"), []byte("img4"))
-    mustWriteFile(t, filepath.Join(root, "Standalone", "ComicInfo.xml"), []byte(`<ComicInfo><Title>Standalone Book</Title><Writer>Jane Doe</Writer><Genre>Drama,Slice of Life</Genre></ComicInfo>`))
-    mustWriteZip(t, filepath.Join(root, "Bundle.cbz"), map[string][]byte{
-        "001.jpg": []byte("zipimg"),
-        "ComicInfo.xml": []byte(`<ComicInfo><Title>Zipped Book</Title><Writer>John Doe</Writer><Genre>Mystery</Genre></ComicInfo>`),
-    })
+	root := t.TempDir()
+	mustWriteFile(t, filepath.Join(root, "Series Alpha", "01", "001.jpg"), []byte("img1"))
+	mustWriteFile(t, filepath.Join(root, "Series Alpha", "01", "002.jpg"), []byte("img2"))
+	mustWriteFile(t, filepath.Join(root, "Series Alpha", "01", "ComicInfo.xml"), []byte(`<ComicInfo><Series>Series Alpha</Series><Title>Chapter 01</Title><Writer>Alpha Author</Writer></ComicInfo>`))
+	mustWriteFile(t, filepath.Join(root, "Series Alpha", "02", "001.jpg"), []byte("img3"))
+	mustWriteFile(t, filepath.Join(root, "Series Alpha", "02", "ComicInfo.xml"), []byte(`<ComicInfo><Series>Series Alpha</Series><Title>Chapter 02</Title><Writer>Alpha Author</Writer></ComicInfo>`))
+	mustWriteFile(t, filepath.Join(root, "Standalone", "001.jpg"), []byte("img4"))
+	mustWriteFile(t, filepath.Join(root, "Standalone", "ComicInfo.xml"), []byte(`<ComicInfo><Title>Standalone Book</Title><Writer>Jane Doe</Writer><Genre>Drama,Slice of Life</Genre></ComicInfo>`))
+	mustWriteZip(t, filepath.Join(root, "Bundle.cbz"), map[string][]byte{
+		"001.jpg":       []byte("zipimg"),
+		"ComicInfo.xml": []byte(`<ComicInfo><Title>Zipped Book</Title><Writer>John Doe</Writer><Genre>Mystery</Genre></ComicInfo>`),
+	})
 
-    cfg := &Config{
-        Server: ServerConfig{Listen: "127.0.0.1:0", Token: "test-token", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache")},
-        Scan: ScanConfig{Concurrency: 2, ExtractArchives: true},
-        Metadata: MetadataConfig{ReadComicInfo: true, ReadSidecar: true},
-        Libraries: []LibraryConfig{{ID: "local-main", Name: "Local", Kind: "local", Root: root, ScanMode: "auto"}},
-    }
-    app, err := NewApp(cfg)
-    if err != nil {
-        t.Fatalf("NewApp: %v", err)
-    }
-    srv := httptest.NewServer(newHTTPServer(app, log.New(io.Discard, "", 0)))
-    defer srv.Close()
+	cfg := &Config{
+		Server:    ServerConfig{Listen: "127.0.0.1:0", Token: "test-token", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache")},
+		Scan:      ScanConfig{Concurrency: 2, ExtractArchives: true},
+		Metadata:  MetadataConfig{ReadComicInfo: true, ReadSidecar: true},
+		Libraries: []LibraryConfig{{ID: "local-main", Name: "Local", Kind: "local", Root: root, ScanMode: "auto"}},
+	}
+	app, err := NewApp(cfg)
+	if err != nil {
+		t.Fatalf("NewApp: %v", err)
+	}
+	srv := httptest.NewServer(newHTTPServer(app, log.New(io.Discard, "", 0)))
+	defer srv.Close()
 
-    bootstrap := getJSON(t, srv.URL+"/api/v1/bootstrap", cfg.Server.Token)
-    libs := bootstrap["data"].(map[string]any)["libraries"].([]any)
-    if len(libs) != 1 {
-        t.Fatalf("expected 1 library, got %d", len(libs))
-    }
+	bootstrap := getJSON(t, srv.URL+"/api/v1/bootstrap", cfg.Server.Token)
+	libs := bootstrap["data"].(map[string]any)["libraries"].([]any)
+	if len(libs) != 1 {
+		t.Fatalf("expected 1 library, got %d", len(libs))
+	}
 
-    comicsList := getJSON(t, srv.URL+"/api/v1/comics?page=1&page_size=20", cfg.Server.Token)
-    items := comicsList["data"].(map[string]any)["items"].([]any)
-    if len(items) != 3 {
-        t.Fatalf("expected 3 comics, got %d", len(items))
-    }
+	comicsList := getJSON(t, srv.URL+"/api/v1/comics?page=1&page_size=20", cfg.Server.Token)
+	items := comicsList["data"].(map[string]any)["items"].([]any)
+	if len(items) != 3 {
+		t.Fatalf("expected 3 comics, got %d", len(items))
+	}
 
-    search := getJSON(t, srv.URL+"/api/v1/search?q=John%20Doe", cfg.Server.Token)
-    searchItems := search["data"].(map[string]any)["items"].([]any)
-    if len(searchItems) != 1 {
-        t.Fatalf("expected 1 search result, got %d", len(searchItems))
-    }
+	search := getJSON(t, srv.URL+"/api/v1/search?q=John%20Doe", cfg.Server.Token)
+	searchItems := search["data"].(map[string]any)["items"].([]any)
+	if len(searchItems) != 1 {
+		t.Fatalf("expected 1 search result, got %d", len(searchItems))
+	}
 
-    var zippedID string
-    for _, raw := range items {
-        item := raw.(map[string]any)
-        if item["title"] == "Zipped Book" {
-            zippedID = item["id"].(string)
-        }
-    }
-    if zippedID == "" {
-        t.Fatal("failed to find zipped comic")
-    }
+	var zippedID string
+	for _, raw := range items {
+		item := raw.(map[string]any)
+		if item["title"] == "Zipped Book" {
+			zippedID = item["id"].(string)
+		}
+	}
+	if zippedID == "" {
+		t.Fatal("failed to find zipped comic")
+	}
 
-    details := getJSON(t, srv.URL+"/api/v1/comics/"+zippedID, cfg.Server.Token)
-    data := details["data"].(map[string]any)
-    chapters := data["chapters"].([]any)
-    if len(chapters) != 1 {
-        t.Fatalf("expected 1 chapter, got %d", len(chapters))
-    }
-    chapterID := chapters[0].(map[string]any)["id"].(string)
+	details := getJSON(t, srv.URL+"/api/v1/comics/"+zippedID, cfg.Server.Token)
+	data := details["data"].(map[string]any)
+	chapters := data["chapters"].([]any)
+	if len(chapters) != 1 {
+		t.Fatalf("expected 1 chapter, got %d", len(chapters))
+	}
+	chapterID := chapters[0].(map[string]any)["id"].(string)
 
-    pages := getJSON(t, srv.URL+"/api/v1/comics/"+zippedID+"/chapters/"+chapterID+"/pages", cfg.Server.Token)
-    images := pages["data"].(map[string]any)["images"].([]any)
-    if len(images) != 1 {
-        t.Fatalf("expected 1 image, got %d", len(images))
-    }
+	pages := getJSON(t, srv.URL+"/api/v1/comics/"+zippedID+"/chapters/"+chapterID+"/pages", cfg.Server.Token)
+	images := pages["data"].(map[string]any)["images"].([]any)
+	if len(images) != 1 {
+		t.Fatalf("expected 1 image, got %d", len(images))
+	}
 
-    req, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
-    res, err := http.DefaultClient.Do(req)
-    if err != nil {
-        t.Fatalf("media request: %v", err)
-    }
-    defer res.Body.Close()
-    raw, _ := io.ReadAll(res.Body)
-    if string(raw) != "zipimg" {
-        t.Fatalf("unexpected media body: %q", string(raw))
-    }
+	req, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("media request: %v", err)
+	}
+	defer res.Body.Close()
+	raw, _ := io.ReadAll(res.Body)
+	if string(raw) != "zipimg" {
+		t.Fatalf("unexpected media body: %q", string(raw))
+	}
 
-    postJSON(t, srv.URL+"/api/v1/favorites/folders", cfg.Server.Token, map[string]any{"name": "Reading"})
-    postJSON(t, srv.URL+"/api/v1/favorites/items", cfg.Server.Token, map[string]any{"comic_id": zippedID, "folder_id": "default"})
-    folders := getJSON(t, srv.URL+"/api/v1/favorites/folders?comic_id="+zippedID, cfg.Server.Token)
-    favorited := folders["data"].(map[string]any)["favorited"].([]any)
-    if len(favorited) == 0 {
-        t.Fatal("expected favorite folder membership")
-    }
+	postJSON(t, srv.URL+"/api/v1/favorites/folders", cfg.Server.Token, map[string]any{"name": "Reading"})
+	postJSON(t, srv.URL+"/api/v1/favorites/items", cfg.Server.Token, map[string]any{"comic_id": zippedID, "folder_id": "default"})
+	folders := getJSON(t, srv.URL+"/api/v1/favorites/folders?comic_id="+zippedID, cfg.Server.Token)
+	favorited := folders["data"].(map[string]any)["favorited"].([]any)
+	if len(favorited) == 0 {
+		t.Fatal("expected favorite folder membership")
+	}
 }
 
 func mustWriteFile(t *testing.T, path string, data []byte) {
-    t.Helper()
-    if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-        t.Fatal(err)
-    }
-    if err := os.WriteFile(path, data, 0o644); err != nil {
-        t.Fatal(err)
-    }
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func mustWriteZip(t *testing.T, path string, files map[string][]byte) {
-    t.Helper()
-    if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-        t.Fatal(err)
-    }
-    f, err := os.Create(path)
-    if err != nil {
-        t.Fatal(err)
-    }
-    defer f.Close()
-    zw := zip.NewWriter(f)
-    for name, data := range files {
-        w, err := zw.Create(name)
-        if err != nil {
-            t.Fatal(err)
-        }
-        if _, err := w.Write(data); err != nil {
-            t.Fatal(err)
-        }
-    }
-    if err := zw.Close(); err != nil {
-        t.Fatal(err)
-    }
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	zw := zip.NewWriter(f)
+	for name, data := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func getJSON(t *testing.T, url, token string) map[string]any {
-    t.Helper()
-    req, _ := http.NewRequest(http.MethodGet, url, nil)
-    req.Header.Set("Authorization", "Bearer "+token)
-    res, err := http.DefaultClient.Do(req)
-    if err != nil {
-        t.Fatal(err)
-    }
-    defer res.Body.Close()
-    if res.StatusCode < 200 || res.StatusCode >= 300 {
-        body, _ := io.ReadAll(res.Body)
-        t.Fatalf("GET %s failed: %s %s", url, res.Status, string(body))
-    }
-    var out map[string]any
-    if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
-        t.Fatal(err)
-    }
-    return out
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("GET %s failed: %s %s", url, res.Status, string(body))
+	}
+	var out map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 func postJSON(t *testing.T, url, token string, payload map[string]any) map[string]any {
-    t.Helper()
-    raw, _ := json.Marshal(payload)
-    req, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
-    req.Header.Set("Authorization", "Bearer "+token)
-    req.Header.Set("Content-Type", "application/json")
-    res, err := http.DefaultClient.Do(req)
-    if err != nil {
-        t.Fatal(err)
-    }
-    defer res.Body.Close()
-    if res.StatusCode < 200 || res.StatusCode >= 300 {
-        body, _ := io.ReadAll(res.Body)
-        t.Fatalf("POST %s failed: %s %s", url, res.Status, string(body))
-    }
-    var out map[string]any
-    if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
-        t.Fatal(err)
-    }
-    return out
+	t.Helper()
+	raw, _ := json.Marshal(payload)
+	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("POST %s failed: %s %s", url, res.Status, string(body))
+	}
+	var out map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
