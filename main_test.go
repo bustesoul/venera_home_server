@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLocalServerFlow(t *testing.T) {
@@ -92,6 +93,26 @@ func TestLocalServerFlow(t *testing.T) {
 	raw, _ := io.ReadAll(res.Body)
 	if string(raw) != "zipimg" {
 		t.Fatalf("unexpected media body: %q", string(raw))
+	}
+	if res.Header.Get("Cache-Control") == "" || res.Header.Get("ETag") == "" {
+		t.Fatalf("expected media cache headers, got Cache-Control=%q ETag=%q", res.Header.Get("Cache-Control"), res.Header.Get("ETag"))
+	}
+	cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "page-media", "*"))
+	if err != nil {
+		t.Fatalf("glob cache files: %v", err)
+	}
+	if len(cachedPages) == 0 {
+		t.Fatal("expected archive page cache file to be created")
+	}
+	condReq, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
+	condReq.Header.Set("If-None-Match", res.Header.Get("ETag"))
+	condRes, err := http.DefaultClient.Do(condReq)
+	if err != nil {
+		t.Fatalf("conditional media request: %v", err)
+	}
+	defer condRes.Body.Close()
+	if condRes.StatusCode != http.StatusNotModified {
+		t.Fatalf("expected 304 for conditional request, got %d", condRes.StatusCode)
 	}
 
 	postJSON(t, srv.URL+"/api/v1/favorites/folders", cfg.Server.Token, map[string]any{"name": "Reading"})
@@ -178,4 +199,67 @@ func postJSON(t *testing.T, url, token string, payload map[string]any) map[strin
 		t.Fatal(err)
 	}
 	return out
+}
+
+func TestArchivePageRequestTriggersChapterPrefetch(t *testing.T) {
+	root := t.TempDir()
+	mustWriteZip(t, filepath.Join(root, "Prefetch.cbz"), map[string][]byte{
+		"001.jpg": []byte("page1"),
+		"002.jpg": []byte("page2"),
+		"003.jpg": []byte("page3"),
+		"004.jpg": []byte("page4"),
+	})
+
+	cfg := &Config{
+		Server:    ServerConfig{Listen: "127.0.0.1:0", Token: "test-token", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache")},
+		Scan:      ScanConfig{Concurrency: 1, ExtractArchives: true},
+		Metadata:  MetadataConfig{ReadComicInfo: true, ReadSidecar: true},
+		Libraries: []LibraryConfig{{ID: "local-main", Name: "Local", Kind: "local", Root: root, ScanMode: "auto"}},
+	}
+	app, err := NewApp(cfg)
+	if err != nil {
+		t.Fatalf("NewApp: %v", err)
+	}
+	srv := httptest.NewServer(newHTTPServer(app, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	var comicID string
+	for _, id := range app.libraries["local-main"] {
+		if app.comics[id].Title == "Prefetch" {
+			comicID = id
+			break
+		}
+	}
+	if comicID == "" {
+		t.Fatal("failed to find prefetch comic")
+	}
+	chapterID := app.comics[comicID].Chapters[0].ID
+	pages := getJSON(t, srv.URL+"/api/v1/comics/"+comicID+"/chapters/"+chapterID+"/pages", cfg.Server.Token)
+	images := pages["data"].(map[string]any)["images"].([]any)
+	if len(images) != 4 {
+		t.Fatalf("expected 4 images, got %d", len(images))
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("media request: %v", err)
+	}
+	defer res.Body.Close()
+	_, _ = io.ReadAll(res.Body)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "page-media", "*"))
+		if err != nil {
+			t.Fatalf("glob cache files: %v", err)
+		}
+		if len(cachedPages) >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected chapter prefetch to cache additional pages, got %d files", len(cachedPages))
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }

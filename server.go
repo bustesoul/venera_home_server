@@ -8,19 +8,25 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type apiServer struct {
-	app *App
-	log *log.Logger
+	app         *App
+	log         *log.Logger
+	prefetchMu  sync.Mutex
+	prefetching map[string]struct{}
+	prefetchSem chan struct{}
 }
 
 func newHTTPServer(app *App, logger *log.Logger) http.Handler {
-	srv := &apiServer{app: app, log: logger}
+	srv := &apiServer{app: app, log: logger, prefetching: map[string]struct{}{}, prefetchSem: make(chan struct{}, 1)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/bootstrap", srv.auth(srv.handleBootstrap))
 	mux.HandleFunc("/api/v1/home", srv.auth(srv.handleHome))
@@ -453,6 +459,190 @@ func (s *apiServer) handleMedia(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func mediaETag(r *http.Request) string {
+	token := strings.TrimPrefix(r.URL.Path, "/media/")
+	if token == "" {
+		return ""
+	}
+	return `"` + token + `"`
+}
+
+func setMediaCacheHeaders(w http.ResponseWriter, r *http.Request) bool {
+	etag := mediaETag(r)
+	if etag != "" {
+		w.Header().Set("ETag", etag)
+	}
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	if etag != "" && strings.TrimSpace(r.Header.Get("If-None-Match")) == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return true
+	}
+	return false
+}
+
+func (s *apiServer) archivePageCachePath(ctx context.Context, backend Backend, comic *Comic, page PageRef) (string, error) {
+	rc, size, modTime, err := backend.OpenStream(ctx, page.SourceRef)
+	if err != nil {
+		return "", err
+	}
+	_ = rc.Close()
+	ext := strings.ToLower(filepath.Ext(page.EntryName))
+	if ext == "" {
+		ext = strings.ToLower(filepath.Ext(page.Name))
+	}
+	key := shaID(comic.LibraryID, cleanRel(page.SourceRef), cleanRel(page.EntryName), strconv.FormatInt(size, 10), modTime.UTC().Format(time.RFC3339Nano))
+	return filepath.Join(s.app.cfg.Server.CacheDir, "page-media", key+ext), nil
+}
+
+func (s *apiServer) serveFilePath(w http.ResponseWriter, contentType string, filePath string) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	w.Header().Set("Content-Type", contentType)
+	_, err = io.Copy(w, f)
+	return err
+}
+
+func (s *apiServer) serveArchivePageFromCache(w http.ResponseWriter, r *http.Request, backend Backend, comic *Comic, page PageRef) bool {
+	cachePath, err := s.archivePageCachePath(r.Context(), backend, comic, page)
+	if err != nil {
+		return false
+	}
+	if _, err := os.Stat(cachePath); err != nil {
+		return false
+	}
+	if err := s.serveFilePath(w, guessContentType(page.Name), cachePath); err != nil {
+		s.log.Printf("page cache read failed: %v", err)
+		return false
+	}
+	s.log.Printf("page cache hit chapter=%s entry=%s", page.SourceRef, cleanRel(page.EntryName))
+	return true
+}
+
+func (s *apiServer) ensureArchivePageCached(ctx context.Context, backend Backend, comic *Comic, page PageRef) (string, bool, error) {
+	cachePath, err := s.archivePageCachePath(ctx, backend, comic, page)
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := os.Stat(cachePath); err == nil {
+		return cachePath, false, nil
+	}
+	archive, err := openArchive(ctx, backend, page.SourceRef, s.app.cfg.Server.CacheDir)
+	if err != nil {
+		return "", false, err
+	}
+	defer archive.Close()
+	rc, err := archive.Open(ctx, page.EntryName)
+	if err != nil {
+		return "", false, err
+	}
+	defer rc.Close()
+	tmpPath := cachePath + ".tmp-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if err := copyFile(tmpPath, rc); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", false, err
+	}
+	if err := os.Rename(tmpPath, cachePath); err != nil {
+		if _, statErr := os.Stat(cachePath); statErr != nil {
+			_ = os.Remove(tmpPath)
+			return "", false, err
+		}
+		_ = os.Remove(tmpPath)
+		return cachePath, false, nil
+	}
+	return cachePath, true, nil
+}
+
+func (s *apiServer) materializeArchivePageCache(w http.ResponseWriter, r *http.Request, backend Backend, comic *Comic, page PageRef) bool {
+	cachePath, created, err := s.ensureArchivePageCached(r.Context(), backend, comic, page)
+	if err != nil {
+		return false
+	}
+	if created {
+		s.log.Printf("page cache fill chapter=%s entry=%s", page.SourceRef, cleanRel(page.EntryName))
+	}
+	if err := s.serveFilePath(w, guessContentType(page.Name), cachePath); err != nil {
+		s.log.Printf("page cache serve failed: %v", err)
+		return false
+	}
+	return true
+}
+
+func (s *apiServer) prefetchOrder(total, current int) []int {
+	if total <= 1 {
+		return nil
+	}
+	out := make([]int, 0, total-1)
+	for i := current + 1; i < total && i <= current+3; i++ {
+		out = append(out, i)
+	}
+	for i := current + 4; i < total; i++ {
+		out = append(out, i)
+	}
+	for i := current - 1; i >= 0; i-- {
+		out = append(out, i)
+	}
+	return out
+}
+
+func (s *apiServer) scheduleChapterPrefetch(chapter *Chapter, pages []PageRef, currentIndex int) {
+	if chapter == nil || chapter.SourceType != "archive" || currentIndex < 0 || currentIndex >= len(pages) {
+		return
+	}
+	key := chapter.ID
+	s.prefetchMu.Lock()
+	if _, exists := s.prefetching[key]; exists {
+		s.prefetchMu.Unlock()
+		s.log.Printf("page prefetch skip chapter=%s reason=already-running", chapter.ID)
+		return
+	}
+	s.prefetching[key] = struct{}{}
+	s.prefetchMu.Unlock()
+	go func() {
+		s.prefetchSem <- struct{}{}
+		defer func() {
+			<-s.prefetchSem
+			s.prefetchMu.Lock()
+			delete(s.prefetching, key)
+			s.prefetchMu.Unlock()
+		}()
+		comic := s.app.comicByID(chapter.ComicID)
+		if comic == nil {
+			return
+		}
+		backend := s.app.backends[comic.LibraryID]
+		if backend == nil {
+			return
+		}
+		order := s.prefetchOrder(len(pages), currentIndex)
+		s.log.Printf("page prefetch start chapter=%s from=%d queued=%d", chapter.ID, currentIndex, len(order))
+		ctx := context.Background()
+		createdCount := 0
+		hitCount := 0
+		failedCount := 0
+		for _, index := range order {
+			page := pages[index]
+			if page.SourceType != "archive" {
+				continue
+			}
+			_, created, err := s.ensureArchivePageCached(ctx, backend, comic, page)
+			if err != nil {
+				failedCount++
+				s.log.Printf("page prefetch failed: chapter=%s page=%d err=%v", chapter.ID, index, err)
+				continue
+			}
+			if created {
+				createdCount++
+			} else {
+				hitCount++
+			}
+		}
+		s.log.Printf("page prefetch done chapter=%s warmed=%d hit=%d failed=%d", chapter.ID, createdCount, hitCount, failedCount)
+	}()
+}
+
 func (s *apiServer) serveCover(w http.ResponseWriter, r *http.Request, payload *signedPayload) {
 	comic := s.app.comicByID(payload.ComicID)
 	if comic == nil || len(comic.Chapters) == 0 {
@@ -482,10 +672,14 @@ func (s *apiServer) servePage(w http.ResponseWriter, r *http.Request, payload *s
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "page not found")
 		return
 	}
+	s.scheduleChapterPrefetch(chapter, pages, payload.PageIndex)
 	s.serveResolvedPage(w, r, chapter, pages[payload.PageIndex])
 }
 
 func (s *apiServer) serveResolvedPage(w http.ResponseWriter, r *http.Request, chapter *Chapter, page PageRef) {
+	if setMediaCacheHeaders(w, r) {
+		return
+	}
 	comic := s.app.comicByID(chapter.ComicID)
 	if comic == nil {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "comic not found")
@@ -503,6 +697,12 @@ func (s *apiServer) serveResolvedPage(w http.ResponseWriter, r *http.Request, ch
 		w.Header().Set("Content-Type", guessContentType(page.Name))
 		_, _ = io.Copy(w, rc)
 	case "archive":
+		if s.serveArchivePageFromCache(w, r, backend, comic, page) {
+			return
+		}
+		if s.materializeArchivePageCache(w, r, backend, comic, page) {
+			return
+		}
 		archive, err := openArchive(r.Context(), backend, page.SourceRef, s.app.cfg.Server.CacheDir)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "READ_FAILED", err.Error())
