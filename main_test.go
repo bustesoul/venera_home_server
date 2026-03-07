@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -29,7 +30,7 @@ func TestLocalServerFlow(t *testing.T) {
 	})
 
 	cfg := &Config{
-		Server:    ServerConfig{Listen: "127.0.0.1:0", Token: "test-token", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache")},
+		Server:    ServerConfig{Listen: "127.0.0.1:0", Token: "test-token", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache"), MemoryCacheMB: 16},
 		Scan:      ScanConfig{Concurrency: 2, ExtractArchives: true},
 		Metadata:  MetadataConfig{ReadComicInfo: true, ReadSidecar: true},
 		Libraries: []LibraryConfig{{ID: "local-main", Name: "Local", Kind: "local", Root: root, ScanMode: "auto"}},
@@ -97,12 +98,12 @@ func TestLocalServerFlow(t *testing.T) {
 	if res.Header.Get("Cache-Control") == "" || res.Header.Get("ETag") == "" {
 		t.Fatalf("expected media cache headers, got Cache-Control=%q ETag=%q", res.Header.Get("Cache-Control"), res.Header.Get("ETag"))
 	}
-	cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "page-media", "*"))
+	cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
 	if err != nil {
 		t.Fatalf("glob cache files: %v", err)
 	}
 	if len(cachedPages) == 0 {
-		t.Fatal("expected archive page cache file to be created")
+		t.Fatal("expected rendered page cache file to be created")
 	}
 	condReq, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
 	condReq.Header.Set("If-None-Match", res.Header.Get("ETag"))
@@ -239,6 +240,14 @@ func TestArchivePageRequestTriggersChapterPrefetch(t *testing.T) {
 	if len(images) != 4 {
 		t.Fatalf("expected 4 images, got %d", len(images))
 	}
+	time.Sleep(150 * time.Millisecond)
+	cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	if err != nil {
+		t.Fatalf("glob cache files before media request: %v", err)
+	}
+	if len(cachedPages) != 0 {
+		t.Fatalf("expected chapter page listing to avoid prefetch, got %d cached files", len(cachedPages))
+	}
 
 	req, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
 	res, err := http.DefaultClient.Do(req)
@@ -250,7 +259,7 @@ func TestArchivePageRequestTriggersChapterPrefetch(t *testing.T) {
 
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "page-media", "*"))
+		cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
 		if err != nil {
 			t.Fatalf("glob cache files: %v", err)
 		}
@@ -261,5 +270,164 @@ func TestArchivePageRequestTriggersChapterPrefetch(t *testing.T) {
 			t.Fatalf("expected chapter prefetch to cache additional pages, got %d files", len(cachedPages))
 		}
 		time.Sleep(25 * time.Millisecond)
+	}
+}
+
+func TestPageRequestPrefetchUsesActualWindowStart(t *testing.T) {
+	root := t.TempDir()
+	for i := 1; i <= 24; i++ {
+		mustWriteFile(t, filepath.Join(root, "Windowed", fmt.Sprintf("%03d.jpg", i)), []byte(fmt.Sprintf("page-%02d", i)))
+	}
+
+	cfg := &Config{
+		Server:    ServerConfig{Listen: "127.0.0.1:0", Token: "test-token", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache")},
+		Scan:      ScanConfig{Concurrency: 1, ExtractArchives: true},
+		Metadata:  MetadataConfig{ReadComicInfo: true, ReadSidecar: true},
+		Libraries: []LibraryConfig{{ID: "local-main", Name: "Local", Kind: "local", Root: root, ScanMode: "auto"}},
+	}
+	app, err := NewApp(cfg)
+	if err != nil {
+		t.Fatalf("NewApp: %v", err)
+	}
+	srv := httptest.NewServer(newHTTPServer(app, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	var comicID string
+	for _, id := range app.libraries["local-main"] {
+		if app.comics[id].Title == "Windowed" {
+			comicID = id
+			break
+		}
+	}
+	if comicID == "" {
+		t.Fatal("failed to find windowed comic")
+	}
+	chapterID := app.comics[comicID].Chapters[0].ID
+	pages := getJSON(t, srv.URL+"/api/v1/comics/"+comicID+"/chapters/"+chapterID+"/pages", cfg.Server.Token)
+	images := pages["data"].(map[string]any)["images"].([]any)
+	if len(images) != 24 {
+		t.Fatalf("expected 24 images, got %d", len(images))
+	}
+
+	firstReq, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
+	firstRes, err := http.DefaultClient.Do(firstReq)
+	if err != nil {
+		t.Fatalf("first media request: %v", err)
+	}
+	_, _ = io.ReadAll(firstRes.Body)
+	_ = firstRes.Body.Close()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+		if err != nil {
+			t.Fatalf("glob cache files after first prefetch: %v", err)
+		}
+		if len(cachedPages) >= 13 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected first window prefetch to warm 13 pages, got %d", len(cachedPages))
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	secondReq, _ := http.NewRequest(http.MethodGet, images[10].(string), nil)
+	secondRes, err := http.DefaultClient.Do(secondReq)
+	if err != nil {
+		t.Fatalf("second media request: %v", err)
+	}
+	_, _ = io.ReadAll(secondRes.Body)
+	_ = secondRes.Body.Close()
+
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+		if err != nil {
+			t.Fatalf("glob cache files after second prefetch: %v", err)
+		}
+		if len(cachedPages) >= 23 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected later window prefetch to warm additional pages, got %d", len(cachedPages))
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
+func TestFilePageServesFromMemoryAfterDiskCacheRemoval(t *testing.T) {
+	root := t.TempDir()
+	mustWriteFile(t, filepath.Join(root, "Direct", "001.jpg"), []byte("local-page"))
+
+	cfg := &Config{
+		Server:    ServerConfig{Listen: "127.0.0.1:0", Token: "test-token", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache"), MemoryCacheMB: 16},
+		Scan:      ScanConfig{Concurrency: 1, ExtractArchives: true},
+		Metadata:  MetadataConfig{ReadComicInfo: true, ReadSidecar: true},
+		Libraries: []LibraryConfig{{ID: "local-main", Name: "Local", Kind: "local", Root: root, ScanMode: "auto"}},
+	}
+	app, err := NewApp(cfg)
+	if err != nil {
+		t.Fatalf("NewApp: %v", err)
+	}
+	srv := httptest.NewServer(newHTTPServer(app, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	var comicID string
+	for _, id := range app.libraries["local-main"] {
+		if app.comics[id].Title == "Direct" {
+			comicID = id
+			break
+		}
+	}
+	if comicID == "" {
+		t.Fatal("failed to find direct comic")
+	}
+	chapterID := app.comics[comicID].Chapters[0].ID
+	pages := getJSON(t, srv.URL+"/api/v1/comics/"+comicID+"/chapters/"+chapterID+"/pages", cfg.Server.Token)
+	images := pages["data"].(map[string]any)["images"].([]any)
+	if len(images) != 1 {
+		t.Fatalf("expected 1 image, got %d", len(images))
+	}
+
+	firstReq, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
+	firstRes, err := http.DefaultClient.Do(firstReq)
+	if err != nil {
+		t.Fatalf("first media request: %v", err)
+	}
+	firstBody, _ := io.ReadAll(firstRes.Body)
+	_ = firstRes.Body.Close()
+	if string(firstBody) != "local-page" {
+		t.Fatalf("unexpected first media body: %q", string(firstBody))
+	}
+
+	cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	if err != nil {
+		t.Fatalf("glob cache files: %v", err)
+	}
+	if len(cachedPages) != 1 {
+		t.Fatalf("expected 1 rendered cache file, got %d", len(cachedPages))
+	}
+	if err := os.Remove(cachedPages[0]); err != nil {
+		t.Fatalf("remove rendered cache file: %v", err)
+	}
+
+	secondReq, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
+	secondRes, err := http.DefaultClient.Do(secondReq)
+	if err != nil {
+		t.Fatalf("second media request: %v", err)
+	}
+	secondBody, _ := io.ReadAll(secondRes.Body)
+	_ = secondRes.Body.Close()
+	if string(secondBody) != "local-page" {
+		t.Fatalf("unexpected second media body: %q", string(secondBody))
+	}
+
+	cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	if err != nil {
+		t.Fatalf("glob cache files after memory hit: %v", err)
+	}
+	if len(cachedPages) != 0 {
+		t.Fatalf("expected memory hit without recreating disk cache, got %d files", len(cachedPages))
 	}
 }

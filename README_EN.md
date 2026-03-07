@@ -1,6 +1,6 @@
 # Venera Home Server
 
-[娑擃厽鏋僝(./README.md) | [English](./README_EN.md)
+[娑擃厽鏋�?./README.md) | [English](./README_EN.md)
 
 `Venera Home Server` is a local-comics backend for **Venera**. It exposes comics stored on local disks, SMB shares, or WebDAV as a lightweight HTTP API, and ships with a matching `venera_home.js` source script that can be imported into Venera directly.
 

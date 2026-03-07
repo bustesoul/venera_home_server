@@ -1,10 +1,10 @@
-/** @type {import('../_venera_.js')} */
+/** @type {import('./_venera_.js')} */
 class VeneraHome extends ComicSource {
     name = "Venera Home"
 
     key = "venera_home"
 
-    version = "0.1.1"
+    version = "0.1.4"
 
     minAppVersion = "1.6.0"
 
@@ -62,8 +62,7 @@ class VeneraHome extends ComicSource {
             return url
         }
         let parts = []
-        for (let key of Object.keys(query)) {
-            let value = query[key]
+        for (let [key, value] of Object.entries(query)) {
             if (value === null || value === undefined || value === '') {
                 continue
             }
@@ -117,12 +116,31 @@ class VeneraHome extends ComicSource {
         return categories
     }
 
+    createEmptyBootstrap() {
+        return {
+            libraries: [],
+            capabilities: {},
+            defaults: {
+                sort: 'updated_desc',
+                page_size: 24,
+            },
+        }
+    }
+
+    createEmptyCategories() {
+        return { groups: [] }
+    }
+
+    getMaxPage(data) {
+        return data.paging && data.paging.max_page ? data.paging.max_page : 1
+    }
+
     getBootstrapCache() {
-        return this.loadData('bootstrap') || { libraries: [], capabilities: {}, defaults: { sort: 'updated_desc', page_size: 24 } }
+        return this.loadData('bootstrap') || this.createEmptyBootstrap()
     }
 
     getCategoryCache() {
-        return this.loadData('categories') || { groups: [] }
+        return this.loadData('categories') || this.createEmptyCategories()
     }
 
     getScopedLibrary() {
@@ -173,22 +191,19 @@ class VeneraHome extends ComicSource {
     }
 
     makeTarget(page, attributes) {
-        return {
-            page: page,
-            attributes: attributes,
-        }
+        return { page, attributes }
     }
 
     makeCategoryTarget(category, param) {
         return this.makeTarget('category', {
-            category: category,
-            param: param,
+            category,
+            param,
         })
     }
 
     makeSearchTarget(keyword) {
         return this.makeTarget('search', {
-            keyword: keyword,
+            keyword,
         })
     }
 
@@ -207,8 +222,8 @@ class VeneraHome extends ComicSource {
         try {
             await this.ensureCaches()
         } catch (_) {
-            this.saveData('bootstrap', { libraries: [], capabilities: {}, defaults: { sort: 'updated_desc', page_size: 24 } })
-            this.saveData('categories', { groups: [] })
+            this.saveData('bootstrap', this.createEmptyBootstrap())
+            this.saveData('categories', this.createEmptyCategories())
         }
     }
 
@@ -242,7 +257,7 @@ class VeneraHome extends ComicSource {
                     return {
                         title: section.title,
                         comics: (section.items || []).map((item) => this.toComic(item)),
-                        viewMore: viewMore,
+                        viewMore,
                     }
                 })
             }
@@ -290,7 +305,7 @@ class VeneraHome extends ComicSource {
             }, null)
             return {
                 comics: (data.items || []).map((item) => this.toComic(item)),
-                maxPage: data.paging && data.paging.max_page ? data.paging.max_page : 1,
+                maxPage: this.getMaxPage(data),
             }
         },
         optionList: [
@@ -319,7 +334,7 @@ class VeneraHome extends ComicSource {
             }, null)
             return {
                 comics: (data.items || []).map((item) => this.toComic(item)),
-                maxPage: data.paging && data.paging.max_page ? data.paging.max_page : 1,
+                maxPage: this.getMaxPage(data),
             }
         },
         optionList: [
@@ -365,12 +380,12 @@ class VeneraHome extends ComicSource {
                 folders[folder.id] = folder.name
             }
             return {
-                folders: folders,
+                folders,
                 favorited: data.favorited || [],
             }
         },
         addFolder: async (name) => {
-            await this.request('POST', '/favorites/folders', null, { name: name })
+            await this.request('POST', '/favorites/folders', null, { name })
             return 'ok'
         },
         deleteFolder: async (folderId) => {
@@ -385,7 +400,7 @@ class VeneraHome extends ComicSource {
             }, null)
             return {
                 comics: (data.items || []).map((item) => this.toComic(item)),
-                maxPage: data.paging && data.paging.max_page ? data.paging.max_page : 1,
+                maxPage: this.getMaxPage(data),
             }
         },
         singleFolderForSingleComic: false,
@@ -557,44 +572,44 @@ class VeneraHome extends ComicSource {
             'Rescan requested': 'Rescan requested',
         },
         'zh_CN': {
-            'Home': '棣栭〉',
-            'Libraries': '涔﹀簱',
-            'Tags': '鏍囩',
-            'Authors': '浣滆€?,
-            'Storage': '瀛樺偍',
-            'Server URL': '鏈嶅姟鍣ㄥ湴鍧€',
-            'Token': '浠ょ墝',
-            'Default Library ID': '榛樿涔﹀簱 ID',
-            'Default Sort': '榛樿鎺掑簭',
-            'Page Size': '鍒嗛〉澶у皬',
-            'Test Connection': '娴嬭瘯杩炴帴',
-            'Rescan': '閲嶆柊鎵弿',
-            'Open Server': '鎵撳紑鏈嶅姟椤?,
-            'Server URL is required': '闇€瑕佸厛濉啓鏈嶅姟鍣ㄥ湴鍧€',
-            'Connected': '宸茶繛鎺?,
-            'libraries': '涓功搴?,
-            'Select library to rescan': '閫夋嫨瑕侀噸鎵殑涔﹀簱',
-            'Rescan requested': '宸叉彁浜ら噸鎵换鍔?,
+            'Home': '首页',
+            'Libraries': '书库',
+            'Tags': '标签',
+            'Authors': '作者',
+            'Storage': '存储',
+            'Server URL': '服务器地址',
+            'Token': '令牌',
+            'Default Library ID': '默认书库 ID',
+            'Default Sort': '默认排序',
+            'Page Size': '分页大小',
+            'Test Connection': '测试连接',
+            'Rescan': '重新扫描',
+            'Open Server': '打开服务器',
+            'Server URL is required': '需要先填写服务器地址',
+            'Connected': '已连接',
+            'libraries': '个书库',
+            'Select library to rescan': '选择要重新扫描的书库',
+            'Rescan requested': '已提交重新扫描请求',
         },
         'zh_TW': {
-            'Home': '棣栭爜',
-            'Libraries': '鏇稿韩',
-            'Tags': '妯欑堡',
-            'Authors': '浣滆€?,
-            'Storage': '鍎插瓨',
-            'Server URL': '浼烘湇鍣ㄥ湴鍧€',
-            'Token': '娆婃潠',
-            'Default Library ID': '闋愯ō鏇稿韩 ID',
-            'Default Sort': '闋愯ō鎺掑簭',
-            'Page Size': '鍒嗛爜澶у皬',
-            'Test Connection': '娓│閫ｇ窔',
-            'Rescan': '閲嶆柊鎺冩弿',
-            'Open Server': '鎵撻枊鏈嶅嫏闋?,
-            'Server URL is required': '闇€瑕佸厛濉浼烘湇鍣ㄥ湴鍧€',
-            'Connected': '宸查€ｇ窔',
-            'libraries': '鍊嬫浉搴?,
-            'Select library to rescan': '閬告搰瑕侀噸鏂版巸鎻忕殑鏇稿韩',
-            'Rescan requested': '宸查€佸嚭閲嶆柊鎺冩弿浠诲嫏',
-        }
+            'Home': '首頁',
+            'Libraries': '書庫',
+            'Tags': '標籤',
+            'Authors': '作者',
+            'Storage': '儲存',
+            'Server URL': '伺服器位址',
+            'Token': '權杖',
+            'Default Library ID': '預設書庫 ID',
+            'Default Sort': '預設排序',
+            'Page Size': '分頁大小',
+            'Test Connection': '測試連線',
+            'Rescan': '重新掃描',
+            'Open Server': '打開伺服器',
+            'Server URL is required': '需要先填寫伺服器位址',
+            'Connected': '已連線',
+            'libraries': '個書庫',
+            'Select library to rescan': '選擇要重新掃描的書庫',
+            'Rescan requested': '已送出重新掃描請求',
+        },
     }
 }

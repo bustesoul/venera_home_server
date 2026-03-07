@@ -1,8 +1,9 @@
-﻿[server]
+[server]
 listen = "0.0.0.0:34123"
 token = "change-me"
 data_dir = "./data"
 cache_dir = "./cache"
+memory_cache_mb = 512
 log_level = "info"
 
 [scan]
