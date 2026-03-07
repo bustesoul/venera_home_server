@@ -1,8 +1,8 @@
 # Venera Home Server
 
-[娑擃厽鏋�?./README.md) | [English](./README_EN.md)
+[中文](./README.md) | [English](./README_EN.md)
 
-`Venera Home Server` is a local-comics backend for **Venera**. It exposes comics stored on local disks, SMB shares, or WebDAV as a lightweight HTTP API, and ships with a matching `venera_home.js` source script that can be imported into Venera directly.
+`Venera Home Server` is a local-comics backend for **Venera**. It exposes comics stored on local disks, SMB shares, or WebDAV through a lightweight HTTP API, and ships with a matching `venera_home.js` source script that can be imported into Venera directly.
 
 ## Goals
 
@@ -48,13 +48,16 @@
 
 ## Repository Layout
 
-- `main.go`: server entry point
+- `main.go`: backward-compatible thin entry for `go run .`
+- `cmd/venera_home_server/main.go`: standard CLI entry
+- `internal/app/`: core application model, scan flow, and metadata merge
+- `internal/httpapi/`: HTTP API, media serving, and page-cache logic
+- `internal/backend/` / `internal/archive/`: storage backends and archive access
+- `internal/tests/`: standalone test modules grouped by concern
+- `internal/README.md`: internal module layout notes
 - `venera_home.js`: Venera source script
 - `server.example.toml`: example configuration
 - `openapi.yaml`: API contract / draft
-- `archive.go`: shared archive abstraction layer
-- `archive_pdf_windows.go`: Windows PDF renderer
-- `testdata/`: archive fixtures used by tests
 
 ## Architecture Overview
 
@@ -108,7 +111,7 @@ scan_mode = "auto"
 
 `scan_mode` supports two modes:
 
-- `auto`: default; sibling chapter folders or archives are grouped only when explicit metadata matches (for example the same `Series`, or the same explicit title without conflicts)
+- `auto`: default; sibling chapter folders or archives are grouped only when explicit metadata matches
 - `flat`: do not auto-group sibling items; each archive or image folder is treated as a separate comic
 
 ### 2. Set secret env vars for SMB / WebDAV if needed
@@ -123,7 +126,7 @@ $env:WEBDAV_PASS = "your-password"
 Development mode:
 
 ```powershell
-go run . -config .\server.example.toml
+go run ./cmd/venera_home_server -config ./server.example.toml
 ```
 
 If you already have a built binary:
@@ -236,7 +239,7 @@ Run tests with:
 go test -buildvcs=false ./...
 ```
 
-Current test coverage includes:
+Current coverage includes:
 
 - config loading
 - end-to-end local flow
@@ -248,7 +251,7 @@ Current test coverage includes:
 ## API and Implementation Notes
 
 - API contract: `openapi.yaml`
-- Archive abstraction entry: `archive.go`
+- Core server implementation: `internal/app/` + `internal/httpapi/` + `internal/backend/` + `internal/archive/`
 - Venera source script: `venera_home.js`
 
 The source script is intentionally thin. Most complexity lives on the server side, while `venera_home.js` mainly maps `/api/v1/*` responses into Venera-compatible objects.
