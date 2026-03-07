@@ -76,7 +76,7 @@ jobs:
           binary="venera_home_server${{ matrix.ext }}"
           mkdir -p "package/${asset_dir}"
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-            go build -trimpath -ldflags="-s -w" -o "package/${asset_dir}/${binary}" ./cmd/venera_home_server
+            go build -trimpath -ldflags="-s -w" -o "package/${asset_dir}/${binary}" .
           cp README.md "package/${asset_dir}/README.md"
           cp server.example.toml "package/${asset_dir}/server.example.toml"
           cp openapi.yaml "package/${asset_dir}/openapi.yaml"

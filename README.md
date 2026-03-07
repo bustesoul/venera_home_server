@@ -2,11 +2,11 @@
 
 [中文](./README.md) | [English](./README_EN.md)
 
-`Venera Home Server` 是一个为 **Venera** 漫画阅读器准备的本地漫画后端。它把本地磁盘、SMB 共享、WebDAV 里的漫画统一暴露成轻量 HTTP API，并配套提供可直接导入 Venera 的 `venera_home.js`。
+`Venera Home Server` 是一个为 **[Venera](https://github.com/venera-app/venera)** 漫画阅读器准备的本地漫画后端。它把本地磁盘、SMB 共享、WebDAV 里的漫画统一暴露成轻量 HTTP API，并配套提供可直接导入 Venera 的 `venera_home.js`。
 
 ## 项目目标
 
-- 让 Venera 直接阅读你已经拥有的本地漫画
+- 让 [Venera](https://github.com/venera-app/venera) 直接阅读你已经拥有的本地漫画
 - 把文件系统、归档读取、缓存、元数据处理沉到独立服务端
 - 保持 `venera_home.js` 尽量薄，主要负责 API 映射
 - 优先覆盖离线 / 私有漫画库场景，为后续扩展留空间
@@ -48,16 +48,33 @@
 
 ## 目录结构
 
-- `main.go`：兼容旧用法的薄入口，便于继续 `go run .`
-- `cmd/venera_home_server/main.go`：标准化 CLI 入口
-- `internal/app/`：核心应用模型、扫描与元数据合并
-- `internal/httpapi/`：HTTP API、媒体分发与页面缓存
-- `internal/backend/` / `internal/archive/`：存储后端与归档访问
-- `internal/tests/`：独立测试模块，按模块拆分
-- `internal/README.md`：内部模块分层说明
-- `venera_home.js`：Venera 源脚本
+- `main.go`：项目唯一入口，便于直接 `go run .`
+- `app/`：核心应用模型、扫描与元数据合并
+- `httpapi/`：HTTP API、媒体分发与页面缓存
+- `backend/` / `archive/`：存储后端与归档访问
+- `tests/`：独立测试模块，按模块拆分
+- `venera_home.js`：[Venera](https://github.com/venera-app/venera) 源脚本
 - `server.example.toml`：示例配置
 - `openapi.yaml`：HTTP API 草案 / 合同
+
+## 模块说明
+
+当前服务端采用根目录扁平模块结构：
+
+- `app/`：核心应用模型、扫描、元数据合并、章节分页物化
+- `archive/`：ZIP / RAR / 7Z / PDF 归档访问
+- `backend/`：本地、SMB、WebDAV 存储后端
+- `config/`：配置加载与解析
+- `favorites/`：收藏夹持久化
+- `httpapi/`：HTTP 路由、媒体分发、页面缓存逻辑
+- `shared/`：跨模块复用工具
+- `tests/`：独立测试模块与 `testkit/` 公共测试支撑
+
+这套结构的目标：
+
+1. 根目录直接按模块分类，避免额外层级；
+2. `main.go` 保持为唯一启动入口；
+3. 测试目录独立，便于按模块浏览与维护。
 
 ## 架构概览
 
@@ -89,6 +106,7 @@ listen = "0.0.0.0:34123"
 token = "change-me"
 data_dir = "./data"
 cache_dir = "./cache"
+log_level = "info"
 
 [scan]
 concurrency = 4
@@ -109,10 +127,10 @@ root = "D:/Comics"
 scan_mode = "auto"
 ```
 
-`scan_mode` 支持两种模式：
-
-- `auto`：默认模式；只有同层项目的显式元数据能匹配上时，才会合并成同一漫画的多个章节
-- `flat`：不自动合并同层项目；每个压缩包或图片目录都按独立漫画处理
+- `log_level` 默认是 `info`；若要看页面缓存、预取、压缩等调试日志，可改成 `debug`
+- `scan_mode` 支持两种模式：
+  - `auto`：默认模式；只有同层项目的显式元数据能匹配上时，才会合并成同一漫画的多个章节
+  - `flat`：不自动合并同层项目；每个压缩包或图片目录都按独立漫画处理
 
 ### 2. 如果使用 SMB / WebDAV，先设置密码环境变量
 
@@ -126,7 +144,7 @@ $env:WEBDAV_PASS = "your-password"
 开发模式：
 
 ```powershell
-go run ./cmd/venera_home_server -config ./server.example.toml
+go run . -config ./server.example.toml
 ```
 
 如果你已经有编译好的可执行文件，也可以直接运行：
@@ -135,7 +153,7 @@ go run ./cmd/venera_home_server -config ./server.example.toml
 .\venera_home_server.exe -config .\server.example.toml
 ```
 
-### 4. 在 Venera 中导入源脚本
+### 4. 在 [Venera](https://github.com/venera-app/venera) 中导入源脚本
 
 导入：
 
@@ -251,10 +269,10 @@ go test -buildvcs=false ./...
 ## API 与实现说明
 
 - HTTP API 草案：`openapi.yaml`
-- 服务端核心实现：`internal/app/` + `internal/httpapi/` + `internal/backend/` + `internal/archive/`
-- Venera 源脚本：`venera_home.js`
+- 服务端核心实现：`app/` + `httpapi/` + `backend/` + `archive/`
+- [Venera](https://github.com/venera-app/venera) 源脚本：`venera_home.js`
 
-`venera_home.js` 设计上保持较薄，主要负责请求 `/api/v1/*` 接口，并把返回数据转换为 Venera 可识别的数据结构。
+`venera_home.js` 设计上保持较薄，主要负责请求 `/api/v1/*` 接口，并把返回数据转换为 [Venera](https://github.com/venera-app/venera) 可识别的数据结构。
 
 ## 后续方向
 

@@ -2,11 +2,11 @@
 
 [中文](./README.md) | [English](./README_EN.md)
 
-`Venera Home Server` is a local-comics backend for **Venera**. It exposes comics stored on local disks, SMB shares, or WebDAV through a lightweight HTTP API, and ships with a matching `venera_home.js` source script that can be imported into Venera directly.
+`Venera Home Server` is a local-comics backend for **[Venera](https://github.com/venera-app/venera)**. It exposes comics stored on local disks, SMB shares, or WebDAV through a lightweight HTTP API, and ships with a matching `venera_home.js` source script that can be imported into Venera directly.
 
 ## Goals
 
-- Let Venera read comics you already own
+- Let [Venera](https://github.com/venera-app/venera) read comics you already own
 - Move filesystem, archive, cache, and metadata logic into a standalone server
 - Keep `venera_home.js` thin and focused on API mapping
 - Start with offline / private-library workflows, while leaving room for future online metadata features
@@ -48,16 +48,33 @@
 
 ## Repository Layout
 
-- `main.go`: backward-compatible thin entry for `go run .`
-- `cmd/venera_home_server/main.go`: standard CLI entry
-- `internal/app/`: core application model, scan flow, and metadata merge
-- `internal/httpapi/`: HTTP API, media serving, and page-cache logic
-- `internal/backend/` / `internal/archive/`: storage backends and archive access
-- `internal/tests/`: standalone test modules grouped by concern
-- `internal/README.md`: internal module layout notes
-- `venera_home.js`: Venera source script
+- `main.go`: single project entry for `go run .`
+- `app/`: core application model, scan flow, and metadata merge
+- `httpapi/`: HTTP API, media serving, and page-cache logic
+- `backend/` / `archive/`: storage backends and archive access
+- `tests/`: standalone test modules grouped by concern
+- `venera_home.js`: [Venera](https://github.com/venera-app/venera) source script
 - `server.example.toml`: example configuration
 - `openapi.yaml`: API contract / draft
+
+## Module Layout
+
+The server now uses a flat, root-level module layout:
+
+- `app/`: core application model, scan flow, metadata merge, and chapter page materialization
+- `archive/`: ZIP / RAR / 7Z / PDF archive access
+- `backend/`: local, SMB, and WebDAV storage backends
+- `config/`: config loading and parsing
+- `favorites/`: favorites persistence
+- `httpapi/`: HTTP routes, media serving, and page-cache logic
+- `shared/`: small cross-module utilities
+- `tests/`: standalone test modules plus shared `testkit/` helpers
+
+Goals of this structure:
+
+1. keep module folders directly visible at the repo root;
+2. keep `main.go` as the single startup entry;
+3. keep tests physically separated while preserving module ownership.
 
 ## Architecture Overview
 
@@ -89,6 +106,7 @@ listen = "0.0.0.0:34123"
 token = "change-me"
 data_dir = "./data"
 cache_dir = "./cache"
+log_level = "info"
 
 [scan]
 concurrency = 4
@@ -109,10 +127,10 @@ root = "D:/Comics"
 scan_mode = "auto"
 ```
 
-`scan_mode` supports two modes:
-
-- `auto`: default; sibling chapter folders or archives are grouped only when explicit metadata matches
-- `flat`: do not auto-group sibling items; each archive or image folder is treated as a separate comic
+- `log_level` defaults to `info`; switch it to `debug` if you want cache, prefetch, and compression debug logs
+- `scan_mode` supports two modes:
+  - `auto`: default; sibling chapter folders or archives are grouped only when explicit metadata matches
+  - `flat`: do not auto-group sibling items; each archive or image folder is treated as a separate comic
 
 ### 2. Set secret env vars for SMB / WebDAV if needed
 
@@ -126,7 +144,7 @@ $env:WEBDAV_PASS = "your-password"
 Development mode:
 
 ```powershell
-go run ./cmd/venera_home_server -config ./server.example.toml
+go run . -config ./server.example.toml
 ```
 
 If you already have a built binary:
@@ -135,7 +153,7 @@ If you already have a built binary:
 .\venera_home_server.exe -config .\server.example.toml
 ```
 
-### 4. Import the Venera source
+### 4. Import the [Venera](https://github.com/venera-app/venera) source
 
 Import:
 
@@ -251,10 +269,10 @@ Current coverage includes:
 ## API and Implementation Notes
 
 - API contract: `openapi.yaml`
-- Core server implementation: `internal/app/` + `internal/httpapi/` + `internal/backend/` + `internal/archive/`
-- Venera source script: `venera_home.js`
+- Core server implementation: `app/` + `httpapi/` + `backend/` + `archive/`
+- [Venera](https://github.com/venera-app/venera) source script: `venera_home.js`
 
-The source script is intentionally thin. Most complexity lives on the server side, while `venera_home.js` mainly maps `/api/v1/*` responses into Venera-compatible objects.
+The source script is intentionally thin. Most complexity lives on the server side, while `venera_home.js` mainly maps `/api/v1/*` responses into [Venera](https://github.com/venera-app/venera)-compatible objects.
 
 ## Roadmap
 
