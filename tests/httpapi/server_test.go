@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -293,6 +294,92 @@ func TestFilePageServesFromMemoryAfterDiskCacheRemoval(t *testing.T) {
 	}
 }
 
+func TestMetadataAdminEndpoints(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteFile(t, filepath.Join(root, "Book A", "001.jpg"), []byte("img"))
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	refresh := testkit.PostJSON(t, srv.URL+"/api/v1/admin/metadata/refresh", cfg.Server.Token, map[string]any{"library_id": "local-main"})
+	jobID := refresh["data"].(map[string]any)["job_id"].(string)
+	job := waitForMetadataJob(t, srv.URL, cfg.Server.Token, jobID)
+	if job["status"] != "done" {
+		t.Fatalf("expected metadata job done, got %#v", job)
+	}
+
+	records := testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?state=empty&library_id=local-main", cfg.Server.Token)
+	items := records["data"].(map[string]any)["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 metadata record, got %d", len(items))
+	}
+	item := items[0].(map[string]any)
+	if item["state"] != "empty" {
+		t.Fatalf("expected empty state, got %#v", item["state"])
+	}
+}
+
+func TestMetadataCleanupEndpoint(t *testing.T) {
+	root := t.TempDir()
+	bookDir := filepath.Join(root, "Book A")
+	testkit.MustWriteFile(t, filepath.Join(bookDir, "001.jpg"), []byte("img"))
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	if err := os.RemoveAll(bookDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if err := application.Rescan(context.Background(), "local-main"); err != nil {
+		t.Fatalf("Rescan: %v", err)
+	}
+
+	missing := testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?state=missing&library_id=local-main", cfg.Server.Token)
+	items := missing["data"].(map[string]any)["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 missing metadata record, got %d", len(items))
+	}
+
+	dryRun := testkit.PostJSON(t, srv.URL+"/api/v1/admin/metadata/cleanup", cfg.Server.Token, map[string]any{"library_id": "local-main", "older_than_days": 0, "dry_run": true})
+	dryData := dryRun["data"].(map[string]any)
+	if int(dryData["matched"].(float64)) != 1 || int(dryData["deleted"].(float64)) != 0 {
+		t.Fatalf("unexpected dry-run cleanup result: %#v", dryData)
+	}
+
+	realRun := testkit.PostJSON(t, srv.URL+"/api/v1/admin/metadata/cleanup", cfg.Server.Token, map[string]any{"library_id": "local-main", "older_than_days": 0, "dry_run": false})
+	realData := realRun["data"].(map[string]any)
+	if int(realData["matched"].(float64)) != 1 || int(realData["deleted"].(float64)) != 1 {
+		t.Fatalf("unexpected cleanup result: %#v", realData)
+	}
+
+	missing = testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?state=missing&library_id=local-main", cfg.Server.Token)
+	items = missing["data"].(map[string]any)["items"].([]any)
+	if len(items) != 0 {
+		t.Fatalf("expected missing metadata to be cleaned, got %d", len(items))
+	}
+}
+
+func waitForMetadataJob(t *testing.T, baseURL, token, jobID string) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		job := testkit.GetJSON(t, baseURL+"/api/v1/admin/metadata/jobs/"+jobID, token)
+		data := job["data"].(map[string]any)
+		status := data["status"].(string)
+		if status == "done" || status == "failed" {
+			return data
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("metadata job %s did not finish in time: %#v", jobID, data)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
 func newServerTestConfig(root string, memoryCacheMB int) *configpkg.Config {
 	return &configpkg.Config{
 		Server:    configpkg.ServerConfig{Listen: "127.0.0.1:0", Token: "test-token", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache"), MemoryCacheMB: memoryCacheMB},
@@ -308,6 +395,7 @@ func newServerTestApp(t *testing.T, cfg *configpkg.Config) *apppkg.App {
 	if err != nil {
 		t.Fatalf("NewApp: %v", err)
 	}
+	t.Cleanup(func() { _ = application.Close() })
 	return application
 }
 

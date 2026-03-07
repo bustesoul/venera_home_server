@@ -26,6 +26,7 @@ func TestSidecarOverridesMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewApp: %v", err)
 	}
+	t.Cleanup(func() { _ = application.Close() })
 	if err := application.Rescan(context.Background(), ""); err != nil {
 		t.Fatalf("Rescan: %v", err)
 	}

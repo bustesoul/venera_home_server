@@ -98,5 +98,6 @@ func newTestApp(t *testing.T, root string) *apppkg.App {
 	if err != nil {
 		t.Fatalf("NewApp: %v", err)
 	}
+	t.Cleanup(func() { _ = application.Close() })
 	return application
 }

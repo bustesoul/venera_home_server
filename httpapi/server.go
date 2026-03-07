@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +21,7 @@ import (
 	archivepkg "venera_home_server/archive"
 	backendpkg "venera_home_server/backend"
 	configpkg "venera_home_server/config"
+	metadatapkg "venera_home_server/metadata"
 	"venera_home_server/shared"
 )
 
@@ -40,18 +42,18 @@ type pageCacheInfoEntry struct {
 }
 
 type Server struct {
-	app             *apppkg.App
-	log             *shared.LevelLogger
-	PageMemoryCache *PageMemoryCache
-	pageFlightMu    sync.Mutex
-	pageFlights     map[string]*pageCacheFlight
-	prefetchMu      sync.Mutex
-	prefetching     map[string]struct{}
-	prefetchSem     chan struct{}
+	app                 *apppkg.App
+	log                 *shared.LevelLogger
+	PageMemoryCache     *PageMemoryCache
+	pageFlightMu        sync.Mutex
+	pageFlights         map[string]*pageCacheFlight
+	prefetchMu          sync.Mutex
+	prefetching         map[string]struct{}
+	prefetchSem         chan struct{}
 	prefetchLastTrigger map[string]time.Time
-	pageCacheBuildSem chan struct{}
-	pageCacheInfoMu    sync.RWMutex
-	pageCacheInfoItems map[string]pageCacheInfoEntry
+	pageCacheBuildSem   chan struct{}
+	pageCacheInfoMu     sync.RWMutex
+	pageCacheInfoItems  map[string]pageCacheInfoEntry
 }
 
 func NewHTTPServer(app *apppkg.App, logger *log.Logger) http.Handler {
@@ -83,6 +85,9 @@ func newHTTPServer(app *apppkg.App, logger *log.Logger) http.Handler {
 	mux.HandleFunc("/api/v1/favorites/items", srv.auth(srv.handleFavoriteItems))
 	mux.HandleFunc("/api/v1/admin/rescan", srv.auth(srv.handleRescan))
 	mux.HandleFunc("/api/v1/admin/metadata/refresh", srv.auth(srv.handleMetadataRefresh))
+	mux.HandleFunc("/api/v1/admin/metadata/jobs/", srv.auth(srv.handleMetadataJob))
+	mux.HandleFunc("/api/v1/admin/metadata/records", srv.auth(srv.handleMetadataRecords))
+	mux.HandleFunc("/api/v1/admin/metadata/cleanup", srv.auth(srv.handleMetadataCleanup))
 	mux.HandleFunc("/media/", srv.handleMedia)
 	mux.HandleFunc("/", srv.handleIndex)
 	return loggingMiddleware(levelLogger, mux)
@@ -93,11 +98,11 @@ func NewForTests(maxMemoryBytes int64, logger *log.Logger) *Server {
 		logger = log.New(io.Discard, "", 0)
 	}
 	return &Server{
-		log:             shared.NewLevelLogger(logger, "debug"),
-		PageMemoryCache: NewPageMemoryCache(maxMemoryBytes),
-		pageFlights:     map[string]*pageCacheFlight{},
-		prefetching:     map[string]struct{}{},
-		prefetchSem:     make(chan struct{}, 1),
+		log:                 shared.NewLevelLogger(logger, "debug"),
+		PageMemoryCache:     NewPageMemoryCache(maxMemoryBytes),
+		pageFlights:         map[string]*pageCacheFlight{},
+		prefetching:         map[string]struct{}{},
+		prefetchSem:         make(chan struct{}, 1),
 		prefetchLastTrigger: map[string]time.Time{},
 		pageCacheBuildSem:   make(chan struct{}, 1),
 		pageCacheInfoItems:  map[string]pageCacheInfoEntry{},
@@ -143,7 +148,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 	writeData(w, map[string]any{
 		"server":       map[string]any{"name": "Venera Home Server", "version": "0.1.0"},
-		"capabilities": map[string]any{"favorites": true, "thumbnails": true, "rescan": true, "metadata_fetch": false},
+		"capabilities": map[string]any{"favorites": true, "thumbnails": true, "rescan": true, "metadata_fetch": true},
 		"libraries":    libraries,
 		"defaults":     map[string]any{"sort": "updated_desc", "page_size": 24},
 	})
@@ -490,7 +495,123 @@ func (s *Server) handleMetadataRefresh(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 		return
 	}
-	writeData(w, map[string]any{"job_id": shared.SHAID("metadata", time.Now().Format(time.RFC3339Nano)), "status": "queued"})
+	var payload apppkg.MetadataRefreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
+		return
+	}
+	job, err := s.app.StartMetadataRefresh(r.Context(), payload)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "METADATA_REFRESH_FAILED", err.Error())
+		return
+	}
+	writeData(w, job)
+}
+
+func (s *Server) handleMetadataJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	jobID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/v1/admin/metadata/jobs/"))
+	if jobID == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_JOB_ID", "job id is required")
+		return
+	}
+	job, ok := s.app.MetadataJob(jobID)
+	if !ok {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "metadata job not found")
+		return
+	}
+	writeData(w, job)
+}
+
+func (s *Server) handleMetadataRecords(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	query := metadatapkg.ListQuery{
+		State:     strings.TrimSpace(r.URL.Query().Get("state")),
+		LibraryID: strings.TrimSpace(r.URL.Query().Get("library_id")),
+		Path:      strings.TrimSpace(r.URL.Query().Get("path")),
+		Limit:     parseInt(strings.TrimSpace(r.URL.Query().Get("limit")), 200),
+	}
+	records, err := s.app.MetadataRecords(r.Context(), query)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "METADATA_RECORDS_FAILED", err.Error())
+		return
+	}
+	items := make([]map[string]any, 0, len(records))
+	for _, record := range records {
+		items = append(items, map[string]any{
+			"id":                  record.ID,
+			"library_id":          record.LibraryID,
+			"root_type":           record.RootType,
+			"root_ref":            record.RootRef,
+			"folder_path":         record.FolderPath,
+			"content_fingerprint": emptyToNil(record.ContentFingerprint),
+			"title":               emptyToNil(record.Title),
+			"title_jpn":           emptyToNil(record.TitleJPN),
+			"subtitle":            emptyToNil(record.Subtitle),
+			"description":         emptyToNil(record.Description),
+			"artists":             record.Artists,
+			"tags":                record.Tags,
+			"language":            emptyToNil(record.Language),
+			"source":              emptyToNil(record.Source),
+			"source_id":           emptyToNil(record.SourceID),
+			"source_token":        emptyToNil(record.SourceToken),
+			"source_url":          emptyToNil(record.SourceURL),
+			"last_error":          emptyToNil(record.LastError),
+			"fetched_at":          formatTimePtrRFC3339(record.FetchedAt),
+			"stale_after":         formatTimePtrRFC3339(record.StaleAfter),
+			"last_seen_at":        formatTimePtrRFC3339(record.LastSeenAt),
+			"missing_since":       formatTimePtrRFC3339(record.MissingSince),
+			"state":               metadataRecordState(record),
+		})
+	}
+	writeData(w, map[string]any{"items": items, "count": len(items)})
+}
+
+func (s *Server) handleMetadataCleanup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	var payload metadatapkg.CleanupRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
+		return
+	}
+	result, err := s.app.CleanupMetadata(r.Context(), payload)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "METADATA_CLEANUP_FAILED", err.Error())
+		return
+	}
+	writeData(w, result)
+}
+
+func metadataRecordState(record metadatapkg.Record) string {
+	if record.MissingSince != nil {
+		return "missing"
+	}
+	if strings.TrimSpace(record.LastError) != "" {
+		return "error"
+	}
+	if record.StaleAfter != nil && !record.StaleAfter.After(time.Now().UTC()) {
+		return "stale"
+	}
+	if record.IsEmptyMetadata() {
+		return "empty"
+	}
+	return "ready"
+}
+
+func formatTimePtrRFC3339(value *time.Time) any {
+	if value == nil {
+		return nil
+	}
+	return value.UTC().Format(time.RFC3339Nano)
 }
 
 func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {

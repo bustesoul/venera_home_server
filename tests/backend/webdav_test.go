@@ -65,6 +65,7 @@ func TestWebDAVLibraryScan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewApp: %v", err)
 	}
+	t.Cleanup(func() { _ = application.Close() })
 	ids := application.LibraryComicIDs("dav")
 	if len(ids) != 2 {
 		t.Fatalf("expected 2 comics from webdav, got %d", len(ids))

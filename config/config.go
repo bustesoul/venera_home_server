@@ -36,6 +36,7 @@ type MetadataConfig struct {
 	ReadComicInfo    bool
 	ReadSidecar      bool
 	AllowRemoteFetch bool
+	DatabasePath     string
 }
 
 type LibraryConfig struct {
@@ -221,6 +222,8 @@ func assignMetadata(cfg *MetadataConfig, key string, value any) {
 		cfg.ReadSidecar = asBool(value)
 	case "allow_remote_fetch":
 		cfg.AllowRemoteFetch = asBool(value)
+	case "database_path":
+		cfg.DatabasePath = asString(value)
 	}
 }
 

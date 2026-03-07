@@ -68,14 +68,38 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build binary
+      - name: Set up Windows GCC
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          path-type: inherit
+          install: >-
+            mingw-w64-x86_64-gcc
+
+      - name: Build Unix binary
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           asset_dir="venera_home_server_${{ matrix.goos }}_${{ matrix.goarch }}"
           binary="venera_home_server${{ matrix.ext }}"
           mkdir -p "package/${asset_dir}"
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 \
+            go build -trimpath -ldflags="-s -w" -o "package/${asset_dir}/${binary}" .
+          cp README.md "package/${asset_dir}/README.md"
+          cp server.example.toml "package/${asset_dir}/server.example.toml"
+          cp openapi.yaml "package/${asset_dir}/openapi.yaml"
+
+      - name: Build Windows binary
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          asset_dir="venera_home_server_${{ matrix.goos }}_${{ matrix.goarch }}"
+          binary="venera_home_server${{ matrix.ext }}"
+          mkdir -p "package/${asset_dir}"
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 CC=gcc CXX=g++ \
             go build -trimpath -ldflags="-s -w" -o "package/${asset_dir}/${binary}" .
           cp README.md "package/${asset_dir}/README.md"
           cp server.example.toml "package/${asset_dir}/server.example.toml"

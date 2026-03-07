@@ -17,17 +17,21 @@ import (
 	backendpkg "venera_home_server/backend"
 	configpkg "venera_home_server/config"
 	favoritespkg "venera_home_server/favorites"
+	metadatapkg "venera_home_server/metadata"
 	"venera_home_server/shared"
 )
 
 type App struct {
-	cfg       *configpkg.Config
-	backends  map[string]backendpkg.Backend
-	comicsMu  sync.RWMutex
-	comics    map[string]*Comic
-	libraries map[string][]string
-	chapters  map[string]*Chapter
-	favorites *favoritespkg.FavoritesStore
+	cfg            *configpkg.Config
+	backends       map[string]backendpkg.Backend
+	comicsMu       sync.RWMutex
+	comics         map[string]*Comic
+	libraries      map[string][]string
+	chapters       map[string]*Chapter
+	favorites      *favoritespkg.FavoritesStore
+	metadataStore  *metadatapkg.Store
+	metadataJobsMu sync.RWMutex
+	metadataJobs   map[string]*MetadataRefreshJob
 }
 
 type comicInfoXML struct {
@@ -51,13 +55,19 @@ func NewApp(cfg *configpkg.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	metadataStore, err := metadatapkg.OpenStore(cfg.Server.DataDir, cfg.Metadata.DatabasePath)
+	if err != nil {
+		return nil, err
+	}
 	app := &App{
-		cfg:       cfg,
-		backends:  map[string]backendpkg.Backend{},
-		comics:    map[string]*Comic{},
-		libraries: map[string][]string{},
-		chapters:  map[string]*Chapter{},
-		favorites: favorites,
+		cfg:           cfg,
+		backends:      map[string]backendpkg.Backend{},
+		comics:        map[string]*Comic{},
+		libraries:     map[string][]string{},
+		chapters:      map[string]*Chapter{},
+		favorites:     favorites,
+		metadataStore: metadataStore,
+		metadataJobs:  map[string]*MetadataRefreshJob{},
 	}
 	for _, lib := range cfg.Libraries {
 		var backend backendpkg.Backend
@@ -123,10 +133,17 @@ func (a *App) Rescan(ctx context.Context, libraryID string) error {
 		if libraryID != "" && lib.ID != libraryID {
 			continue
 		}
+		scanStarted := time.Now().UTC()
 		backend := a.backends[lib.ID]
-		comics, err := a.scanLibrary(ctx, lib, backend)
+		libraryCtx := withMetadataScanStarted(ctx, scanStarted)
+		comics, err := a.scanLibrary(libraryCtx, lib, backend)
 		if err != nil {
 			return fmt.Errorf("scan %s: %w", lib.ID, err)
+		}
+		if a.metadataStore != nil {
+			if err := a.metadataStore.FinalizeLibraryScan(libraryCtx, lib.ID, scanStarted); err != nil {
+				return fmt.Errorf("finalize metadata scan %s: %w", lib.ID, err)
+			}
 		}
 		ids := make([]string, 0, len(comics))
 		for _, comic := range comics {
@@ -234,7 +251,7 @@ func (a *App) scanDir(ctx context.Context, lib configpkg.LibraryConfig, backend 
 			}
 		}
 		if meta, groupKey, ok := shouldBuildSeries(parentMeta, candidates); ok {
-			comic, err := a.buildSeriesComicFromCandidates(lib, rel, groupKey, meta, candidates)
+			comic, err := a.buildSeriesComicFromCandidates(ctx, lib, rel, groupKey, meta, candidates)
 			if err == nil {
 				return []*Comic{comic}, nil
 			}
@@ -380,6 +397,7 @@ func mergeMetadata(base ParsedMetadata, override ParsedMetadata) ParsedMetadata 
 		out.Tags = shared.UniqueStrings(out.Tags)
 	}
 	out.Language = firstNonEmpty(override.Language, out.Language)
+	out.SourceURL = firstNonEmpty(override.SourceURL, out.SourceURL)
 	out.ScanMode = firstNonEmpty(override.ScanMode, out.ScanMode)
 	out.Hidden = out.Hidden || override.Hidden
 	out.hasExplicitTitle = out.hasExplicitTitle || override.hasExplicitTitle
@@ -496,12 +514,13 @@ func shouldBuildSeries(parentMeta ParsedMetadata, candidates []chapterCandidate)
 	return rootMeta, key, true
 }
 
-func (a *App) buildSeriesComicFromCandidates(lib configpkg.LibraryConfig, rel string, groupKey string, meta ParsedMetadata, candidates []chapterCandidate) (*Comic, error) {
+func (a *App) buildSeriesComicFromCandidates(ctx context.Context, lib configpkg.LibraryConfig, rel string, groupKey string, meta ParsedMetadata, candidates []chapterCandidate) (*Comic, error) {
 	if len(candidates) == 0 {
 		return nil, errors.New("empty series")
 	}
 	title := resolveComicTitle(meta, shared.BaseNameTitle(rel))
-	comic := a.buildBaseComic(lib, rel, title, "series")
+	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForSeries(lib, rel, title, candidates))
+	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, title), "series")
 	comic.ID = shared.SHAID(lib.ID, "series", rel, groupKey)
 	applyMetadata(comic, meta)
 	sort.Slice(candidates, func(i, j int) bool { return shared.NaturalLess(candidates[i].SortKey, candidates[j].SortKey) })
@@ -560,6 +579,7 @@ func (a *App) buildArchiveSeriesComic(ctx context.Context, lib configpkg.Library
 	if err != nil || len(groups) < 2 {
 		return nil, err
 	}
+	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForArchive(ctx, a, lib, backend, rel, fallbackTitle))
 	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, fallbackTitle), "archive")
 	applyMetadata(comic, meta)
 	chapters := make([]*Chapter, 0, len(groups))
@@ -583,6 +603,7 @@ func (a *App) buildArchiveSeriesComic(ctx context.Context, lib configpkg.Library
 
 func (a *App) buildDirComic(ctx context.Context, lib configpkg.LibraryConfig, backend backendpkg.Backend, rel string, images []backendpkg.Entry) (*Comic, error) {
 	meta, _ := a.loadMetadataForDir(ctx, backend, rel, shared.BaseNameTitle(rel))
+	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForDir(lib, rel, resolveComicTitle(meta, shared.BaseNameTitle(rel)), images))
 	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, shared.BaseNameTitle(rel)), "dir")
 	applyMetadata(comic, meta)
 	chapter := &Chapter{
@@ -611,6 +632,7 @@ func (a *App) buildArchiveComic(ctx context.Context, lib configpkg.LibraryConfig
 	if comic, err := a.buildArchiveSeriesComic(ctx, lib, backend, rel, fallbackTitle, meta); err == nil && comic != nil {
 		return comic, nil
 	}
+	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForArchive(ctx, a, lib, backend, rel, fallbackTitle))
 	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, fallbackTitle), "archive")
 	applyMetadata(comic, meta)
 	chapter := &Chapter{
@@ -635,6 +657,7 @@ func applyMetadata(comic *Comic, meta ParsedMetadata) {
 	comic.Authors = shared.UniqueStrings(meta.Authors)
 	comic.Tags = shared.UniqueStrings(meta.Tags)
 	comic.Language = meta.Language
+	comic.SourceURL = firstNonEmpty(meta.SourceURL, comic.SourceURL)
 }
 
 func latestMod(items []backendpkg.Entry) time.Time {
@@ -762,6 +785,7 @@ func applySidecar(meta *ParsedMetadata, raw []byte) {
 		meta.Tags = shared.UniqueStrings(override.Tags)
 	}
 	meta.Language = firstNonEmpty(override.Language, meta.Language)
+	meta.SourceURL = firstNonEmpty(override.SourceURL, meta.SourceURL)
 	meta.ScanMode = firstNonEmpty(override.ScanMode, meta.ScanMode)
 	meta.Hidden = meta.Hidden || override.Hidden
 }

@@ -97,6 +97,7 @@ func TestPDFComicFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewApp: %v", err)
 	}
+	t.Cleanup(func() { _ = application.Close() })
 	ids := application.LibraryComicIDs("local-main")
 	if len(ids) != 1 {
 		t.Fatalf("expected 1 pdf comic, got %d", len(ids))

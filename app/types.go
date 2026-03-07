@@ -51,6 +51,7 @@ type ParsedMetadata struct {
 	Authors     []string `json:"authors,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	Language    string   `json:"language,omitempty"`
+	SourceURL   string   `json:"source_url,omitempty"`
 	ScanMode    string   `json:"scan_mode,omitempty"`
 	Hidden      bool     `json:"hidden,omitempty"`
 
