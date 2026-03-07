@@ -68,6 +68,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install Linux musl toolchain
+        if: matrix.goos == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Set up Windows GCC
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -85,8 +93,17 @@ jobs:
           asset_dir="venera_home_server_${{ matrix.goos }}_${{ matrix.goarch }}"
           binary="venera_home_server${{ matrix.ext }}"
           mkdir -p "package/${asset_dir}"
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 \
-            go build -trimpath -ldflags="-s -w" -o "package/${asset_dir}/${binary}" .
+          if [[ "${{ matrix.goos }}" == "linux" ]]; then
+            GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 CC=musl-gcc \
+              go build -trimpath \
+              -ldflags="-s -w -linkmode external -extldflags '-static'" \
+              -o "package/${asset_dir}/${binary}" .
+            file "package/${asset_dir}/${binary}"
+            ldd "package/${asset_dir}/${binary}" || true
+          else
+            GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 \
+              go build -trimpath -ldflags="-s -w" -o "package/${asset_dir}/${binary}" .
+          fi
           cp README.md "package/${asset_dir}/README.md"
           cp server.example.toml "package/${asset_dir}/server.example.toml"
           cp openapi.yaml "package/${asset_dir}/openapi.yaml"
