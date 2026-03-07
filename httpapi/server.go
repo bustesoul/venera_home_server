@@ -27,6 +27,13 @@ const pagePrefetchWindow = 12
 const pageCacheInfoTTL = 30 * time.Second
 const prefetchMinInterval = 5 * time.Second
 
+type PageRenderMode string
+
+const (
+	pageRenderModeDefault PageRenderMode = "default"
+	pageRenderModeOrigin  PageRenderMode = "origin"
+)
+
 type pageCacheInfoEntry struct {
 	info    ResolvedPageCacheInfo
 	expires time.Time
@@ -512,7 +519,7 @@ func mediaETag(r *http.Request) string {
 	if token == "" {
 		return ""
 	}
-	return `"` + token + `"`
+	return `"` + token + "|" + string(pageRenderModeFromRequest(r)) + `"`
 }
 
 func setMediaCacheHeaders(w http.ResponseWriter, r *http.Request) bool {
@@ -520,6 +527,7 @@ func setMediaCacheHeaders(w http.ResponseWriter, r *http.Request) bool {
 	if etag != "" {
 		w.Header().Set("ETag", etag)
 	}
+	w.Header().Set("Vary", "X-Venera-Image-Mode")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	if etag != "" && strings.TrimSpace(r.Header.Get("If-None-Match")) == etag {
 		w.WriteHeader(http.StatusNotModified)
@@ -528,12 +536,39 @@ func setMediaCacheHeaders(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
+func normalizePageRenderMode(raw string) PageRenderMode {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "origin", "original":
+		return pageRenderModeOrigin
+	default:
+		return pageRenderModeDefault
+	}
+}
+
+func pageRenderModeFromRequest(r *http.Request) PageRenderMode {
+	if r == nil {
+		return pageRenderModeOrigin
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("mode")); raw != "" {
+		return normalizePageRenderMode(raw)
+	}
+	if raw := strings.TrimSpace(r.Header.Get("X-Venera-Image-Mode")); raw != "" {
+		return normalizePageRenderMode(raw)
+	}
+	if strings.TrimSpace(r.Header.Get("X-Venera-Reader")) == "1" {
+		return pageRenderModeDefault
+	}
+	return pageRenderModeOrigin
+}
+
 type ResolvedPageCacheInfo struct {
-	Key           string
-	Path          string
-	ContentType   string
-	ModTime       time.Time
-	ContentLength int64
+	Key              string
+	Path             string
+	ContentType      string
+	ModTime          time.Time
+	ContentLength    int64
+	Mode             PageRenderMode
+	VisualCompressed bool
 }
 
 func pageCacheLabel(page apppkg.PageRef) string {
@@ -569,7 +604,7 @@ func (s *Server) pageSourceMeta(ctx context.Context, backend backendpkg.Backend,
 	return size, modTime, nil
 }
 
-func (s *Server) pageCacheInfo(ctx context.Context, backend backendpkg.Backend, comic *apppkg.Comic, page apppkg.PageRef) (ResolvedPageCacheInfo, error) {
+func (s *Server) pageCacheInfo(ctx context.Context, backend backendpkg.Backend, comic *apppkg.Comic, page apppkg.PageRef, mode PageRenderMode) (ResolvedPageCacheInfo, error) {
 	size, modTime, err := s.pageSourceMeta(ctx, backend, page)
 	if err != nil {
 		return ResolvedPageCacheInfo{}, err
@@ -578,11 +613,21 @@ func (s *Server) pageCacheInfo(ctx context.Context, backend backendpkg.Backend, 
 	contentType := shared.GuessContentType(page.Name)
 	cacheExt := sourceExt
 	cacheContentType := contentType
-	if shouldVisualCompressSource(contentType, sourceExt, size) {
+	visualCompressed := false
+	if mode == pageRenderModeDefault {
+		compressed, width, height, compressErr := s.shouldVisualCompressPage(ctx, backend, page, contentType, sourceExt, size)
+		if compressErr != nil {
+			s.log.Debugf("page visual compress probe failed ref=%s err=%v", pageCacheLabel(page), compressErr)
+		} else if compressed {
+			visualCompressed = true
+			s.log.Debugf("page visual compress plan ref=%s mode=%s size=%d dims=%dx%d", pageCacheLabel(page), mode, size, width, height)
+		}
+	}
+	if visualCompressed {
 		cacheExt = ".jpg"
 		cacheContentType = "image/jpeg"
 	}
-	parts := []string{"page", renderedPageCacheVariant, page.SourceType, comic.LibraryID, shared.CleanRel(page.SourceRef), strconv.FormatInt(size, 10), modTime.UTC().Format(time.RFC3339Nano)}
+	parts := []string{"page", renderedPageCacheVariant, string(mode), page.SourceType, comic.LibraryID, shared.CleanRel(page.SourceRef), strconv.FormatInt(size, 10), modTime.UTC().Format(time.RFC3339Nano)}
 	if page.EntryName != "" {
 		parts = append(parts, shared.CleanRel(page.EntryName))
 	}
@@ -592,23 +637,25 @@ func (s *Server) pageCacheInfo(ctx context.Context, backend backendpkg.Backend, 
 		contentLength = size
 	}
 	return ResolvedPageCacheInfo{
-		Key:           shared.SHAID(parts...),
-		Path:          filepath.Join(s.app.Config().Server.CacheDir, "rendered-pages", shared.SHAID(parts...)+cacheExt),
-		ContentType:   cacheContentType,
-		ModTime:       modTime,
-		ContentLength: contentLength,
+		Key:              shared.SHAID(parts...),
+		Path:             filepath.Join(s.app.Config().Server.CacheDir, "rendered-pages", shared.SHAID(parts...)+cacheExt),
+		ContentType:      cacheContentType,
+		ModTime:          modTime,
+		ContentLength:    contentLength,
+		Mode:             mode,
+		VisualCompressed: visualCompressed,
 	}, nil
 }
 
-func pageCacheInfoLookupKey(comic *apppkg.Comic, page apppkg.PageRef) string {
+func pageCacheInfoLookupKey(comic *apppkg.Comic, page apppkg.PageRef, mode PageRenderMode) string {
 	if page.EntryName != "" {
-		return comic.LibraryID + ":" + page.SourceRef + "::" + page.EntryName
+		return comic.LibraryID + ":" + string(mode) + ":" + page.SourceRef + "::" + page.EntryName
 	}
-	return comic.LibraryID + ":" + page.SourceRef
+	return comic.LibraryID + ":" + string(mode) + ":" + page.SourceRef
 }
 
-func (s *Server) pageCacheInfoCached(ctx context.Context, backend backendpkg.Backend, comic *apppkg.Comic, page apppkg.PageRef) (ResolvedPageCacheInfo, error) {
-	key := pageCacheInfoLookupKey(comic, page)
+func (s *Server) pageCacheInfoCached(ctx context.Context, backend backendpkg.Backend, comic *apppkg.Comic, page apppkg.PageRef, mode PageRenderMode) (ResolvedPageCacheInfo, error) {
+	key := pageCacheInfoLookupKey(comic, page, mode)
 	now := time.Now()
 
 	s.pageCacheInfoMu.RLock()
@@ -618,7 +665,7 @@ func (s *Server) pageCacheInfoCached(ctx context.Context, backend backendpkg.Bac
 	}
 	s.pageCacheInfoMu.RUnlock()
 
-	info, err := s.pageCacheInfo(ctx, backend, comic, page)
+	info, err := s.pageCacheInfo(ctx, backend, comic, page, mode)
 	if err != nil {
 		return info, err
 	}
@@ -858,7 +905,7 @@ func (s *Server) scheduleChapterPrefetch(chapter *apppkg.Chapter, pages []apppkg
 		failedCount := 0
 		for _, index := range order {
 			page := pages[index]
-			info, err := s.pageCacheInfoCached(ctx, backend, comic, page)
+			info, err := s.pageCacheInfoCached(ctx, backend, comic, page, pageRenderModeDefault)
 			if err != nil {
 				failedCount++
 				s.log.Debugf("page prefetch failed: chapter=%s page=%d err=%v", chapter.ID, index, err)
@@ -953,7 +1000,8 @@ func (s *Server) serveResolvedPage(w http.ResponseWriter, r *http.Request, chapt
 		return
 	}
 	backend := s.app.Backend(comic.LibraryID)
-	info, err := s.pageCacheInfoCached(r.Context(), backend, comic, page)
+	mode := pageRenderModeFromRequest(r)
+	info, err := s.pageCacheInfoCached(r.Context(), backend, comic, page, mode)
 	if err == nil {
 		if s.servePageFromMemoryCache(w, info, page) {
 			return
@@ -963,7 +1011,7 @@ func (s *Server) serveResolvedPage(w http.ResponseWriter, r *http.Request, chapt
 		}
 		s.schedulePageCacheBuild(backend, info, page)
 	} else {
-		s.log.Debugf("render cache key failed ref=%s err=%v", pageCacheLabel(page), err)
+		s.log.Debugf("render cache key failed ref=%s mode=%s err=%v", pageCacheLabel(page), mode, err)
 	}
 	switch page.SourceType {
 	case "file":
@@ -981,7 +1029,7 @@ func (s *Server) serveResolvedPage(w http.ResponseWriter, r *http.Request, chapt
 		if !modTime.IsZero() {
 			w.Header().Set("Last-Modified", modTime.UTC().Format(http.TimeFormat))
 		}
-		s.log.Debugf("page file fallback ref=%s bytes=%d type=%s", page.SourceRef, size, contentType)
+		s.log.Debugf("page file fallback ref=%s mode=%s bytes=%d type=%s", page.SourceRef, mode, size, contentType)
 		_, _ = io.Copy(w, rc)
 	case "archive":
 		archive, err := archivepkg.Open(r.Context(), backend, page.SourceRef, s.app.Config().Server.CacheDir)

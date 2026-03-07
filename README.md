@@ -166,8 +166,11 @@ go run . -config ./server.example.toml
 - `Default Library ID`：可留空，也可以指定某个书库
 - `Default Sort`
 - `Page Size`
+- `Image Mode`：默认是 `High Quality Compressed`；若要始终请求原图，可切到 `Origin`
 
 > 如果是手机访问电脑上的服务，不要填 `127.0.0.1`，要填电脑的局域网 IP。
+>
+> 如果 `Image Mode` 选择 `Origin`，建议同时在 Venera 里适当调低“阅读中-预加载图片数量”，以减少带宽和内存压力。
 
 ## 书库结构建议
 

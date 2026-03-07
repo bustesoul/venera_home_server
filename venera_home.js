@@ -4,7 +4,7 @@ class VeneraHome extends ComicSource {
 
     key = "venera_home"
 
-    version = "0.1.5"
+    version = "0.1.6"
 
     minAppVersion = "1.6.0"
 
@@ -32,6 +32,11 @@ class VeneraHome extends ComicSource {
         return this.loadSetting('page_size') || '24'
     }
 
+    get imageMode() {
+        let value = (this.loadSetting('image_mode') || 'default').toString().trim().toLowerCase()
+        return value === 'origin' ? 'origin' : 'default'
+    }
+
     get headers() {
         let headers = {
             "Accept": "application/json"
@@ -54,7 +59,21 @@ class VeneraHome extends ComicSource {
         if (this.token) {
             headers["Authorization"] = `Bearer ${this.token}`
         }
+        headers['X-Venera-Image-Mode'] = this.imageMode
         return headers
+    }
+
+    withMediaMode(url) {
+        if (!url) {
+            return url
+        }
+        let target = url
+        let mode = encodeURIComponent(this.imageMode)
+        if (/[?&]mode=/.test(target)) {
+            return target.replace(/([?&])mode=[^&#]*/g, `$1mode=${mode}`)
+        }
+        let separator = target.includes('?') ? '&' : '?'
+        return `${target}${separator}mode=${mode}`
     }
 
     get readerTuning() {
@@ -385,7 +404,7 @@ class VeneraHome extends ComicSource {
     }
 
     pickCover(item) {
-        return item.cover_url || item.cover || ''
+        return this.withMediaMode(item.cover_url || item.cover || '')
     }
 
     flattenTags(tagsMap) {
@@ -647,7 +666,7 @@ class VeneraHome extends ComicSource {
             return new ComicDetails({
                 title: data.title,
                 subTitle: data.subtitle || '',
-                cover: data.cover_url || '',
+                cover: this.withMediaMode(data.cover_url || ''),
                 description: data.description || '',
                 tags: data.tags || {},
                 chapters: chapters,
@@ -745,6 +764,15 @@ class VeneraHome extends ComicSource {
             ],
             default: '24',
         },
+        image_mode: {
+            title: 'Image Mode',
+            type: 'select',
+            options: [
+                { value: 'default', text: 'High Quality Compressed' },
+                { value: 'origin', text: 'Origin' },
+            ],
+            default: 'default',
+        },
         test_connection: {
             title: "Test Connection",
             type: "callback",
@@ -801,6 +829,7 @@ class VeneraHome extends ComicSource {
             'Default Library ID': 'Default Library ID',
             'Default Sort': 'Default Sort',
             'Page Size': 'Page Size',
+            'Image Mode': 'Image Mode',
             'Test Connection': 'Test Connection',
             'Rescan': 'Rescan',
             'Open Server': 'Open Server',
@@ -821,6 +850,7 @@ class VeneraHome extends ComicSource {
             'Default Library ID': '默认书库 ID',
             'Default Sort': '默认排序',
             'Page Size': '分页大小',
+            'Image Mode': '图片模式',
             'Test Connection': '测试连接',
             'Rescan': '重新扫描',
             'Open Server': '打开服务器',
@@ -841,6 +871,7 @@ class VeneraHome extends ComicSource {
             'Default Library ID': '預設書庫 ID',
             'Default Sort': '預設排序',
             'Page Size': '分頁大小',
+            'Image Mode': '圖片模式',
             'Test Connection': '測試連線',
             'Rescan': '重新掃描',
             'Open Server': '打開伺服器',

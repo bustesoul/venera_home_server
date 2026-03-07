@@ -166,8 +166,11 @@ Then configure:
 - `Default Library ID`: optional
 - `Default Sort`
 - `Page Size`
+- `Image Mode`: defaults to `High Quality Compressed`; switch to `Origin` to always request original page images
 
 > If your phone is connecting to a PC-hosted server, do not use `127.0.0.1`; use the PC's LAN IP instead.
+>
+> If you choose `Image Mode = Origin`, it is recommended to lower Venera's "Reading - Prefetch image count" setting to reduce bandwidth and memory pressure.
 
 ## Recommended Library Layout
 

@@ -15,17 +15,16 @@ import (
 	"strings"
 
 	apppkg "venera_home_server/app"
+	archivepkg "venera_home_server/archive"
 	backendpkg "venera_home_server/backend"
-	"venera_home_server/shared"
 )
 
 const enableServerSideChapterPrefetch = false
-const renderedPageCacheVariant = "async-long2048-q82-v4"
+const renderedPageCacheVariant = "mode-hqjpeg-long4096-q90-v5"
 const pagePrefetchThrottleStep = 4
-const largePageVisualCompressThreshold = 2 * 1024 * 1024
-const largePageVisualCompressQuality = 82
-const largePageVisualCompressMaxLongEdge = 2048
-const largePageVisualCompressMinSavings = 128 * 1024
+const largePageVisualCompressThreshold = 12 * 1024 * 1024
+const largePageVisualCompressQuality = 90
+const largePageVisualCompressMaxLongEdge = 4096
 
 func prefetchThrottleWindowStart(windowStart int) int {
 	if windowStart < 0 {
@@ -57,15 +56,71 @@ func shouldVisualCompressSource(contentType string, ext string, size int64) bool
 		return false
 	}
 	switch normalizeContentType(contentType) {
-	case "image/jpeg", "image/png", "image/gif":
+	case "image/jpeg":
 		return true
 	}
 	switch strings.ToLower(ext) {
-	case ".jpg", ".jpeg", ".png", ".gif":
+	case ".jpg", ".jpeg":
 		return true
 	default:
 		return false
 	}
+}
+
+func imageLongEdge(width, height int) int {
+	if width > height {
+		return width
+	}
+	return height
+}
+
+func shouldVisualCompressDimensions(width, height int) bool {
+	return width > 0 && height > 0 && imageLongEdge(width, height) > largePageVisualCompressMaxLongEdge
+}
+
+func (s *Server) pageJPEGDimensions(ctx context.Context, backend backendpkg.Backend, page apppkg.PageRef) (int, int, error) {
+	switch page.SourceType {
+	case "file":
+		rc, _, _, err := backend.OpenStream(ctx, page.SourceRef)
+		if err != nil {
+			return 0, 0, err
+		}
+		defer rc.Close()
+		cfg, err := jpeg.DecodeConfig(rc)
+		if err != nil {
+			return 0, 0, err
+		}
+		return cfg.Width, cfg.Height, nil
+	case "archive":
+		archive, err := archivepkg.Open(ctx, backend, page.SourceRef, s.app.Config().Server.CacheDir)
+		if err != nil {
+			return 0, 0, err
+		}
+		defer archive.Close()
+		rc, err := archive.Open(ctx, page.EntryName)
+		if err != nil {
+			return 0, 0, err
+		}
+		defer rc.Close()
+		cfg, err := jpeg.DecodeConfig(rc)
+		if err != nil {
+			return 0, 0, err
+		}
+		return cfg.Width, cfg.Height, nil
+	default:
+		return 0, 0, os.ErrInvalid
+	}
+}
+
+func (s *Server) shouldVisualCompressPage(ctx context.Context, backend backendpkg.Backend, page apppkg.PageRef, contentType string, ext string, size int64) (bool, int, int, error) {
+	if !shouldVisualCompressSource(contentType, ext, size) {
+		return false, 0, 0, nil
+	}
+	width, height, err := s.pageJPEGDimensions(ctx, backend, page)
+	if err != nil {
+		return false, 0, 0, err
+	}
+	return shouldVisualCompressDimensions(width, height), width, height, nil
 }
 
 func resizeImageLongEdgeBilinear(src image.Image, maxLongEdge int) image.Image {
@@ -175,19 +230,16 @@ func recompressVisualJPEG(data []byte, quality int) ([]byte, int, int, int, int,
 	return buf.Bytes(), origWidth, origHeight, resizedBounds.Dx(), resizedBounds.Dy(), nil
 }
 
-func (s *Server) maybeCompressLargePageBytes(info ResolvedPageCacheInfo, page apppkg.PageRef, data []byte) ([]byte, bool) {
-	if !shouldVisualCompressSource(shared.GuessContentType(page.Name), pageSourceExt(page), int64(len(data))) {
-		return data, false
+func (s *Server) maybeCompressLargePageBytes(info ResolvedPageCacheInfo, page apppkg.PageRef, data []byte) ([]byte, bool, error) {
+	if !info.VisualCompressed {
+		return data, false, nil
 	}
 	optimized, origWidth, origHeight, resizedWidth, resizedHeight, err := recompressVisualJPEG(data, largePageVisualCompressQuality)
 	if err != nil {
-		return data, false
+		return nil, false, err
 	}
-	if len(optimized) >= len(data)-largePageVisualCompressMinSavings {
-		return data, false
-	}
-	s.log.Debugf("page visual compress ref=%s before=%d after=%d quality=%d size=%dx%d->%dx%d", pageCacheLabel(page), len(data), len(optimized), largePageVisualCompressQuality, origWidth, origHeight, resizedWidth, resizedHeight)
-	return optimized, true
+	s.log.Debugf("page visual compress ref=%s mode=%s before=%d after=%d quality=%d size=%dx%d->%dx%d", pageCacheLabel(page), info.Mode, len(data), len(optimized), largePageVisualCompressQuality, origWidth, origHeight, resizedWidth, resizedHeight)
+	return optimized, true, nil
 }
 
 func (s *Server) WarmPageMemoryFromDiskCache(info ResolvedPageCacheInfo, page apppkg.PageRef) (bool, error) {
@@ -239,7 +291,10 @@ func (s *Server) schedulePageMemoryWarm(info ResolvedPageCacheInfo, page apppkg.
 }
 
 func (s *Server) storePageCacheBytes(info ResolvedPageCacheInfo, page apppkg.PageRef, data []byte) (bool, error) {
-	data, _ = s.maybeCompressLargePageBytes(info, page, data)
+	data, _, err := s.maybeCompressLargePageBytes(info, page, data)
+	if err != nil {
+		return false, err
+	}
 	storedInMemory := s.PageMemoryCache.Add(info.Key, CachedPageBytes{Data: data, ContentType: info.ContentType, ModTime: info.ModTime})
 	created, err := s.writePageCacheBytes(info, data)
 	if err != nil {
