@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Venera Metadata Admin</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0f1115; --panel:#171a21; --soft:#202532; --text:#e8ecf1; --muted:#9aa6b2; --line:#2a3142; --accent:#4f8cff; --ok:#2db784; --warn:#d79b35; --err:#d65454; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text); }
+    header { padding:20px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(15,17,21,.92); backdrop-filter: blur(8px); z-index:10; }
+    h1,h2,h3 { margin:0; }
+    main { padding:20px; display:grid; gap:16px; }
+    .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit,minmax(360px,1fr)); }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+    .panel.wide { grid-column: 1 / -1; }
+    .muted { color:var(--muted); }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .row + .row { margin-top:10px; }
+    label { display:grid; gap:6px; min-width:120px; }
+    input, select, button, textarea { background:var(--soft); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:9px 11px; }
+    input, select { min-width:0; }
+    button { cursor:pointer; }
+    button.primary { background:var(--accent); border-color:var(--accent); }
+    button.warn { background:var(--warn); border-color:var(--warn); color:#111; }
+    button.ghost { background:transparent; }
+    .status { padding:10px 12px; border-radius:10px; background:var(--soft); }
+    .status.ok { border:1px solid rgba(45,183,132,.35); }
+    .status.err { border:1px solid rgba(214,84,84,.35); }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+    th { color:var(--muted); font-weight:600; }
+    .actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px; background:var(--soft); color:var(--muted); font-size:12px; }
+    .pill.ok { color:#9ef0cf; }
+    .pill.warn { color:#ffd789; }
+    .pill.err { color:#ff9b9b; }
+    .scroll { overflow:auto; }
+    code { white-space:nowrap; }
+    .mono { font-family: ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .spacer { flex:1; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <div>
+      <h1>Metadata Admin</h1>
+      <div class="muted">手动触发补全、查看作业状态与元数据记录，适合排查缺失、过期和错误条目。</div>
+    </div>
+    <div class="spacer"></div>
+    <label>
+      <span>Bearer Token</span>
+      <input id="tokenInput" type="password" placeholder="留空表示服务端未配置 token">
+    </label>
+    <button id="saveTokenBtn" class="ghost">保存 Token</button>
+  </div>
+</header>
+<main>
+  <div id="statusBox" class="status">准备就绪</div>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>手动补全</h2>
+      <div class="row">
+        <label><span>Library</span><input id="enrichLibrary" placeholder="如 local-main"></label>
+        <label><span>State</span>
+          <select id="enrichState">
+            <option value="empty">empty</option>
+            <option value="ready">ready</option>
+            <option value="stale">stale</option>
+            <option value="error">error</option>
+            <option value="missing">missing</option>
+          </select>
+        </label>
+        <label><span>Source</span><select id="enrichSource"><option value="">全部可用数据源</option></select></label>
+      </div>
+      <div class="row">
+        <label><span>Limit</span><input id="enrichLimit" type="number" value="200" min="1" max="2000"></label>
+        <label><span>Min Score</span><input id="enrichScore" type="number" value="0.72" min="0" max="1" step="0.01"></label>
+        <label><span>Workers</span><input id="enrichWorkers" type="number" value="3" min="1" max="4"></label>
+      </div>
+      <div class="row">
+        <button id="triggerEnrichBtn" class="primary">开始补全</button>
+        <button id="refreshSourcesBtn" class="ghost">刷新数据源</button>
+        <button id="refreshJobsBtn" class="ghost">刷新作业</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>元数据记录查询</h2>
+      <div class="row">
+        <label><span>Library</span><input id="recordLibrary" placeholder="留空=全部"></label>
+        <label><span>State</span>
+          <select id="recordState">
+            <option value="">全部</option>
+            <option value="empty">empty</option>
+            <option value="ready">ready</option>
+            <option value="stale">stale</option>
+            <option value="error">error</option>
+            <option value="missing">missing</option>
+          </select>
+        </label>
+        <label><span>Search</span><input id="recordSearch" placeholder="title/path/source like"></label>
+      </div>
+      <div class="row">
+        <label><span>Page</span><input id="recordPage" type="number" value="1" min="1"></label>
+        <label><span>Page Size</span><input id="recordLimit" type="number" value="50" min="1" max="200"></label>
+        <button id="queryRecordsBtn" class="primary">查询记录</button>
+      </div>
+      <div class="muted" id="recordSummary"></div>
+    </section>
+  </div>
+
+  <section class="panel wide">
+    <div class="row">
+      <h2>作业列表</h2>
+      <div class="spacer"></div>
+      <button id="togglePollBtn" class="ghost">暂停自动刷新</button>
+    </div>
+    <div class="scroll"><table id="jobsTable"><thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Library</th><th>Sources</th><th>Progress</th><th>Error</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="panel wide">
+    <div class="row">
+      <h2>漫画元数据记录</h2>
+    </div>
+    <div class="scroll"><table id="recordsTable"><thead><tr><th>State</th><th>Title</th><th>Path</th><th>Source</th><th>Confidence</th><th>Locked</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>数据源列表</h2>
+      <div class="muted" id="sourceDirLabel"></div>
+      <div class="scroll"><table id="sourcesTable"><thead><tr><th>Name</th><th>Table</th><th>Rows</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="panel">
+      <h2>数据源浏览</h2>
+      <div class="row">
+        <label><span>Source</span><select id="browseSource"></select></label>
+        <label><span>Query</span><input id="browseQuery" placeholder="title / artist like"></label>
+      </div>
+      <div class="row">
+        <label><span>Page</span><input id="browsePage" type="number" value="1" min="1"></label>
+        <label><span>Page Size</span><input id="browseLimit" type="number" value="30" min="1" max="200"></label>
+        <button id="browseBtn" class="primary">查询数据源</button>
+      </div>
+      <div class="muted" id="browseSummary"></div>
+      <div class="scroll"><table id="browseTable"><thead></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+</main>
+<script>
+const state = { poll: true, sources: [] };
+const tokenInput = document.getElementById('tokenInput');
+const statusBox = document.getElementById('statusBox');
+
+tokenInput.value = localStorage.getItem('venera_admin_token') || '';
+document.getElementById('saveTokenBtn').addEventListener('click', () => {
+  localStorage.setItem('venera_admin_token', tokenInput.value.trim());
+  setStatus('Token 已保存。', 'ok');
+});
+
+document.getElementById('triggerEnrichBtn').addEventListener('click', triggerEnrich);
+document.getElementById('refreshSourcesBtn').addEventListener('click', refreshSources);
+document.getElementById('refreshJobsBtn').addEventListener('click', refreshJobs);
+document.getElementById('queryRecordsBtn').addEventListener('click', () => refreshRecords(true));
+document.getElementById('browseBtn').addEventListener('click', browseSource);
+document.getElementById('togglePollBtn').addEventListener('click', () => {
+  state.poll = !state.poll;
+  document.getElementById('togglePollBtn').textContent = state.poll ? '暂停自动刷新' : '恢复自动刷新';
+});
+
+function authHeaders() {
+  const token = tokenInput.value.trim();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchJSON(url, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}), ...authHeaders() };
+  const response = await fetch(url, { ...options, headers });
+  const text = await response.text();
+  let json = {};
+  try { json = text ? JSON.parse(text) : {}; } catch (_) {}
+  if (!response.ok) {
+    const message = json?.error?.message || `${response.status} ${response.statusText}`;
+    throw new Error(message);
+  }
+  return json.data;
+}
+
+function setStatus(message, kind = '') {
+  statusBox.textContent = message;
+  statusBox.className = `status ${kind}`.trim();
+}
+
+function htmlEscape(value) {
+  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+}
+
+function pill(text, kind = '') {
+  return `<span class="pill ${kind}">${htmlEscape(text)}</span>`;
+}
+
+async function triggerEnrich() {
+  try {
+    const payload = {
+      library_id: document.getElementById('enrichLibrary').value.trim(),
+      state: document.getElementById('enrichState').value,
+      source_id: document.getElementById('enrichSource').value,
+      limit: Number(document.getElementById('enrichLimit').value || 200),
+      min_score: Number(document.getElementById('enrichScore').value || 0.72),
+      workers: Number(document.getElementById('enrichWorkers').value || 3),
+    };
+    const data = await fetchJSON('/api/v1/admin/metadata/enrich', { method: 'POST', body: JSON.stringify(payload) });
+    setStatus(`已创建补全任务 ${data.job_id}`, 'ok');
+    await refreshJobs();
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+async function refreshJobs() {
+  try {
+    const data = await fetchJSON('/api/v1/admin/metadata/jobs');
+    const tbody = document.querySelector('#jobsTable tbody');
+    tbody.innerHTML = (data.items || []).map(job => {
+      const progress = job.kind === 'enrich'
+        ? `${job.processed || 0}/${job.examined || 0} · matched ${job.matched || 0} · updated ${job.updated || 0} · skipped ${job.skipped || 0}`
+        : `${job.processed || 0}`;
+      return `<tr>
+        <td class="mono">${htmlEscape(job.job_id)}</td>
+        <td>${htmlEscape(job.kind || 'refresh')}</td>
+        <td>${renderState(job.status)}</td>
+        <td>${htmlEscape(job.library_id || '')}</td>
+        <td>${htmlEscape((job.sources || []).join(', '))}</td>
+        <td>${htmlEscape(progress)}</td>
+        <td>${htmlEscape(job.error || '')}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" class="muted">暂无作业</td></tr>';
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+function renderState(value) {
+  const kind = value === 'done' ? 'ok' : value === 'failed' ? 'err' : value === 'running' ? 'warn' : '';
+  return pill(value || '-', kind);
+}
+
+async function refreshRecords(resetPage = false) {
+  try {
+    if (resetPage) document.getElementById('recordPage').value = '1';
+    const page = Number(document.getElementById('recordPage').value || 1);
+    const limit = Number(document.getElementById('recordLimit').value || 50);
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      library_id: document.getElementById('recordLibrary').value.trim(),
+      state: document.getElementById('recordState').value,
+      search: document.getElementById('recordSearch').value.trim(),
+    });
+    const data = await fetchJSON(`/api/v1/admin/metadata/records?${params.toString()}`);
+    document.getElementById('recordSummary').textContent = `共 ${data.total} 条，当前第 ${data.page} 页，每页 ${data.page_size} 条`;
+    const tbody = document.querySelector('#recordsTable tbody');
+    tbody.innerHTML = (data.items || []).map(item => {
+      const locator = JSON.stringify(item.locator || {});
+      return `<tr>
+        <td>${renderState(item.state)}</td>
+        <td><div>${htmlEscape(item.title || item.title_jpn || '(empty)')}</div><div class="muted mono">${htmlEscape(item.subtitle || '')}</div></td>
+        <td><div class="mono">${htmlEscape(item.root_ref || '')}</div><div class="muted">${htmlEscape(item.folder_path || '')}</div></td>
+        <td><div>${htmlEscape(item.source || '')}</div><div class="muted mono">${htmlEscape(item.source_id || '')}</div></td>
+        <td>${item.confidence == null ? '' : htmlEscape(item.confidence)}</td>
+        <td>${item.manual_locked ? pill('locked','warn') : pill('open')}</td>
+        <td><div class="actions">
+          <button class="ghost" onclick='recordAction("${item.manual_locked ? 'unlock' : 'lock'}", ${locator})'>${item.manual_locked ? '解锁' : '锁定'}</button>
+          <button class="warn" onclick='recordAction("reset", ${locator})'>重置状态</button>
+          <button class="primary" onclick='recordAction("enrich", ${locator})'>补一次</button>
+        </div></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" class="muted">没有可见记录</td></tr>';
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+async function recordAction(action, locator) {
+  try {
+    const payload = {
+      action,
+      locator,
+      source_id: document.getElementById('enrichSource').value,
+      min_score: Number(document.getElementById('enrichScore').value || 0.72),
+      workers: Number(document.getElementById('enrichWorkers').value || 3),
+    };
+    const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
+    if (data.job?.job_id) {
+      setStatus(`已创建记录补全任务 ${data.job.job_id}`, 'ok');
+      await refreshJobs();
+    } else {
+      setStatus(`操作 ${action} 已完成`, 'ok');
+      await refreshRecords(false);
+    }
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+async function refreshSources() {
+  try {
+    const data = await fetchJSON('/api/v1/admin/metadata/sources');
+    state.sources = data.items || [];
+    document.getElementById('sourceDirLabel').textContent = `目录：${data.directory || ''}`;
+    renderSourceSelectors();
+    const tbody = document.querySelector('#sourcesTable tbody');
+    tbody.innerHTML = state.sources.map(source => `<tr>
+      <td><div>${htmlEscape(source.name)}</div><div class="muted mono">${htmlEscape(source.relative_path || '')}</div></td>
+      <td>${htmlEscape(source.chosen_table || '')}</td>
+      <td>${htmlEscape(source.row_count ?? '')}</td>
+      <td>${source.error ? pill(source.error, 'err') : pill('ready', 'ok')}</td>
+      <td><button class="ghost" ${source.error ? 'disabled' : ''} onclick='pickSource("${htmlEscape(source.id)}")'>选择</button></td>
+    </tr>`).join('') || '<tr><td colspan="5" class="muted">`data/externaldb` 下暂无可用 sqlite</td></tr>';
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+function renderSourceSelectors() {
+  const enrichSource = document.getElementById('enrichSource');
+  const browseSource = document.getElementById('browseSource');
+  const options = state.sources.filter(item => !item.error).map(item => `<option value="${htmlEscape(item.id)}">${htmlEscape(item.name)}</option>`).join('');
+  enrichSource.innerHTML = `<option value="">全部可用数据源</option>${options}`;
+  browseSource.innerHTML = options ? options : '<option value="">暂无可用数据源</option>';
+}
+
+function pickSource(id) {
+  document.getElementById('browseSource').value = id;
+  browseSource();
+}
+
+async function browseSource() {
+  try {
+    const sourceId = document.getElementById('browseSource').value;
+    if (!sourceId) {
+      setStatus('没有可用的数据源。', 'err');
+      return;
+    }
+    const params = new URLSearchParams({
+      q: document.getElementById('browseQuery').value.trim(),
+      page: document.getElementById('browsePage').value || '1',
+      limit: document.getElementById('browseLimit').value || '30',
+    });
+    const data = await fetchJSON(`/api/v1/admin/metadata/sources/${encodeURIComponent(sourceId)}/records?${params.toString()}`);
+    const browse = data.browse || {};
+    document.getElementById('browseSummary').textContent = `${data.source?.name || ''} · table=${browse.table || ''} · total=${browse.total || 0}`;
+    const head = document.querySelector('#browseTable thead');
+    const body = document.querySelector('#browseTable tbody');
+    const columns = browse.columns || [];
+    head.innerHTML = `<tr>${columns.map(col => `<th>${htmlEscape(col)}</th>`).join('')}</tr>`;
+    body.innerHTML = (browse.items || []).map(item => `<tr>${columns.map(col => `<td>${htmlEscape(item[col] || '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(columns.length,1)}" class="muted">没有查询结果</td></tr>`;
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+async function boot() {
+  await Promise.all([refreshSources(), refreshJobs(), refreshRecords(false)]);
+  setStatus('已加载管理页', 'ok');
+}
+
+setInterval(() => {
+  if (!state.poll) return;
+  refreshJobs();
+}, 3000);
+setInterval(() => {
+  if (!state.poll) return;
+  refreshRecords(false);
+}, 8000);
+
+boot().catch(error => setStatus(error.message, 'err'));
+</script>
+</body>
+</html>

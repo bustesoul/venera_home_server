@@ -1,15 +1,23 @@
-# Venera Home Server
+﻿# Venera Home Server
 
 [中文](./README.md) | [English](./README_EN.md)
 
-`Venera Home Server` 是一个为 **[Venera](https://github.com/venera-app/venera)** 漫画阅读器准备的本地漫画后端。它把本地磁盘、SMB 共享、WebDAV 里的漫画统一暴露成轻量 HTTP API，并配套提供可直接导入 Venera 的 `venera_home.js`。
+`Venera Home Server` 是为 **[Venera](https://github.com/venera-app/venera)** 准备的本地漫画后端服务。它会把本地磁盘、SMB、WebDAV 中的漫画统一暴露成轻量 HTTP API，并配套提供可直接导入 Venera 的 `venera_home.js`。
+
+除了基础阅读能力外，当前版本已经内置一套 **手动触发、自动应用** 的本地元数据补全流程：
+
+- 扫描时把漫画条目写入本地元数据库
+- 从 `data/externaldb` 自动发现外部 SQLite 数据源
+- 在 Web 管理页中手动触发补全任务
+- 自动把命中的元数据写回本地库
+- 任务结束后自动 `Rescan`，让 Venera 侧马上看到结果
 
 ## 项目目标
 
-- 让 [Venera](https://github.com/venera-app/venera) 直接阅读你已经拥有的本地漫画
+- 让 [Venera](https://github.com/venera-app/venera) 直接读取你已经拥有的漫画
 - 把文件系统、归档读取、缓存、元数据处理沉到独立服务端
 - 保持 `venera_home.js` 尽量薄，主要负责 API 映射
-- 优先覆盖离线 / 私有漫画库场景，为后续扩展留空间
+- 优先覆盖离线 / 私有漫画库场景，同时为后续更多数据源留扩展空间
 
 ## 当前能力
 
@@ -27,7 +35,7 @@
 - 7-Zip：`cb7` / `7z`
 - 文档：`pdf`（当前仅 Windows 渲染）
 
-### 功能
+### 阅读与服务能力
 
 - 扫描、索引、首页、分类、搜索、详情、章节阅读
 - 收藏夹与多文件夹收藏
@@ -38,43 +46,52 @@
 - 手动重扫
 - 带签名的封面 / 页面媒体 URL
 
+### 元数据能力
+
+- 扫描结果持久化到本地 `metadata.db`
+- 扫描时自动记录匹配 hint、路径、指纹等信息
+- 支持“填空式”合并：远程补全不会覆盖已有本地显式元数据
+- 支持本地外部 SQLite 数据源补全
+- 支持 dry-run 匹配分析工具 `exdb_dryrun`
+- 支持在管理页中执行：
+  - 手动批量补全
+  - 单条重试补全
+  - 锁定 / 解锁某条记录
+  - 重置为仅保留本地元数据
+  - 浏览外部数据源内容
+
+### 管理页
+
+服务启动后，根路径 `/` 即为内置 Web 管理页。
+
+当前页面支持：
+
+- 查看任务进度
+- 查询本地元数据记录
+- 触发手动补全
+- 浏览 `data/externaldb` 下的数据源
+- 对单本执行锁定、解锁、重置、单条补全
+
 ## 当前限制
 
 - `SMB` 当前只在 Windows 构建中可用
 - `PDF` 当前只在 Windows 构建中可用，依赖系统内建 `Windows.Data.Pdf`
-- 还没有实现远程元数据抓取
-- 还没有 Web 管理界面
-- 还没有评论、签到、账号体系等互联网源能力
+- 当前补全数据源是 **本地 SQLite**，还没有接入互联网元数据源
+- 当前没有自动计划任务；补全需要你手动触发
+- 当前没有复杂的冲突审查流；设计目标是“手动触发一次 + Web 中做基础纠正”
 
-## 目录结构
+## 仓库结构
 
-- `main.go`：项目唯一入口，便于直接 `go run .`
-- `app/`：核心应用模型、扫描与元数据合并
-- `httpapi/`：HTTP API、媒体分发与页面缓存
-- `backend/` / `archive/`：存储后端与归档访问
-- `tests/`：独立测试模块，按模块拆分
-- `venera_home.js`：[Venera](https://github.com/venera-app/venera) 源脚本
+- `main.go`：项目入口，可直接 `go run .`
+- `app/`：核心应用模型、扫描流程、元数据合并、补全任务
+- `httpapi/`：HTTP API、媒体分发、管理页、页面缓存
+- `metadata/`：本地元数据存储与查询
+- `exdbdryrun/`：外部 SQLite 匹配与 dry-run 逻辑
+- `backend/` / `archive/`：存储后端与归档读取
+- `tests/`：测试模块与 `testkit/`
+- `venera_home.js`：Venera 源脚本
 - `server.example.toml`：示例配置
-- `openapi.yaml`：HTTP API 草案 / 合同
-
-## 模块说明
-
-当前服务端采用根目录扁平模块结构：
-
-- `app/`：核心应用模型、扫描、元数据合并、章节分页物化
-- `archive/`：ZIP / RAR / 7Z / PDF 归档访问
-- `backend/`：本地、SMB、WebDAV 存储后端
-- `config/`：配置加载与解析
-- `favorites/`：收藏夹持久化
-- `httpapi/`：HTTP 路由、媒体分发、页面缓存逻辑
-- `shared/`：跨模块复用工具
-- `tests/`：独立测试模块与 `testkit/` 公共测试支撑
-
-这套结构的目标：
-
-1. 根目录直接按模块分类，避免额外层级；
-2. `main.go` 保持为唯一启动入口；
-3. 测试目录独立，便于按模块浏览与维护。
+- `openapi.yaml`：HTTP API 草案
 
 ## 架构概览
 
@@ -86,8 +103,9 @@ graph LR
   C --> E["SMB Backend"]
   C --> F["WebDAV Backend"]
   C --> G["Archive Layer"]
-  C --> H["Favorites JSON"]
-  C --> I["Cache"]
+  C --> H["Metadata Store"]
+  C --> I["External SQLite Sources"]
+  C --> J["Cache"]
 ```
 
 ## 快速开始
@@ -106,6 +124,7 @@ listen = "0.0.0.0:34123"
 token = "change-me"
 data_dir = "./data"
 cache_dir = "./cache"
+memory_cache_mb = 512
 log_level = "info"
 
 [scan]
@@ -127,12 +146,15 @@ root = "D:/Comics"
 scan_mode = "auto"
 ```
 
-- `log_level` 默认是 `info`；若要看页面缓存、预取、压缩等调试日志，可改成 `debug`
-- `scan_mode` 支持两种模式：
-  - `auto`：默认模式；只有同层项目的显式元数据能匹配上时，才会合并成同一漫画的多个章节
-  - `flat`：不自动合并同层项目；每个压缩包或图片目录都按独立漫画处理
+说明：
 
-### 2. 如果使用 SMB / WebDAV，先设置密码环境变量
+- `log_level` 默认是 `info`；如果你想看缓存、预取、扫描细节，可改成 `debug`
+- `scan_mode`：
+  - `auto`：默认；只有同层目录 / 归档的显式元数据能对应上时，才会合并成同一漫画的多章节
+  - `flat`：不自动合并；每个目录或压缩包都按独立漫画处理
+- `allow_remote_fetch` 当前还主要是为未来互联网数据源预留的开关
+
+### 2. 如果使用 SMB / WebDAV，先配置密码环境变量
 
 ```powershell
 $env:SMB_PASS = "your-password"
@@ -147,13 +169,13 @@ $env:WEBDAV_PASS = "your-password"
 go run . -config ./server.example.toml
 ```
 
-如果你已经有编译好的可执行文件，也可以直接运行：
+如果你已经有编译好的程序：
 
 ```powershell
 .\venera_home_server.exe -config .\server.example.toml
 ```
 
-### 4. 在 [Venera](https://github.com/venera-app/venera) 中导入源脚本
+### 4. 在 Venera 中导入源脚本
 
 导入：
 
@@ -161,18 +183,117 @@ go run . -config ./server.example.toml
 
 然后填写：
 
-- `Server URL`：例如 `http://127.0.0.1:34123` 或 `http://192.168.1.20:34123`
-- `Token`：与配置文件里的 `token` 保持一致
-- `Default Library ID`：可留空，也可以指定某个书库
+- `Server URL`：例如 `http://127.0.0.1:34123`
+- `Token`：与服务端配置保持一致
+- `Default Library ID`：可留空
 - `Default Sort`
 - `Page Size`
-- `Image Mode`：默认是 `High Quality Compressed`；若要始终请求原图，可切到 `Origin`
+- `Image Mode`
 
-> 如果是手机访问电脑上的服务，不要填 `127.0.0.1`，要填电脑的局域网 IP。
->
-> 如果 `Image Mode` 选择 `Origin`，建议同时在 Venera 里适当调低“阅读中-预加载图片数量”，以减少带宽和内存压力。
+> 如果手机访问电脑上的服务，不要填 `127.0.0.1`，要填电脑的局域网 IP。
 
-## 书库结构建议
+## 元数据补全工作流
+
+### 1. 扫描生成本地元数据库
+
+服务每次扫描都会把漫画条目写入本地元数据库，默认位于：
+
+- `data/metadata.db`
+
+这里面会保存：
+
+- 书库定位信息
+- 文件夹路径
+- 内容指纹
+- 匹配 hint（如关键词、EH 相关线索）
+- 已补全的标题、作者、标签、来源等字段
+
+### 2. 放入外部数据源
+
+把你准备好的 SQLite 数据库直接放进：
+
+- `data/externaldb/`
+
+不需要额外配置数据源列表。服务会在管理页里自动发现它们。
+
+### 3. 打开管理页手动触发
+
+浏览器打开：
+
+- `/`
+
+如果服务端配置了 `token`，在页面右上角填入 Bearer Token。
+
+然后你可以：
+
+- 先在“数据源列表 / 数据源浏览”里确认外部库内容正常
+- 再在“手动补全”里对 `state=empty` 触发一次批量补全
+- 等待任务结束，服务会自动应用命中结果并自动 `Rescan`
+
+### 4. 处理误匹配或暂时无解的条目
+
+如果某本补错了，或者当前数据源根本覆盖不到：
+
+- 点“重置到本地”清掉补全结果
+- 点“锁定”让它以后不参加批量补全
+- 等将来加了更多数据源后，再“解锁”并重试
+
+这正是 `manual_locked` 字段的用途：**阻止后续自动补全再次误伤**。
+
+## `exdb_dryrun` 用法
+
+如果你想在真正接入服务前先分析匹配效果，可以用 dry-run 工具。
+
+示例：
+
+```powershell
+.\exdb_dryrun.exe `
+  -metadata D:\test\data\metadata.db `
+  -exdb H:\Downloads\2025_08_04_database.sqlite `
+  -library local-main `
+  -state empty `
+  -limit 200 `
+  -min-score 0.72 `
+  -out H:\Downloads\report.json
+```
+
+常见用途：
+
+- 先看某个外部库是否适合作为补全源
+- 调整 `min-score`
+- 对比不同数据库的命中率
+- 分析误匹配案例
+
+## 元数据优先级
+
+当前元数据合并顺序大致为：
+
+1. `.venera.json`
+2. `ComicInfo.xml`
+3. 文件名 / 目录名推断
+4. 本地 metadata store 中的补全字段（仅填空，不强行覆盖已有显式值）
+
+示例 `.venera.json`：
+
+```json
+{
+  "title": "Chapter 01",
+  "series": "Dungeon Meshi",
+  "subtitle": "Ryoko Kui",
+  "description": "Hand-maintained metadata",
+  "authors": ["Ryoko Kui"],
+  "tags": ["Fantasy", "Adventure", "Food"],
+  "language": "zh",
+  "scan_mode": "flat"
+}
+```
+
+附加能力：
+
+- `hidden: true`：忽略当前目录或压缩包
+- 压缩包旁可放 `xxx.cbz.venera.json` / `xxx.zip.venera.json`
+
+## 推荐书库结构
 
 ### 单本漫画目录
 
@@ -205,49 +326,6 @@ D:\Comics\Packed\
   album.pdf
 ```
 
-同层的多个章节目录 / 压缩包，只有在 `scan_mode = "auto"` 且显式元数据匹配时，才会被识别成同一漫画下的不同章节。
-
-如果一个压缩包内部包含多个顶层图片文件夹，则默认识别为多章节漫画。
-
-如果你的目录只是“月份桶 / 作者桶 / 临时归档桶”，不想自动合卷，可以：
-
-- 把对应书库的 `scan_mode` 改成 `flat`
-- 或者只在某个目录里放一份 `.venera.json`，内容写成 `{ "scan_mode": "flat" }` 做目录级覆盖
-
-## 元数据优先级
-
-服务端当前按下面顺序取元数据：
-
-1. `.venera.json`
-2. `ComicInfo.xml`
-3. 文件名 / 目录名推断
-
-`.venera.json` 示例：
-
-```json
-{
-  "title": "Chapter 01",
-  "series": "Dungeon Meshi",
-  "subtitle": "Ryoko Kui",
-  "description": "Hand-maintained metadata",
-  "authors": ["Ryoko Kui"],
-  "tags": ["Fantasy", "Adventure", "Food"],
-  "language": "zh",
-  "scan_mode": "flat"
-}
-```
-
-可选字段：
-
-- `hidden: true`：忽略当前目录对应的漫画；如果这个目录本身是容器目录，则会忽略整个目录树
-- 若目标是压缩包，请在压缩包旁边放 `xxx.cbz.venera.json` / `xxx.zip.venera.json`，例如：
-
-```json
-{
-  "hidden": true
-}
-```
-
 ## 平台说明
 
 ### Windows
@@ -259,39 +337,37 @@ D:\Comics\Packed\
 ### Linux / macOS
 
 - 支持本地、WebDAV
-- 当前不支持 SMB
-- 当前不支持 PDF 渲染
-- 其余图片 / ZIP / RAR / 7-Zip 流程仍可用
+- 暂不支持 SMB
+- 暂不支持 PDF 渲染
+- 图片 / ZIP / RAR / 7-Zip 流程可用
 
 ## 开发与测试
 
 运行测试：
 
 ```powershell
-go test -buildvcs=false ./...
+go test ./...
+```
+
+构建：
+
+```powershell
+go build ./...
 ```
 
 当前测试覆盖包括：
 
 - 配置加载
-- 本地完整流程
+- 本地完整阅读流程
 - WebDAV 扫描
-- 元数据覆盖
+- 元数据覆盖与补全流程
 - `rar` / `7z` 归档读取
-- `pdf` 阅读流程（Windows）
-
-## API 与实现说明
-
-- HTTP API 草案：`openapi.yaml`
-- 服务端核心实现：`app/` + `httpapi/` + `backend/` + `archive/`
-- [Venera](https://github.com/venera-app/venera) 源脚本：`venera_home.js`
-
-`venera_home.js` 设计上保持较薄，主要负责请求 `/api/v1/*` 接口，并把返回数据转换为 [Venera](https://github.com/venera-app/venera) 可识别的数据结构。
+- 管理页相关元数据接口
 
 ## 后续方向
 
-- 更完整的中文 / 英文设置说明
-- 更好的发布包结构（exe + 默认配置 + 启动脚本）
-- 远程元数据抓取与人工修正界面
+- 接入更多本地 / 互联网元数据源
+- 更完整的元数据差异对比与人工确认能力
+- 自动计划任务
+- 更丰富的管理页统计和筛选
 - 跨平台 PDF 方案
-- 更细粒度的缓存与预热策略

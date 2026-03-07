@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -409,4 +410,75 @@ func findComicByTitle(t *testing.T, application *apppkg.App, libraryID, title st
 	}
 	t.Fatalf("failed to find comic %s", title)
 	return nil
+}
+
+func TestMetadataExternalSourceEndpoints(t *testing.T) {
+	root := t.TempDir()
+	matchedRel := `[Circle] Match Book 11 [Chinese] [DL]`
+	testkit.MustWriteFile(t, filepath.Join(root, matchedRel, `001.jpg`), []byte("img"))
+	testkit.MustSeedExDBGallery(t, filepath.Join(root, `data`, `externaldb`, `catalog.sqlite`), []testkit.ExDBGalleryRow{{
+		GID:      `2708021`,
+		Token:    `d774d5b991`,
+		Title:    `[Circle] Match Book 11`,
+		TitleJPN: `[Circle] Match Book 11 [Chinese] [DL]`,
+		Artist:   `["artist one"]`,
+		Category: `Doujinshi`,
+		Rating:   4.72,
+		Thumb:    `https://ehgt.org/example-cover.webp`,
+	}})
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	res, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if !strings.Contains(string(body), "Metadata Admin") {
+		t.Fatalf("expected admin html page, got %q", string(body))
+	}
+
+	sources := testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/sources", cfg.Server.Token)
+	sourceItems := sources["data"].(map[string]any)["items"].([]any)
+	if len(sourceItems) != 1 {
+		t.Fatalf("expected 1 metadata source, got %d", len(sourceItems))
+	}
+	sourceID := sourceItems[0].(map[string]any)["id"].(string)
+
+	browse := testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/sources/"+sourceID+"/records?q=Match%20Book", cfg.Server.Token)
+	browseItems := browse["data"].(map[string]any)["browse"].(map[string]any)["items"].([]any)
+	if len(browseItems) != 1 {
+		t.Fatalf("expected 1 browsed source row, got %d", len(browseItems))
+	}
+
+	enrich := testkit.PostJSON(t, srv.URL+"/api/v1/admin/metadata/enrich", cfg.Server.Token, map[string]any{"library_id": "local-main", "state": "empty", "limit": 20, "workers": 2})
+	jobID := enrich["data"].(map[string]any)["job_id"].(string)
+	job := waitForMetadataJob(t, srv.URL, cfg.Server.Token, jobID)
+	if job["status"] != "done" {
+		t.Fatalf("expected enrich job done, got %#v", job)
+	}
+	if int(job["updated"].(float64)) != 1 {
+		t.Fatalf("expected 1 updated record, got %#v", job)
+	}
+
+	records := testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?library_id=local-main&search=Match%20Book&page=1&limit=10", cfg.Server.Token)
+	recordData := records["data"].(map[string]any)
+	if int(recordData["total"].(float64)) != 1 {
+		t.Fatalf("expected 1 searched record, got %#v", recordData)
+	}
+	recordItem := recordData["items"].([]any)[0].(map[string]any)
+	if recordItem["source_id"] != "2708021" {
+		t.Fatalf("expected source_id 2708021, got %#v", recordItem)
+	}
+
+	testkit.PostJSON(t, srv.URL+"/api/v1/admin/metadata/records/actions", cfg.Server.Token, map[string]any{"action": "reset", "locator": recordItem["locator"]})
+	records = testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?library_id=local-main&search=Match%20Book&page=1&limit=10", cfg.Server.Token)
+	recordItem = records["data"].(map[string]any)["items"].([]any)[0].(map[string]any)
+	if recordItem["source"] != nil || recordItem["source_id"] != nil {
+		t.Fatalf("expected reset record to clear source fields, got %#v", recordItem)
+	}
 }

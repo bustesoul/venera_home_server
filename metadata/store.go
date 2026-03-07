@@ -124,7 +124,16 @@ type ListQuery struct {
 	State     string
 	LibraryID string
 	Path      string
+	Search    string
 	Limit     int
+	Offset    int
+}
+
+type ListResult struct {
+	Items  []Record `json:"items"`
+	Total  int      `json:"total"`
+	Limit  int      `json:"limit"`
+	Offset int      `json:"offset"`
 }
 
 type CleanupRequest struct {
@@ -421,10 +430,96 @@ WHERE library_id = ? AND root_type = ? AND root_ref = ?
 	return nil
 }
 
-func (s *Store) ListRecords(ctx context.Context, query ListQuery) ([]Record, error) {
+func (s *Store) ResetMetadata(ctx context.Context, locator Locator) error {
 	if s == nil || s.db == nil {
-		return nil, nil
+		return nil
 	}
+	if !locator.Valid() {
+		return errors.New("invalid metadata locator")
+	}
+	result, err := s.db.ExecContext(ctx, `
+UPDATE manga_metadata
+SET title = NULL, title_jpn = NULL, subtitle = NULL, description = NULL,
+    artists_json = NULL, tags_json = NULL, language = NULL, rating = NULL,
+    category = NULL, source = NULL, source_id = NULL, source_token = NULL,
+    source_url = NULL, match_kind = NULL, confidence = NULL,
+    cover_source_url = NULL, cover_blob_relpath = NULL, extra_json = NULL,
+    last_error = NULL, fetched_at = NULL, stale_after = NULL
+WHERE library_id = ? AND root_type = ? AND root_ref = ?
+`, locator.LibraryID, locator.RootType, locator.RootRef)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Store) ListRecords(ctx context.Context, query ListQuery) ([]Record, error) {
+	result, err := s.ListRecordsPage(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (s *Store) ListRecordsPage(ctx context.Context, query ListQuery) (ListResult, error) {
+	if s == nil || s.db == nil {
+		return ListResult{Limit: query.Limit, Offset: query.Offset}, nil
+	}
+	where, args := buildListRecordsFilter(query)
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	offset := query.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	countStmt := `SELECT COUNT(*) FROM manga_metadata WHERE ` + strings.Join(where, ` AND `)
+	var total int
+	if err := s.db.QueryRowContext(ctx, countStmt, args...).Scan(&total); err != nil {
+		return ListResult{}, err
+	}
+	stmt := `
+SELECT id, library_id, root_type, root_ref, folder_path, content_fingerprint,
+       title, title_jpn, subtitle, description, artists_json, tags_json,
+       language, rating, category, source, source_id, source_token, source_url,
+       match_kind, confidence, manual_locked, cover_source_url, cover_blob_relpath,
+       hint_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
+FROM manga_metadata
+WHERE ` + strings.Join(where, ` AND `) + `
+ORDER BY COALESCE(last_seen_at, '') DESC, id DESC
+LIMIT ? OFFSET ?`
+	queryArgs := append(append([]any{}, args...), limit, offset)
+	rows, err := s.db.QueryContext(ctx, stmt, queryArgs...)
+	if err != nil {
+		return ListResult{}, err
+	}
+	defer rows.Close()
+	out := []Record{}
+	for rows.Next() {
+		rec, err := scanRecord(rows)
+		if err != nil {
+			return ListResult{}, err
+		}
+		out = append(out, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return ListResult{}, err
+	}
+	return ListResult{Items: out, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+func buildListRecordsFilter(query ListQuery) ([]string, []any) {
 	where := []string{"1=1"}
 	args := []any{}
 	if strings.TrimSpace(query.LibraryID) != "" {
@@ -434,6 +529,13 @@ func (s *Store) ListRecords(ctx context.Context, query ListQuery) ([]Record, err
 	if path := strings.TrimSpace(query.Path); path != "" {
 		where = append(where, "(root_ref LIKE ? OR folder_path LIKE ?)")
 		args = append(args, path+"%", path+"%")
+	}
+	if search := strings.TrimSpace(query.Search); search != "" {
+		pattern := "%" + search + "%"
+		where = append(where, `(root_ref LIKE ? OR folder_path LIKE ? OR COALESCE(title, '') LIKE ? OR COALESCE(title_jpn, '') LIKE ? OR COALESCE(subtitle, '') LIKE ? OR COALESCE(description, '') LIKE ? OR COALESCE(artists_json, '') LIKE ? OR COALESCE(tags_json, '') LIKE ? OR COALESCE(category, '') LIKE ? OR COALESCE(source, '') LIKE ? OR COALESCE(source_id, '') LIKE ? OR COALESCE(last_error, '') LIKE ?)`)
+		for i := 0; i < 12; i++ {
+			args = append(args, pattern)
+		}
 	}
 	switch strings.ToLower(strings.TrimSpace(query.State)) {
 	case "empty":
@@ -445,36 +547,10 @@ func (s *Store) ListRecords(ctx context.Context, query ListQuery) ([]Record, err
 	case "stale":
 		where = append(where, "stale_after IS NOT NULL AND stale_after <> '' AND stale_after <= ?")
 		args = append(args, formatTime(time.Now().UTC()))
+	case "ready":
+		where = append(where, "missing_since IS NULL")
 	}
-	limit := query.Limit
-	if limit <= 0 {
-		limit = 200
-	}
-	stmt := `
-SELECT id, library_id, root_type, root_ref, folder_path, content_fingerprint,
-       title, title_jpn, subtitle, description, artists_json, tags_json,
-       language, rating, category, source, source_id, source_token, source_url,
-       match_kind, confidence, manual_locked, cover_source_url, cover_blob_relpath,
-       hint_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
-FROM manga_metadata
-WHERE ` + strings.Join(where, ` AND `) + `
-ORDER BY COALESCE(last_seen_at, '') DESC, id DESC
-LIMIT ?`
-	args = append(args, limit)
-	rows, err := s.db.QueryContext(ctx, stmt, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Record{}
-	for rows.Next() {
-		rec, err := scanRecord(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, rec)
-	}
-	return out, rows.Err()
+	return where, args
 }
 
 func (s *Store) CleanupMissing(ctx context.Context, req CleanupRequest) (CleanupResult, error) {
@@ -733,6 +809,11 @@ func nullIfEmpty(value string) any {
 		return nil
 	}
 	return value
+}
+
+func escapeLikeValue(value string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return replacer.Replace(value)
 }
 
 func formatTime(value time.Time) string {

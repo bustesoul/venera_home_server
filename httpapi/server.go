@@ -85,8 +85,13 @@ func newHTTPServer(app *apppkg.App, logger *log.Logger) http.Handler {
 	mux.HandleFunc("/api/v1/favorites/items", srv.auth(srv.handleFavoriteItems))
 	mux.HandleFunc("/api/v1/admin/rescan", srv.auth(srv.handleRescan))
 	mux.HandleFunc("/api/v1/admin/metadata/refresh", srv.auth(srv.handleMetadataRefresh))
+	mux.HandleFunc("/api/v1/admin/metadata/enrich", srv.auth(srv.handleMetadataEnrich))
+	mux.HandleFunc("/api/v1/admin/metadata/jobs", srv.auth(srv.handleMetadataJobs))
 	mux.HandleFunc("/api/v1/admin/metadata/jobs/", srv.auth(srv.handleMetadataJob))
 	mux.HandleFunc("/api/v1/admin/metadata/records", srv.auth(srv.handleMetadataRecords))
+	mux.HandleFunc("/api/v1/admin/metadata/records/actions", srv.auth(srv.handleMetadataRecordAction))
+	mux.HandleFunc("/api/v1/admin/metadata/sources", srv.auth(srv.handleMetadataSources))
+	mux.HandleFunc("/api/v1/admin/metadata/sources/", srv.auth(srv.handleMetadataSources))
 	mux.HandleFunc("/api/v1/admin/metadata/cleanup", srv.auth(srv.handleMetadataCleanup))
 	mux.HandleFunc("/media/", srv.handleMedia)
 	mux.HandleFunc("/", srv.handleIndex)
@@ -131,8 +136,8 @@ func loggingMiddleware(logger *shared.LevelLogger, next http.Handler) http.Handl
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = io.WriteString(w, "Venera Home Server\n")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = io.WriteString(w, adminIndexHTML)
 }
 
 func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -531,46 +536,36 @@ func (s *Server) handleMetadataRecords(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 		return
 	}
+	page := parsePage(strings.TrimSpace(r.URL.Query().Get("page")))
+	limit := parseInt(strings.TrimSpace(r.URL.Query().Get("limit")), 200)
+	if limit <= 0 {
+		limit = 200
+	}
 	query := metadatapkg.ListQuery{
 		State:     strings.TrimSpace(r.URL.Query().Get("state")),
 		LibraryID: strings.TrimSpace(r.URL.Query().Get("library_id")),
 		Path:      strings.TrimSpace(r.URL.Query().Get("path")),
-		Limit:     parseInt(strings.TrimSpace(r.URL.Query().Get("limit")), 200),
+		Search:    strings.TrimSpace(r.URL.Query().Get("search")),
+		Limit:     limit,
+		Offset:    (page - 1) * limit,
 	}
-	records, err := s.app.MetadataRecords(r.Context(), query)
+	result, err := s.app.MetadataRecordsPage(r.Context(), query)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "METADATA_RECORDS_FAILED", err.Error())
 		return
 	}
-	items := make([]map[string]any, 0, len(records))
-	for _, record := range records {
-		items = append(items, map[string]any{
-			"id":                  record.ID,
-			"library_id":          record.LibraryID,
-			"root_type":           record.RootType,
-			"root_ref":            record.RootRef,
-			"folder_path":         record.FolderPath,
-			"content_fingerprint": emptyToNil(record.ContentFingerprint),
-			"title":               emptyToNil(record.Title),
-			"title_jpn":           emptyToNil(record.TitleJPN),
-			"subtitle":            emptyToNil(record.Subtitle),
-			"description":         emptyToNil(record.Description),
-			"artists":             record.Artists,
-			"tags":                record.Tags,
-			"language":            emptyToNil(record.Language),
-			"source":              emptyToNil(record.Source),
-			"source_id":           emptyToNil(record.SourceID),
-			"source_token":        emptyToNil(record.SourceToken),
-			"source_url":          emptyToNil(record.SourceURL),
-			"last_error":          emptyToNil(record.LastError),
-			"fetched_at":          formatTimePtrRFC3339(record.FetchedAt),
-			"stale_after":         formatTimePtrRFC3339(record.StaleAfter),
-			"last_seen_at":        formatTimePtrRFC3339(record.LastSeenAt),
-			"missing_since":       formatTimePtrRFC3339(record.MissingSince),
-			"state":               metadataRecordState(record),
-		})
+	items := make([]map[string]any, 0, len(result.Items))
+	for _, record := range result.Items {
+		items = append(items, metadataRecordMap(record))
 	}
-	writeData(w, map[string]any{"items": items, "count": len(items)})
+	writeData(w, map[string]any{
+		"items":     items,
+		"count":     len(items),
+		"total":     result.Total,
+		"page":      page,
+		"page_size": result.Limit,
+		"offset":    result.Offset,
+	})
 }
 
 func (s *Server) handleMetadataCleanup(w http.ResponseWriter, r *http.Request) {
