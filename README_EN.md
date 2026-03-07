@@ -237,6 +237,17 @@ Example `.venera.json`:
 }
 ```
 
+Optional field:
+
+- `hidden: true`: ignore the comic represented by the current directory; if the directory is only a container, the whole subtree is skipped
+- For archive files, place a sidecar next to the archive such as `xxx.cbz.venera.json` / `xxx.zip.venera.json`, for example:
+
+```json
+{
+  "hidden": true
+}
+```
+
 ## Platform Notes
 
 ### Windows

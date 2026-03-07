@@ -237,6 +237,17 @@ D:\Comics\Packed\
 }
 ```
 
+可选字段：
+
+- `hidden: true`：忽略当前目录对应的漫画；如果这个目录本身是容器目录，则会忽略整个目录树
+- 若目标是压缩包，请在压缩包旁边放 `xxx.cbz.venera.json` / `xxx.zip.venera.json`，例如：
+
+```json
+{
+  "hidden": true
+}
+```
+
 ## 平台说明
 
 ### Windows

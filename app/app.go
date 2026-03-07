@@ -188,6 +188,10 @@ func (a *App) scanDir(ctx context.Context, lib configpkg.LibraryConfig, backend 
 	if err != nil {
 		return nil, err
 	}
+	dirMeta, _ := a.loadMetadataForDir(ctx, backend, rel, shared.BaseNameTitle(rel))
+	if dirMeta.Hidden {
+		return []*Comic{}, nil
+	}
 	var images, archives, dirs []backendpkg.Entry
 	for _, entry := range entries {
 		if entry.IsDir {
@@ -215,17 +219,17 @@ func (a *App) scanDir(ctx context.Context, lib configpkg.LibraryConfig, backend 
 		}
 	}
 	if scanMode == "auto" && rel != "" && len(dirs) == len(chapterDirs) && len(archives)+len(chapterDirs) >= 2 {
-		parentMeta, _ := a.loadMetadataForDir(ctx, backend, rel, shared.BaseNameTitle(rel))
+		parentMeta := dirMeta
 		candidates := make([]chapterCandidate, 0, len(archives)+len(chapterDirs))
 		for _, dir := range chapterDirs {
 			candidate, err := a.inspectChapterDirCandidate(ctx, backend, dir.RelPath)
-			if err == nil {
+			if err == nil && !candidate.Meta.Hidden {
 				candidates = append(candidates, candidate)
 			}
 		}
 		for _, archive := range archives {
 			candidate, err := a.inspectArchiveCandidate(ctx, backend, archive.RelPath, shared.BaseNameTitle(archive.Name))
-			if err == nil {
+			if err == nil && !candidate.Meta.Hidden {
 				candidates = append(candidates, candidate)
 			}
 		}
@@ -242,6 +246,9 @@ func (a *App) scanDir(ctx context.Context, lib configpkg.LibraryConfig, backend 
 		if err != nil {
 			return nil, err
 		}
+		if comic == nil {
+			return []*Comic{}, nil
+		}
 		return []*Comic{comic}, nil
 	}
 
@@ -252,7 +259,7 @@ func (a *App) scanDir(ctx context.Context, lib configpkg.LibraryConfig, backend 
 	out := []*Comic{}
 	for _, archive := range archives {
 		comic, err := a.buildArchiveComic(ctx, lib, backend, archive.RelPath, shared.BaseNameTitle(archive.Name))
-		if err == nil {
+		if err == nil && comic != nil {
 			out = append(out, comic)
 		}
 	}
@@ -374,6 +381,7 @@ func mergeMetadata(base ParsedMetadata, override ParsedMetadata) ParsedMetadata 
 	}
 	out.Language = firstNonEmpty(override.Language, out.Language)
 	out.ScanMode = firstNonEmpty(override.ScanMode, out.ScanMode)
+	out.Hidden = out.Hidden || override.Hidden
 	out.hasExplicitTitle = out.hasExplicitTitle || override.hasExplicitTitle
 	out.hasExplicitSeries = out.hasExplicitSeries || override.hasExplicitSeries
 	return out
@@ -597,6 +605,9 @@ func (a *App) buildArchiveComic(ctx context.Context, lib configpkg.LibraryConfig
 	if err != nil {
 		return nil, err
 	}
+	if meta.Hidden {
+		return nil, nil
+	}
 	if comic, err := a.buildArchiveSeriesComic(ctx, lib, backend, rel, fallbackTitle, meta); err == nil && comic != nil {
 		return comic, nil
 	}
@@ -752,6 +763,7 @@ func applySidecar(meta *ParsedMetadata, raw []byte) {
 	}
 	meta.Language = firstNonEmpty(override.Language, meta.Language)
 	meta.ScanMode = firstNonEmpty(override.ScanMode, meta.ScanMode)
+	meta.Hidden = meta.Hidden || override.Hidden
 }
 
 func (a *App) materializeChapterPages(ctx context.Context, chapter *Chapter) ([]PageRef, error) {

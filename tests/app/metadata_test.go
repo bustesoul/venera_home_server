@@ -47,3 +47,35 @@ func TestSidecarOverridesMetadata(t *testing.T) {
 		t.Fatalf("unexpected tags/language: %#v %s", comic.Tags, comic.Language)
 	}
 }
+
+func TestHiddenSidecarSkipsDirectoryComic(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteFile(t, filepath.Join(root, "Hidden Book", "001.jpg"), []byte("img-hidden"))
+	testkit.MustWriteFile(t, filepath.Join(root, "Hidden Book", ".venera.json"), []byte(`{"hidden":true}`))
+	testkit.MustWriteFile(t, filepath.Join(root, "Visible Book", "001.jpg"), []byte("img-visible"))
+
+	application := newTestApp(t, root)
+	ids := application.LibraryComicIDs("local-main")
+	if len(ids) != 1 {
+		t.Fatalf("expected 1 comic, got %d", len(ids))
+	}
+	if comic := application.ComicByID(ids[0]); comic == nil || comic.Title != "Visible Book" {
+		t.Fatalf("unexpected visible comic: %#v", comic)
+	}
+}
+
+func TestHiddenSidecarSkipsArchiveComic(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteZip(t, filepath.Join(root, "Hidden Book.cbz"), map[string][]byte{"001.jpg": []byte("a")})
+	testkit.MustWriteFile(t, filepath.Join(root, "Hidden Book.cbz.venera.json"), []byte(`{"hidden":true}`))
+	testkit.MustWriteZip(t, filepath.Join(root, "Visible Book.cbz"), map[string][]byte{"001.jpg": []byte("b")})
+
+	application := newTestApp(t, root)
+	ids := application.LibraryComicIDs("local-main")
+	if len(ids) != 1 {
+		t.Fatalf("expected 1 comic, got %d", len(ids))
+	}
+	if comic := application.ComicByID(ids[0]); comic == nil || comic.Title != "Visible Book" {
+		t.Fatalf("unexpected visible comic: %#v", comic)
+	}
+}

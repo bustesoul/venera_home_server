@@ -52,6 +52,7 @@ type ParsedMetadata struct {
 	Tags        []string `json:"tags,omitempty"`
 	Language    string   `json:"language,omitempty"`
 	ScanMode    string   `json:"scan_mode,omitempty"`
+	Hidden      bool     `json:"hidden,omitempty"`
 
 	hasExplicitTitle  bool
 	hasExplicitSeries bool
