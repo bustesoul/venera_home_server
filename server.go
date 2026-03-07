@@ -36,6 +36,7 @@ type apiServer struct {
 	prefetching     map[string]struct{}
 	prefetchSem     chan struct{}
 	prefetchLastTrigger map[string]time.Time
+	pageCacheBuildSem chan struct{}
 	pageCacheInfoMu    sync.RWMutex
 	pageCacheInfoItems map[string]pageCacheInfoEntry
 }
@@ -48,7 +49,7 @@ func newHTTPServer(app *App, logger *log.Logger) http.Handler {
 	srv := &apiServer{
 		app: app, log: logger, pageMemoryCache: pageMemoryCache,
 		pageFlights: map[string]*pageCacheFlight{}, prefetching: map[string]struct{}{},
-		prefetchSem: make(chan struct{}, 1), prefetchLastTrigger: map[string]time.Time{},
+		prefetchSem: make(chan struct{}, 1), prefetchLastTrigger: map[string]time.Time{}, pageCacheBuildSem: make(chan struct{}, 1),
 		pageCacheInfoItems: map[string]pageCacheInfoEntry{},
 	}
 	mux := http.NewServeMux()
@@ -518,31 +519,58 @@ func pageCacheLabel(page PageRef) string {
 	return cleanRel(page.SourceRef)
 }
 
-func (s *apiServer) pageCacheInfo(ctx context.Context, backend Backend, comic *Comic, page PageRef) (resolvedPageCacheInfo, error) {
+func (s *apiServer) pageSourceMeta(ctx context.Context, backend Backend, page PageRef) (int64, time.Time, error) {
+	if page.Size > 0 || !page.ModTime.IsZero() {
+		return page.Size, page.ModTime, nil
+	}
+	if page.SourceType == "archive" && page.EntryName != "" {
+		archive, err := openArchive(ctx, backend, page.SourceRef, s.app.cfg.Server.CacheDir)
+		if err != nil {
+			return 0, time.Time{}, err
+		}
+		defer archive.Close()
+		target := cleanRel(strings.ReplaceAll(page.EntryName, "\\", "/"))
+		for _, entry := range archive.Entries() {
+			if cleanRel(strings.ReplaceAll(entry.Name, "\\", "/")) == target {
+				return entry.Size, entry.ModTime, nil
+			}
+		}
+		return 0, time.Time{}, os.ErrNotExist
+	}
 	rc, size, modTime, err := backend.OpenStream(ctx, page.SourceRef)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	_ = rc.Close()
+	return size, modTime, nil
+}
+
+func (s *apiServer) pageCacheInfo(ctx context.Context, backend Backend, comic *Comic, page PageRef) (resolvedPageCacheInfo, error) {
+	size, modTime, err := s.pageSourceMeta(ctx, backend, page)
 	if err != nil {
 		return resolvedPageCacheInfo{}, err
 	}
-	_ = rc.Close()
-	ext := strings.ToLower(filepath.Ext(page.EntryName))
-	if ext == "" {
-		ext = strings.ToLower(filepath.Ext(page.Name))
+	sourceExt := pageSourceExt(page)
+	contentType := guessContentType(page.Name)
+	cacheExt := sourceExt
+	cacheContentType := contentType
+	if shouldVisualCompressSource(contentType, sourceExt, size) {
+		cacheExt = ".jpg"
+		cacheContentType = "image/jpeg"
 	}
-	if ext == "" {
-		ext = strings.ToLower(filepath.Ext(page.SourceRef))
-	}
-	parts := []string{"page", page.SourceType, comic.LibraryID, cleanRel(page.SourceRef), strconv.FormatInt(size, 10), modTime.UTC().Format(time.RFC3339Nano)}
+	parts := []string{"page", renderedPageCacheVariant, page.SourceType, comic.LibraryID, cleanRel(page.SourceRef), strconv.FormatInt(size, 10), modTime.UTC().Format(time.RFC3339Nano)}
 	if page.EntryName != "" {
 		parts = append(parts, cleanRel(page.EntryName))
 	}
+	parts = append(parts, cacheContentType)
 	contentLength := int64(0)
-	if page.SourceType == "file" {
+	if page.SourceType == "file" && cacheContentType == contentType {
 		contentLength = size
 	}
 	return resolvedPageCacheInfo{
 		key:           shaID(parts...),
-		path:          filepath.Join(s.app.cfg.Server.CacheDir, "rendered-pages", shaID(parts...)+ext),
-		contentType:   guessContentType(page.Name),
+		path:          filepath.Join(s.app.cfg.Server.CacheDir, "rendered-pages", shaID(parts...)+cacheExt),
+		contentType:   cacheContentType,
 		modTime:       modTime,
 		contentLength: contentLength,
 	}, nil
@@ -756,6 +784,9 @@ func prefetchThrottleKey(chapterID string, windowStart int) string {
 }
 
 func (s *apiServer) scheduleChapterPrefetch(chapter *Chapter, pages []PageRef, currentIndex int) {
+	if !enableServerSideChapterPrefetch {
+		return
+	}
 	if chapter == nil || currentIndex < 0 || currentIndex >= len(pages) {
 		return
 	}
@@ -906,28 +937,7 @@ func (s *apiServer) serveResolvedPage(w http.ResponseWriter, r *http.Request, ch
 		if s.servePageFromDiskCache(w, info, page) {
 			return
 		}
-		created, cacheErr, shared := s.doPageFlight(info.key, func() (bool, error) {
-			return s.ensurePageCached(r.Context(), backend, page, info)
-		})
-		if cacheErr == nil {
-			if created && !shared {
-				s.log.Printf("render cache fill ref=%s", pageCacheLabel(page))
-			}
-			if s.servePageFromMemoryCache(w, info, page) {
-				return
-			}
-			if s.servePageFromDiskCache(w, info, page) {
-				return
-			}
-		} else {
-			if s.servePageFromMemoryCache(w, info, page) {
-				return
-			}
-			if s.servePageFromDiskCache(w, info, page) {
-				return
-			}
-			s.log.Printf("render cache fill failed ref=%s err=%v", pageCacheLabel(page), cacheErr)
-		}
+		s.schedulePageCacheBuild(backend, info, page)
 	} else {
 		s.log.Printf("render cache key failed ref=%s err=%v", pageCacheLabel(page), err)
 	}

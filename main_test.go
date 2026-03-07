@@ -103,7 +103,9 @@ func TestLocalServerFlow(t *testing.T) {
 		t.Fatalf("glob cache files: %v", err)
 	}
 	if len(cachedPages) == 0 {
-		t.Fatal("expected rendered page cache file to be created")
+		if cachedPages, err = waitForRenderedCacheCount(root, 1, 3*time.Second); err != nil {
+			t.Fatal(err)
+		}
 	}
 	condReq, _ := http.NewRequest(http.MethodGet, images[0].(string), nil)
 	condReq.Header.Set("If-None-Match", res.Header.Get("ETag"))
@@ -202,7 +204,7 @@ func postJSON(t *testing.T, url, token string, payload map[string]any) map[strin
 	return out
 }
 
-func TestArchivePageRequestTriggersChapterPrefetch(t *testing.T) {
+func TestArchivePageRequestBuildsOnlyRequestedPageAsync(t *testing.T) {
 	root := t.TempDir()
 	mustWriteZip(t, filepath.Join(root, "Prefetch.cbz"), map[string][]byte{
 		"001.jpg": []byte("page1"),
@@ -257,23 +259,20 @@ func TestArchivePageRequestTriggersChapterPrefetch(t *testing.T) {
 	defer res.Body.Close()
 	_, _ = io.ReadAll(res.Body)
 
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
-		if err != nil {
-			t.Fatalf("glob cache files: %v", err)
-		}
-		if len(cachedPages) >= 2 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected chapter prefetch to cache additional pages, got %d files", len(cachedPages))
-		}
-		time.Sleep(25 * time.Millisecond)
+	if cachedPages, err = waitForRenderedCacheCount(root, 1, 3*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	if err != nil {
+		t.Fatalf("glob cache files: %v", err)
+	}
+	if len(cachedPages) != 1 {
+		t.Fatalf("expected only requested page to be cached, got %d files", len(cachedPages))
 	}
 }
 
-func TestPageRequestPrefetchUsesActualWindowStart(t *testing.T) {
+func TestPageRequestsBuildOnlyRequestedPagesAsync(t *testing.T) {
 	root := t.TempDir()
 	for i := 1; i <= 24; i++ {
 		mustWriteFile(t, filepath.Join(root, "Windowed", fmt.Sprintf("%03d.jpg", i)), []byte(fmt.Sprintf("page-%02d", i)))
@@ -317,19 +316,17 @@ func TestPageRequestPrefetchUsesActualWindowStart(t *testing.T) {
 	_, _ = io.ReadAll(firstRes.Body)
 	_ = firstRes.Body.Close()
 
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
-		if err != nil {
-			t.Fatalf("glob cache files after first prefetch: %v", err)
-		}
-		if len(cachedPages) >= 13 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected first window prefetch to warm 13 pages, got %d", len(cachedPages))
-		}
-		time.Sleep(25 * time.Millisecond)
+	cachedPages, err := waitForRenderedCacheCount(root, 1, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	if err != nil {
+		t.Fatalf("glob cache files after first request: %v", err)
+	}
+	if len(cachedPages) != 1 {
+		t.Fatalf("expected first request to cache exactly 1 page, got %d", len(cachedPages))
 	}
 
 	secondReq, _ := http.NewRequest(http.MethodGet, images[10].(string), nil)
@@ -340,19 +337,17 @@ func TestPageRequestPrefetchUsesActualWindowStart(t *testing.T) {
 	_, _ = io.ReadAll(secondRes.Body)
 	_ = secondRes.Body.Close()
 
-	deadline = time.Now().Add(3 * time.Second)
-	for {
-		cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
-		if err != nil {
-			t.Fatalf("glob cache files after second prefetch: %v", err)
-		}
-		if len(cachedPages) >= 23 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected later window prefetch to warm additional pages, got %d", len(cachedPages))
-		}
-		time.Sleep(25 * time.Millisecond)
+	cachedPages, err = waitForRenderedCacheCount(root, 2, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	if err != nil {
+		t.Fatalf("glob cache files after second request: %v", err)
+	}
+	if len(cachedPages) != 2 {
+		t.Fatalf("expected two requested pages to be cached, got %d", len(cachedPages))
 	}
 }
 
@@ -401,9 +396,9 @@ func TestFilePageServesFromMemoryAfterDiskCacheRemoval(t *testing.T) {
 		t.Fatalf("unexpected first media body: %q", string(firstBody))
 	}
 
-	cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	cachedPages, err := waitForRenderedCacheCount(root, 1, 3*time.Second)
 	if err != nil {
-		t.Fatalf("glob cache files: %v", err)
+		t.Fatal(err)
 	}
 	if len(cachedPages) != 1 {
 		t.Fatalf("expected 1 rendered cache file, got %d", len(cachedPages))
@@ -429,5 +424,22 @@ func TestFilePageServesFromMemoryAfterDiskCacheRemoval(t *testing.T) {
 	}
 	if len(cachedPages) != 0 {
 		t.Fatalf("expected memory hit without recreating disk cache, got %d files", len(cachedPages))
+	}
+}
+
+func waitForRenderedCacheCount(root string, wantAtLeast int, timeout time.Duration) ([]string, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+		if err != nil {
+			return nil, fmt.Errorf("glob cache files: %w", err)
+		}
+		if len(cachedPages) >= wantAtLeast {
+			return cachedPages, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("expected at least %d rendered cache files, got %d", wantAtLeast, len(cachedPages))
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
 }

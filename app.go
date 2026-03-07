@@ -766,7 +766,7 @@ func (a *App) materializeChapterPages(ctx context.Context, chapter *Chapter) ([]
 		pages := []PageRef{}
 		for _, entry := range entries {
 			if !entry.IsDir && isImageFile(entry.Name) {
-				pages = append(pages, PageRef{PageIndex: len(pages), SourceType: "file", SourceRef: entry.RelPath, Name: entry.Name})
+				pages = append(pages, PageRef{PageIndex: len(pages), SourceType: "file", SourceRef: entry.RelPath, Name: entry.Name, Size: entry.Size, ModTime: entry.ModTime})
 			}
 		}
 		chapter.pages = pages
@@ -786,7 +786,7 @@ func (a *App) materializeChapterPages(ctx context.Context, chapter *Chapter) ([]
 			if prefix != "" && entryName != prefix && !strings.HasPrefix(entryName, prefix+"/") {
 				continue
 			}
-			pages = append(pages, PageRef{PageIndex: len(pages), SourceType: "archive", SourceRef: chapter.SourceRef, EntryName: entry.Name, Name: path.Base(entryName)})
+			pages = append(pages, PageRef{PageIndex: len(pages), SourceType: "archive", SourceRef: chapter.SourceRef, EntryName: entry.Name, Name: path.Base(entryName), Size: entry.Size, ModTime: entry.ModTime})
 		}
 		sort.Slice(pages, func(i, j int) bool { return naturalLess(pages[i].Name, pages[j].Name) })
 		for i := range pages {

@@ -39,6 +39,8 @@ type PageRef struct {
 	SourceRef  string
 	EntryName  string
 	Name       string
+	Size       int64
+	ModTime    time.Time
 }
 
 type ParsedMetadata struct {

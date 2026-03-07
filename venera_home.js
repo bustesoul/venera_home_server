@@ -4,7 +4,7 @@ class VeneraHome extends ComicSource {
 
     key = "venera_home"
 
-    version = "0.1.4"
+    version = "0.1.5"
 
     minAppVersion = "1.6.0"
 
@@ -47,6 +47,236 @@ class VeneraHome extends ComicSource {
             ...this.headers,
             "Content-Type": "application/json"
         }
+    }
+
+    get mediaHeaders() {
+        let headers = {}
+        if (this.token) {
+            headers["Authorization"] = `Bearer ${this.token}`
+        }
+        return headers
+    }
+
+    get readerTuning() {
+        return {
+            maxConcurrent: 2,
+            burstWindowMs: 250,
+            jumpThreshold: 4,
+            slotTimeoutMs: 15000,
+            maxTrackedChapters: 6,
+            chapterIdleMs: 10 * 60 * 1000,
+        }
+    }
+
+    getReaderStore() {
+        if (!this._readerStore) {
+            this._readerStore = {
+                chapters: {},
+            }
+        }
+        return this._readerStore
+    }
+
+    makeReaderChapterKey(comicId, epId) {
+        return `${comicId}::${epId}`
+    }
+
+    ensureReaderState(comicId, epId) {
+        let store = this.getReaderStore()
+        let key = this.makeReaderChapterKey(comicId, epId)
+        let now = Date.now()
+        let state = store.chapters[key]
+        if (!state) {
+            state = {
+                key,
+                images: [],
+                indexByImage: {},
+                pending: [],
+                active: 0,
+                focusIndex: 0,
+                focusUntil: 0,
+                requestSeq: 0,
+                touchedAt: now,
+            }
+            store.chapters[key] = state
+        }
+        state.touchedAt = now
+        this.cleanupReaderStates(key)
+        return state
+    }
+
+    cleanupReaderStates(activeKey) {
+        let store = this.getReaderStore()
+        let tuning = this.readerTuning
+        let now = Date.now()
+        let keys = Object.keys(store.chapters)
+        keys.sort((a, b) => {
+            let ta = store.chapters[a] && store.chapters[a].touchedAt ? store.chapters[a].touchedAt : 0
+            let tb = store.chapters[b] && store.chapters[b].touchedAt ? store.chapters[b].touchedAt : 0
+            return tb - ta
+        })
+        for (let i = 0; i < keys.length; i++) {
+            let key = keys[i]
+            let state = store.chapters[key]
+            if (!state || key === activeKey) {
+                continue
+            }
+            let stale = now - (state.touchedAt || 0) > tuning.chapterIdleMs
+            let overflow = i >= tuning.maxTrackedChapters
+            if ((stale || overflow) && state.active === 0 && (!state.pending || state.pending.length === 0)) {
+                delete store.chapters[key]
+            }
+        }
+    }
+
+    rememberChapterImages(comicId, epId, images) {
+        let state = this.ensureReaderState(comicId, epId)
+        state.images = Array.isArray(images) ? images.slice() : []
+        state.indexByImage = {}
+        for (let i = 0; i < state.images.length; i++) {
+            state.indexByImage[state.images[i]] = i
+        }
+        return state
+    }
+
+    resolveReaderPageIndex(state, image) {
+        if (Object.prototype.hasOwnProperty.call(state.indexByImage, image)) {
+            return state.indexByImage[image]
+        }
+        let index = state.images.indexOf(image)
+        if (index >= 0) {
+            state.indexByImage[image] = index
+            return index
+        }
+        return 0
+    }
+
+    updateReaderFocus(state, index) {
+        let tuning = this.readerTuning
+        let now = Date.now()
+        if (state.focusUntil === 0 || now > state.focusUntil || Math.abs(index - state.focusIndex) >= tuning.jumpThreshold) {
+            state.focusIndex = index
+            state.focusUntil = now + tuning.burstWindowMs
+            return
+        }
+        if (index < state.focusIndex) {
+            state.focusIndex = index
+        }
+    }
+
+    classifyReaderRole(state, index) {
+        let distance = Math.abs(index - state.focusIndex)
+        if (distance === 0) {
+            return 'current'
+        }
+        if (distance === 1) {
+            return 'near'
+        }
+        if (distance <= 3) {
+            return index >= state.focusIndex ? 'ahead' : 'behind'
+        }
+        return 'distant'
+    }
+
+    scoreReaderTask(state, task) {
+        let distance = Math.abs(task.index - state.focusIndex)
+        if (distance === 0) {
+            return task.order
+        }
+        if (distance === 1) {
+            return 1000 + task.order
+        }
+        if (distance <= 3) {
+            return 5000 + distance * 100 + task.order
+        }
+        return 20000 + distance * 100 + task.order
+    }
+
+    pickNextReaderTaskIndex(state) {
+        let bestIndex = 0
+        let bestScore = this.scoreReaderTask(state, state.pending[0])
+        for (let i = 1; i < state.pending.length; i++) {
+            let score = this.scoreReaderTask(state, state.pending[i])
+            if (score < bestScore) {
+                bestScore = score
+                bestIndex = i
+            }
+        }
+        return bestIndex
+    }
+
+    createReaderRelease(state) {
+        let released = false
+        return () => {
+            if (released) {
+                return
+            }
+            released = true
+            if (state.active > 0) {
+                state.active -= 1
+            }
+            this.pumpReaderQueue(state)
+        }
+    }
+
+    buildReaderHintHeaders(index, role) {
+        return {
+            ...this.mediaHeaders,
+            'X-Venera-Reader': '1',
+            'X-Venera-Load-Mode': `queued-${this.readerTuning.maxConcurrent}`,
+            'X-Venera-Load-Role': role,
+            'X-Venera-Page-Index': String(index),
+        }
+    }
+
+    buildReaderLoadConfig(image, state, index, release, attempt) {
+        let role = this.classifyReaderRole(state, index)
+        let headers = this.buildReaderHintHeaders(index, role)
+        setTimeout(() => release(), this.readerTuning.slotTimeoutMs)
+        let config = {
+            url: image,
+            headers,
+            onResponse: (data) => {
+                release()
+                return data
+            },
+        }
+        if (attempt < 1) {
+            config.onLoadFailed = () => {
+                release()
+                return {
+                    url: image,
+                    headers: this.buildReaderHintHeaders(index, 'retry'),
+                }
+            }
+        }
+        return config
+    }
+
+    pumpReaderQueue(state) {
+        while (state.active < this.readerTuning.maxConcurrent && state.pending.length > 0) {
+            let nextIndex = this.pickNextReaderTaskIndex(state)
+            let task = state.pending.splice(nextIndex, 1)[0]
+            state.active += 1
+            let release = this.createReaderRelease(state)
+            task.resolve(this.buildReaderLoadConfig(task.image, state, task.index, release, task.attempt))
+        }
+    }
+
+    async scheduleReaderImageLoad(image, comicId, epId) {
+        let state = this.ensureReaderState(comicId, epId)
+        let index = this.resolveReaderPageIndex(state, image)
+        this.updateReaderFocus(state, index)
+        return await new Promise((resolve) => {
+            state.pending.push({
+                image,
+                index,
+                attempt: 0,
+                order: ++state.requestSeq,
+                resolve,
+            })
+            this.pumpReaderQueue(state)
+        })
     }
 
     ensureConfigured() {
@@ -441,15 +671,24 @@ class VeneraHome extends ComicSource {
         },
         loadEp: async (comicId, epId) => {
             let data = await this.request('GET', `/comics/${encodeURIComponent(comicId)}/chapters/${encodeURIComponent(epId)}/pages`, null, null)
+            let images = data.images || []
+            this.rememberChapterImages(comicId, epId, images)
             return {
-                images: data.images || [],
+                images,
             }
         },
-        onImageLoad: () => {
-            return {}
+        onImageLoad: async (image, comicId, epId) => {
+            return await this.scheduleReaderImageLoad(image, comicId, epId)
         },
-        onThumbnailLoad: () => {
-            return {}
+        onThumbnailLoad: (url) => {
+            return {
+                url,
+                headers: {
+                    ...this.mediaHeaders,
+                    'X-Venera-Reader': '1',
+                    'X-Venera-Load-Role': 'thumbnail',
+                }
+            }
         },
         idMatch: '^[A-Za-z0-9_:-]+$',
         onClickTag: (namespace, tag) => {
