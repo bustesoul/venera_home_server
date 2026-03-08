@@ -28,6 +28,9 @@ func TestLoadConfigExample(t *testing.T) {
 	if cfg.Server.MemoryCacheMB != 512 {
 		t.Fatalf("unexpected memory cache size: %d", cfg.Server.MemoryCacheMB)
 	}
+	if !cfg.EHBot.AutoRescan || cfg.EHBot.PollIntervalSeconds != 60 || cfg.EHBot.TargetLibraryID != "local-main" {
+		t.Fatalf("unexpected ehbot config: %#v", cfg.EHBot)
+	}
 	if len(cfg.Libraries) != 3 {
 		t.Fatalf("expected 3 libraries, got %d", len(cfg.Libraries))
 	}
@@ -39,7 +42,7 @@ func TestLoadConfigExample(t *testing.T) {
 func TestLoadConfigWithUTF8BOM(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "server.toml")
-	content := "\uFEFF[server]\nlisten = \"0.0.0.0:34123\"\ntoken = \"sk-buste\"\nmemory_cache_mb = 1024\n\n[[libraries]]\nid = \"local-main\"\nkind = \"local\"\nroot = \"Y:/comic\"\n"
+	content := "\uFEFF[server]\nlisten = \"0.0.0.0:34123\"\ntoken = \"sk-buste\"\nmemory_cache_mb = 1024\n\n[ehbot]\nbase_url = \"https://ehbot.example.com\"\ntarget_library_id = \"local-main\"\n\n[[libraries]]\nid = \"local-main\"\nkind = \"local\"\nroot = \"Y:/comic\"\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -52,6 +55,9 @@ func TestLoadConfigWithUTF8BOM(t *testing.T) {
 	}
 	if cfg.Server.MemoryCacheMB != 1024 {
 		t.Fatalf("unexpected memory cache size: %d", cfg.Server.MemoryCacheMB)
+	}
+	if cfg.EHBot.BaseURL != "https://ehbot.example.com" || cfg.EHBot.TargetLibraryID != "local-main" {
+		t.Fatalf("unexpected ehbot values: %#v", cfg.EHBot)
 	}
 	if len(cfg.Libraries) != 1 {
 		t.Fatalf("expected 1 library, got %d", len(cfg.Libraries))

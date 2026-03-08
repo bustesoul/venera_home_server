@@ -44,9 +44,9 @@ func TestAdminHomePageUsesReadableUTF8Text(t *testing.T) {
 		"cleanupDryRunBtn",
 		"sidecarModal",
 		"/api/v1/admin/metadata/sidecar",
-		"切换浅色",
-		"批量补全任务（Batch Enrich）",
-		"保存或删除后，自动触发该书库的 Rescan 任务",
+		"EH Bot Pull / Import",
+		"runEHBotPullBtn",
+		"/api/v1/admin/ehbot/status",
 	} {
 		if !strings.Contains(text, needle) {
 			t.Fatalf("expected admin page to contain %q, got %q", needle, text)

@@ -17,6 +17,20 @@ read_comicinfo = true
 read_sidecar = true
 allow_remote_fetch = false
 
+[ehbot]
+enabled = false
+base_url = "https://ehbot.example.com"
+pull_token = "change-me"
+consumer_id = "home-main"
+target_id = "home-main"
+target_library_id = "local-main"
+target_subdir = "EH Inbox"
+poll_interval_seconds = 60
+lease_seconds = 1800
+download_timeout_seconds = 1800
+auto_rescan = true
+max_jobs_per_poll = 1
+
 [[libraries]]
 id = "local-main"
 name = "Local Manga"

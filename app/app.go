@@ -32,6 +32,11 @@ type App struct {
 	metadataStore  *metadatapkg.Store
 	metadataJobsMu sync.RWMutex
 	metadataJobs   map[string]*MetadataRefreshJob
+	ehBotMu        sync.RWMutex
+	ehBotJobs      map[string]*EHBotPullJob
+	ehBotState     EHBotRuntimeState
+	ehBotQueue     chan *EHBotPullJob
+	ehBotCancel    context.CancelFunc
 }
 
 type comicInfoXML struct {
@@ -68,6 +73,7 @@ func NewApp(cfg *configpkg.Config) (*App, error) {
 		favorites:     favorites,
 		metadataStore: metadataStore,
 		metadataJobs:  map[string]*MetadataRefreshJob{},
+		ehBotJobs:     map[string]*EHBotPullJob{},
 	}
 	for _, lib := range cfg.Libraries {
 		var backend backendpkg.Backend
@@ -92,6 +98,7 @@ func NewApp(cfg *configpkg.Config) (*App, error) {
 	if err := app.Rescan(context.Background(), ""); err != nil {
 		return nil, err
 	}
+	app.startEHBotService()
 	return app, nil
 }
 
@@ -330,7 +337,7 @@ func (a *App) buildBaseComic(lib configpkg.LibraryConfig, rel string, title stri
 		UpdatedAt:   now,
 		RootType:    rootType,
 		RootRef:     shared.CleanRel(rel),
-		SourceURL:   shared.CleanRel(rel),
+		SourceURL:   "",
 		Chapters:    []*Chapter{},
 	}
 }
@@ -700,6 +707,9 @@ func (a *App) loadMetadataForDir(ctx context.Context, backend backendpkg.Backend
 		if raw, err := backend.ReadSmallFile(ctx, shared.RelJoin(rel, "ComicInfo.xml"), 256*1024); err == nil {
 			applyComicInfo(&meta, raw)
 		}
+		if raw, err := backend.ReadSmallFile(ctx, shared.RelJoin(rel, "galleryinfo.txt"), 256*1024); err == nil {
+			applyGalleryInfo(&meta, raw)
+		}
 	}
 	if a.cfg.Metadata.ReadSidecar {
 		if raw, err := backend.ReadSmallFile(ctx, shared.RelJoin(rel, ".venera.json"), 256*1024); err == nil {
@@ -729,6 +739,14 @@ func (a *App) loadMetadataForArchive(ctx context.Context, backend backendpkg.Bac
 				raw, _ := io.ReadAll(io.LimitReader(rc, 256*1024))
 				_ = rc.Close()
 				applyComicInfo(&meta, raw)
+			}
+		}
+		if a.cfg.Metadata.ReadComicInfo && strings.EqualFold(path.Base(entry.Name), "galleryinfo.txt") {
+			rc, err := archive.Open(ctx, entry.Name)
+			if err == nil {
+				raw, _ := io.ReadAll(io.LimitReader(rc, 256*1024))
+				_ = rc.Close()
+				applyGalleryInfo(&meta, raw)
 			}
 		}
 		if shared.IsImageFile(entry.Name) {

@@ -6,6 +6,7 @@ func (a *App) Close() error {
 	if a == nil {
 		return nil
 	}
+	a.stopEHBotService()
 	var errs []error
 	if a.metadataStore != nil {
 		if err := a.metadataStore.Close(); err != nil {

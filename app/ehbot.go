@@ -1,0 +1,742 @@
+package app
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	configpkg "venera_home_server/config"
+	"venera_home_server/shared"
+)
+
+const ehBotJobHistoryLimit = 64
+
+type EHBotPullJob struct {
+	ID               string     `json:"job_id"`
+	Trigger          string     `json:"trigger,omitempty"`
+	Status           string     `json:"status"`
+	LibraryID        string     `json:"library_id,omitempty"`
+	Listed           int        `json:"listed"`
+	Eligible         int        `json:"eligible"`
+	Claimed          int        `json:"claimed"`
+	Imported         int        `json:"imported"`
+	Completed        int        `json:"completed"`
+	Failed           int        `json:"failed"`
+	LastStep         string     `json:"last_step,omitempty"`
+	RemoteJobID      string     `json:"remote_job_id,omitempty"`
+	RemoteTitle      string     `json:"remote_title,omitempty"`
+	RemoteTargetID   string     `json:"remote_target_id,omitempty"`
+	ArtifactFilename string     `json:"artifact_filename,omitempty"`
+	ImportedPath     string     `json:"imported_path,omitempty"`
+	Error            string     `json:"error,omitempty"`
+	RequestedAt      time.Time  `json:"requested_at"`
+	StartedAt        *time.Time `json:"started_at,omitempty"`
+	FinishedAt       *time.Time `json:"finished_at,omitempty"`
+}
+
+type EHBotRuntimeState struct {
+	Running          bool
+	CurrentJobID     string
+	LastPollAt       *time.Time
+	LastSuccessAt    *time.Time
+	LastError        string
+	LastRemoteJobID  string
+	LastImportedPath string
+}
+
+type EHBotStatus struct {
+	Enabled                bool       `json:"enabled"`
+	Configured             bool       `json:"configured"`
+	ConfigError            string     `json:"config_error,omitempty"`
+	BaseURL                string     `json:"base_url,omitempty"`
+	ConsumerID             string     `json:"consumer_id,omitempty"`
+	TargetID               string     `json:"target_id,omitempty"`
+	TargetLibraryID        string     `json:"target_library_id,omitempty"`
+	TargetLibraryName      string     `json:"target_library_name,omitempty"`
+	TargetLibraryKind      string     `json:"target_library_kind,omitempty"`
+	TargetSubdir           string     `json:"target_subdir,omitempty"`
+	PollIntervalSeconds    int        `json:"poll_interval_seconds"`
+	LeaseSeconds           int        `json:"lease_seconds"`
+	DownloadTimeoutSeconds int        `json:"download_timeout_seconds"`
+	AutoRescan             bool       `json:"auto_rescan"`
+	MaxJobsPerPoll         int        `json:"max_jobs_per_poll"`
+	Running                bool       `json:"running"`
+	QueueDepth             int        `json:"queue_depth"`
+	CurrentJobID           string     `json:"current_job_id,omitempty"`
+	LastPollAt             *time.Time `json:"last_poll_at,omitempty"`
+	LastSuccessAt          *time.Time `json:"last_success_at,omitempty"`
+	LastError              string     `json:"last_error,omitempty"`
+	LastRemoteJobID        string     `json:"last_remote_job_id,omitempty"`
+	LastImportedPath       string     `json:"last_imported_path,omitempty"`
+}
+
+type ehBotRemoteJob struct {
+	JobID    string `json:"job_id"`
+	Status   string `json:"status"`
+	TargetID string `json:"target_id,omitempty"`
+	Gallery  struct {
+		GID       string   `json:"gid"`
+		Token     string   `json:"token"`
+		Title     string   `json:"title,omitempty"`
+		Uploader  string   `json:"uploader,omitempty"`
+		Tags      []string `json:"tags,omitempty"`
+		SourceURL string   `json:"source_url,omitempty"`
+	} `json:"gallery"`
+	Artifact struct {
+		Format    string `json:"format,omitempty"`
+		Filename  string `json:"filename,omitempty"`
+		SizeBytes int64  `json:"size_bytes,omitempty"`
+		SHA256    string `json:"sha256,omitempty"`
+	} `json:"artifact,omitempty"`
+	Claim *struct {
+		ConsumerID string `json:"consumer_id,omitempty"`
+	} `json:"claim,omitempty"`
+}
+
+type ehBotClient struct {
+	baseURL    string
+	pullToken  string
+	consumerID string
+	httpClient *http.Client
+}
+
+type ehBotImportResult struct {
+	RelPath string
+	SHA256  string
+}
+
+func (a *App) startEHBotService() {
+	ctx, cancel := context.WithCancel(context.Background())
+	a.ehBotMu.Lock()
+	a.ehBotQueue = make(chan *EHBotPullJob, 8)
+	a.ehBotCancel = cancel
+	a.ehBotMu.Unlock()
+	go a.runEHBotWorker(ctx)
+	if normalizeEHBotConfig(a.cfg.EHBot).Enabled {
+		go a.runEHBotPoller(ctx)
+	}
+}
+
+func (a *App) stopEHBotService() {
+	a.ehBotMu.RLock()
+	cancel := a.ehBotCancel
+	a.ehBotMu.RUnlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (a *App) runEHBotWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job := <-a.ehBotQueue:
+			if job == nil {
+				continue
+			}
+			a.runEHBotPullJob(ctx, job)
+		}
+	}
+}
+
+func (a *App) runEHBotPoller(ctx context.Context) {
+	a.tryEnqueueAutoEHBotPull("startup")
+	cfg := normalizeEHBotConfig(a.cfg.EHBot)
+	interval := time.Duration(cfg.PollIntervalSeconds) * time.Second
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.tryEnqueueAutoEHBotPull("auto")
+		}
+	}
+}
+
+func (a *App) StartEHBotPull(_ context.Context) (EHBotPullJob, error) {
+	return a.enqueueEHBotPull("manual")
+}
+
+func (a *App) enqueueEHBotPull(trigger string) (EHBotPullJob, error) {
+	cfg := normalizeEHBotConfig(a.cfg.EHBot)
+	now := time.Now().UTC()
+	job := &EHBotPullJob{
+		ID:          shared.SHAID("ehbot-pull", trigger, now.Format(time.RFC3339Nano)),
+		Trigger:     trigger,
+		Status:      "queued",
+		LibraryID:   cfg.TargetLibraryID,
+		RequestedAt: now,
+	}
+	a.ehBotMu.Lock()
+	if a.ehBotQueue == nil {
+		a.ehBotQueue = make(chan *EHBotPullJob, 8)
+	}
+	a.ehBotJobs[job.ID] = job
+	trimEHBotJobsLocked(a.ehBotJobs)
+	queue := a.ehBotQueue
+	a.ehBotMu.Unlock()
+	select {
+	case queue <- job:
+		return *job, nil
+	default:
+		finished := time.Now().UTC()
+		a.ehBotMu.Lock()
+		job.Status = "failed"
+		job.Error = "ehbot worker queue is full"
+		job.FinishedAt = &finished
+		a.ehBotJobs[job.ID] = job
+		a.ehBotState.LastError = job.Error
+		a.ehBotMu.Unlock()
+		return *job, fmt.Errorf("ehbot worker queue is full")
+	}
+}
+
+func (a *App) tryEnqueueAutoEHBotPull(trigger string) {
+	a.ehBotMu.RLock()
+	busy := a.ehBotState.Running
+	queueDepth := 0
+	if a.ehBotQueue != nil {
+		queueDepth = len(a.ehBotQueue)
+	}
+	a.ehBotMu.RUnlock()
+	if busy || queueDepth > 0 {
+		return
+	}
+	_, _ = a.enqueueEHBotPull(trigger)
+}
+
+func (a *App) EHBotStatus() EHBotStatus {
+	cfg := normalizeEHBotConfig(a.cfg.EHBot)
+	lib, found := a.libraryConfig(cfg.TargetLibraryID)
+	configError := ehBotConfigError(cfg, lib, found)
+	a.ehBotMu.RLock()
+	defer a.ehBotMu.RUnlock()
+	queueDepth := 0
+	if a.ehBotQueue != nil {
+		queueDepth = len(a.ehBotQueue)
+	}
+	return EHBotStatus{
+		Enabled:                cfg.Enabled,
+		Configured:             configError == "",
+		ConfigError:            configError,
+		BaseURL:                cfg.BaseURL,
+		ConsumerID:             cfg.ConsumerID,
+		TargetID:               cfg.TargetID,
+		TargetLibraryID:        cfg.TargetLibraryID,
+		TargetLibraryName:      lib.Name,
+		TargetLibraryKind:      lib.Kind,
+		TargetSubdir:           cfg.TargetSubdir,
+		PollIntervalSeconds:    cfg.PollIntervalSeconds,
+		LeaseSeconds:           cfg.LeaseSeconds,
+		DownloadTimeoutSeconds: cfg.DownloadTimeoutSeconds,
+		AutoRescan:             cfg.AutoRescan,
+		MaxJobsPerPoll:         cfg.MaxJobsPerPoll,
+		Running:                a.ehBotState.Running,
+		QueueDepth:             queueDepth,
+		CurrentJobID:           a.ehBotState.CurrentJobID,
+		LastPollAt:             cloneTimePtr(a.ehBotState.LastPollAt),
+		LastSuccessAt:          cloneTimePtr(a.ehBotState.LastSuccessAt),
+		LastError:              a.ehBotState.LastError,
+		LastRemoteJobID:        a.ehBotState.LastRemoteJobID,
+		LastImportedPath:       a.ehBotState.LastImportedPath,
+	}
+}
+
+func (a *App) EHBotJobs() []EHBotPullJob {
+	a.ehBotMu.RLock()
+	defer a.ehBotMu.RUnlock()
+	items := make([]EHBotPullJob, 0, len(a.ehBotJobs))
+	for _, job := range a.ehBotJobs {
+		if job == nil {
+			continue
+		}
+		items = append(items, *job)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if !items[i].RequestedAt.Equal(items[j].RequestedAt) {
+			return items[i].RequestedAt.After(items[j].RequestedAt)
+		}
+		return items[i].ID > items[j].ID
+	})
+	return items
+}
+
+func (a *App) EHBotJob(id string) (EHBotPullJob, bool) {
+	a.ehBotMu.RLock()
+	defer a.ehBotMu.RUnlock()
+	job, ok := a.ehBotJobs[id]
+	if !ok || job == nil {
+		return EHBotPullJob{}, false
+	}
+	return *job, true
+}
+
+func (a *App) runEHBotPullJob(ctx context.Context, job *EHBotPullJob) {
+	started := time.Now().UTC()
+	a.ehBotMu.Lock()
+	job.Status = "running"
+	job.StartedAt = &started
+	job.LastStep = "listing ready jobs"
+	a.ehBotState.Running = true
+	a.ehBotState.CurrentJobID = job.ID
+	a.ehBotState.LastPollAt = cloneTimePtr(job.StartedAt)
+	a.ehBotMu.Unlock()
+
+	err := a.executeEHBotPull(ctx, job)
+	finished := time.Now().UTC()
+
+	a.ehBotMu.Lock()
+	defer a.ehBotMu.Unlock()
+	job.FinishedAt = &finished
+	a.ehBotState.Running = false
+	a.ehBotState.CurrentJobID = ""
+	if err != nil {
+		job.Status = "failed"
+		job.Error = err.Error()
+		a.ehBotState.LastError = err.Error()
+		trimEHBotJobsLocked(a.ehBotJobs)
+		return
+	}
+	job.Status = "done"
+	job.LastStep = "done"
+	a.ehBotState.LastError = ""
+	lastSuccess := finished
+	a.ehBotState.LastSuccessAt = &lastSuccess
+	trimEHBotJobsLocked(a.ehBotJobs)
+}
+
+func (a *App) executeEHBotPull(ctx context.Context, job *EHBotPullJob) error {
+	cfg := normalizeEHBotConfig(a.cfg.EHBot)
+	lib, found := a.libraryConfig(cfg.TargetLibraryID)
+	if configError := ehBotConfigError(cfg, lib, found); configError != "" {
+		return fmt.Errorf(configError)
+	}
+	client, err := newEHBotClient(cfg)
+	if err != nil {
+		return err
+	}
+	jobs, err := client.listReadyJobs(ctx, cfg.MaxJobsPerPoll)
+	if err != nil {
+		return err
+	}
+	eligible := make([]ehBotRemoteJob, 0, len(jobs))
+	for _, remoteJob := range jobs {
+		if !ehBotTargetMatches(cfg.TargetID, remoteJob.TargetID) {
+			continue
+		}
+		eligible = append(eligible, remoteJob)
+	}
+	a.updateEHBotJob(job.ID, func(item *EHBotPullJob) {
+		item.Listed = len(jobs)
+		item.Eligible = len(eligible)
+		item.LastStep = "claiming remote jobs"
+	})
+	importedCount := 0
+	for _, remoteJob := range eligible {
+		a.updateEHBotJob(job.ID, func(item *EHBotPullJob) {
+			item.RemoteJobID = remoteJob.JobID
+			item.RemoteTitle = remoteJob.Gallery.Title
+			item.RemoteTargetID = remoteJob.TargetID
+			item.ArtifactFilename = remoteJob.Artifact.Filename
+			item.LastStep = fmt.Sprintf("claiming %s", remoteJob.JobID)
+		})
+		claimedJob, err := client.claim(ctx, remoteJob.JobID, cfg.ConsumerID, cfg.LeaseSeconds)
+		if err != nil {
+			continue
+		}
+		a.updateEHBotJob(job.ID, func(item *EHBotPullJob) {
+			item.Claimed++
+			item.LastStep = fmt.Sprintf("downloading %s", claimedJob.JobID)
+		})
+		stopHeartbeat := startEHBotHeartbeat(ctx, client, claimedJob.JobID, cfg.ConsumerID, cfg.LeaseSeconds)
+		importResult, importErr := a.importEHBotArtifact(ctx, client, cfg, lib, claimedJob)
+		stopHeartbeat()
+		if importErr != nil {
+			_, _ = client.fail(ctx, claimedJob.JobID, "IMPORT_FAILED", importErr.Error(), true)
+			a.updateEHBotJob(job.ID, func(item *EHBotPullJob) {
+				item.Failed++
+				item.Error = importErr.Error()
+				item.LastStep = fmt.Sprintf("remote fail %s", claimedJob.JobID)
+			})
+			continue
+		}
+		if err := client.complete(ctx, claimedJob.JobID, cfg.ConsumerID, lib.ID, importResult.RelPath, importResult.SHA256); err != nil {
+			return fmt.Errorf("complete %s: %w", claimedJob.JobID, err)
+		}
+		importedCount++
+		a.updateEHBotJob(job.ID, func(item *EHBotPullJob) {
+			item.Imported++
+			item.Completed++
+			item.ImportedPath = importResult.RelPath
+			item.LastStep = fmt.Sprintf("completed %s", claimedJob.JobID)
+		})
+		a.ehBotMu.Lock()
+		a.ehBotState.LastRemoteJobID = claimedJob.JobID
+		a.ehBotState.LastImportedPath = importResult.RelPath
+		a.ehBotMu.Unlock()
+	}
+	if importedCount > 0 && cfg.AutoRescan {
+		a.updateEHBotJob(job.ID, func(item *EHBotPullJob) {
+			item.LastStep = fmt.Sprintf("rescanning library %s", lib.ID)
+		})
+		if err := a.Rescan(ctx, lib.ID); err != nil {
+			a.updateEHBotJob(job.ID, func(item *EHBotPullJob) {
+				item.Error = fmt.Sprintf("import completed, but rescan failed: %v", err)
+			})
+		}
+	}
+	return nil
+}
+
+func (a *App) importEHBotArtifact(ctx context.Context, client *ehBotClient, cfg configpkg.EHBotConfig, lib configpkg.LibraryConfig, remoteJob ehBotRemoteJob) (ehBotImportResult, error) {
+	downloadCtx, cancel := context.WithTimeout(ctx, time.Duration(cfg.DownloadTimeoutSeconds)*time.Second)
+	defer cancel()
+	resp, err := client.downloadArtifact(downloadCtx, remoteJob.JobID)
+	if err != nil {
+		return ehBotImportResult{}, err
+	}
+	defer resp.Body.Close()
+	filename := safeEHBotArtifactFilename(remoteJob.Artifact.Filename)
+	relPath := shared.RelJoin(cfg.TargetSubdir, fmt.Sprintf("ehbot_%s_%s", remoteJob.JobID, filename))
+	absPath := filepath.Join(lib.Root, filepath.FromSlash(relPath))
+	tempPath := absPath + ".part"
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		return ehBotImportResult{}, err
+	}
+	_ = os.Remove(tempPath)
+	file, err := os.Create(tempPath)
+	if err != nil {
+		return ehBotImportResult{}, err
+	}
+	hasher := sha256.New()
+	_, copyErr := io.Copy(io.MultiWriter(file, hasher), resp.Body)
+	closeErr := file.Close()
+	if copyErr != nil {
+		_ = os.Remove(tempPath)
+		return ehBotImportResult{}, copyErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(tempPath)
+		return ehBotImportResult{}, closeErr
+	}
+	sum := hex.EncodeToString(hasher.Sum(nil))
+	expectedSHA := strings.TrimSpace(resp.Header.Get("X-Artifact-SHA256"))
+	if expectedSHA == "" {
+		expectedSHA = strings.TrimSpace(remoteJob.Artifact.SHA256)
+	}
+	if expectedSHA != "" && !strings.EqualFold(expectedSHA, sum) {
+		_ = os.Remove(tempPath)
+		return ehBotImportResult{}, fmt.Errorf("artifact checksum mismatch")
+	}
+	_ = os.Remove(absPath)
+	if err := os.Rename(tempPath, absPath); err != nil {
+		_ = os.Remove(tempPath)
+		return ehBotImportResult{}, err
+	}
+	return ehBotImportResult{RelPath: relPath, SHA256: sum}, nil
+}
+
+func (a *App) updateEHBotJob(id string, update func(*EHBotPullJob)) {
+	a.ehBotMu.Lock()
+	defer a.ehBotMu.Unlock()
+	job, ok := a.ehBotJobs[id]
+	if !ok || job == nil || update == nil {
+		return
+	}
+	update(job)
+}
+
+func trimEHBotJobsLocked(items map[string]*EHBotPullJob) {
+	if len(items) <= ehBotJobHistoryLimit {
+		return
+	}
+	type pair struct {
+		id string
+		at time.Time
+	}
+	ordered := make([]pair, 0, len(items))
+	for id, job := range items {
+		if job == nil {
+			continue
+		}
+		at := job.RequestedAt
+		if job.FinishedAt != nil {
+			at = *job.FinishedAt
+		} else if job.StartedAt != nil {
+			at = *job.StartedAt
+		}
+		ordered = append(ordered, pair{id: id, at: at})
+	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].at.After(ordered[j].at) })
+	for _, item := range ordered[ehBotJobHistoryLimit:] {
+		delete(items, item.id)
+	}
+}
+
+func normalizeEHBotConfig(cfg configpkg.EHBotConfig) configpkg.EHBotConfig {
+	cfg.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	cfg.PullToken = strings.TrimSpace(cfg.PullToken)
+	cfg.TargetID = strings.TrimSpace(cfg.TargetID)
+	cfg.TargetLibraryID = strings.TrimSpace(cfg.TargetLibraryID)
+	cfg.TargetSubdir = strings.Trim(strings.TrimSpace(strings.ReplaceAll(cfg.TargetSubdir, "\\", "/")), "/")
+	if cfg.ConsumerID == "" {
+		cfg.ConsumerID = defaultEHBotConsumerID(cfg.TargetLibraryID)
+	} else {
+		cfg.ConsumerID = strings.TrimSpace(cfg.ConsumerID)
+	}
+	if cfg.PollIntervalSeconds <= 0 {
+		cfg.PollIntervalSeconds = 60
+	}
+	if cfg.LeaseSeconds <= 0 {
+		cfg.LeaseSeconds = 1800
+	}
+	if cfg.DownloadTimeoutSeconds <= 0 {
+		cfg.DownloadTimeoutSeconds = 1800
+	}
+	if cfg.MaxJobsPerPoll <= 0 {
+		cfg.MaxJobsPerPoll = 1
+	}
+	return cfg
+}
+
+func defaultEHBotConsumerID(targetLibraryID string) string {
+	hostname, err := os.Hostname()
+	if err == nil {
+		hostname = strings.TrimSpace(hostname)
+	}
+	if hostname == "" {
+		hostname = "venera-home"
+	}
+	targetLibraryID = strings.TrimSpace(targetLibraryID)
+	if targetLibraryID == "" {
+		return hostname
+	}
+	return hostname + "-" + targetLibraryID
+}
+
+func ehBotConfigError(cfg configpkg.EHBotConfig, lib configpkg.LibraryConfig, found bool) string {
+	if strings.TrimSpace(cfg.BaseURL) == "" {
+		return "ehbot.base_url is required"
+	}
+	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
+		return fmt.Sprintf("ehbot.base_url is invalid: %v", err)
+	}
+	if strings.TrimSpace(cfg.TargetLibraryID) == "" {
+		return "ehbot.target_library_id is required"
+	}
+	if !found {
+		return fmt.Sprintf("target library %q not found", cfg.TargetLibraryID)
+	}
+	if strings.ToLower(strings.TrimSpace(lib.Kind)) != "local" {
+		return fmt.Sprintf("target library %q must be local for ehbot import", lib.ID)
+	}
+	if strings.TrimSpace(lib.Root) == "" {
+		return fmt.Sprintf("target library %q root is empty", lib.ID)
+	}
+	return ""
+}
+
+func ehBotTargetMatches(expected string, actual string) bool {
+	expected = strings.TrimSpace(expected)
+	actual = strings.TrimSpace(actual)
+	if expected == "" {
+		return actual == ""
+	}
+	return expected == actual
+}
+
+func safeEHBotArtifactFilename(name string) string {
+	base := path.Base(strings.ReplaceAll(strings.TrimSpace(name), "\\", "/"))
+	if base == "" || base == "." || base == "/" {
+		base = "artifact.zip"
+	}
+	var builder strings.Builder
+	for _, r := range base {
+		switch {
+		case r < 32:
+			builder.WriteRune('_')
+		case strings.ContainsRune(`<>:"/\\|?*`, r):
+			builder.WriteRune('_')
+		default:
+			builder.WriteRune(r)
+		}
+	}
+	cleaned := strings.Trim(strings.TrimSpace(builder.String()), ".")
+	if cleaned == "" {
+		cleaned = "artifact.zip"
+	}
+	if filepath.Ext(cleaned) == "" {
+		cleaned += ".zip"
+	}
+	return cleaned
+}
+
+func cloneTimePtr(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
+func startEHBotHeartbeat(ctx context.Context, client *ehBotClient, jobID string, consumerID string, leaseSeconds int) func() {
+	heartbeatCtx, cancel := context.WithCancel(ctx)
+	interval := time.Duration(leaseSeconds/2) * time.Second
+	if interval < 15*time.Second {
+		interval = 15 * time.Second
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-heartbeatCtx.Done():
+				return
+			case <-ticker.C:
+				_, _ = client.heartbeat(heartbeatCtx, jobID, consumerID, leaseSeconds)
+			}
+		}
+	}()
+	return func() {
+		cancel()
+		<-done
+	}
+}
+
+func newEHBotClient(cfg configpkg.EHBotConfig) (*ehBotClient, error) {
+	if cfg.BaseURL == "" {
+		return nil, fmt.Errorf("ehbot base url is required")
+	}
+	return &ehBotClient{
+		baseURL:    cfg.BaseURL,
+		pullToken:  cfg.PullToken,
+		consumerID: cfg.ConsumerID,
+		httpClient: &http.Client{},
+	}, nil
+}
+
+func (c *ehBotClient) listReadyJobs(ctx context.Context, limit int) ([]ehBotRemoteJob, error) {
+	if limit <= 0 {
+		limit = 1
+	}
+	endpoint := fmt.Sprintf("%s/api/v1/pull/jobs?status=ready&limit=%d", c.baseURL, limit)
+	var payload struct {
+		Items []ehBotRemoteJob `json:"items"`
+	}
+	if err := c.doJSON(ctx, http.MethodGet, endpoint, nil, &payload); err != nil {
+		return nil, err
+	}
+	return payload.Items, nil
+}
+
+func (c *ehBotClient) claim(ctx context.Context, jobID string, consumerID string, leaseSeconds int) (ehBotRemoteJob, error) {
+	var out ehBotRemoteJob
+	err := c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/api/v1/pull/jobs/%s/claim", c.baseURL, url.PathEscape(jobID)), map[string]any{
+		"consumer_id":   consumerID,
+		"lease_seconds": leaseSeconds,
+	}, &out)
+	return out, err
+}
+
+func (c *ehBotClient) heartbeat(ctx context.Context, jobID string, consumerID string, leaseSeconds int) (ehBotRemoteJob, error) {
+	var out ehBotRemoteJob
+	err := c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/api/v1/pull/jobs/%s/heartbeat", c.baseURL, url.PathEscape(jobID)), map[string]any{
+		"consumer_id":   consumerID,
+		"lease_seconds": leaseSeconds,
+	}, &out)
+	return out, err
+}
+
+func (c *ehBotClient) complete(ctx context.Context, jobID string, consumerID string, libraryID string, importedPath string, sha256sum string) error {
+	return c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/api/v1/pull/jobs/%s/complete", c.baseURL, url.PathEscape(jobID)), map[string]any{
+		"consumer_id":   consumerID,
+		"library_id":    libraryID,
+		"imported_path": importedPath,
+		"sha256":        sha256sum,
+	}, nil)
+}
+
+func (c *ehBotClient) fail(ctx context.Context, jobID string, errorCode string, message string, retryable bool) (ehBotRemoteJob, error) {
+	var out ehBotRemoteJob
+	err := c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/api/v1/pull/jobs/%s/fail", c.baseURL, url.PathEscape(jobID)), map[string]any{
+		"error_code": errorCode,
+		"message":    message,
+		"retryable":  retryable,
+	}, &out)
+	return out, err
+}
+
+func (c *ehBotClient) downloadArtifact(ctx context.Context, jobID string) (*http.Response, error) {
+	endpoint := fmt.Sprintf("%s/api/v1/pull/jobs/%s/artifact?consumer_id=%s", c.baseURL, url.PathEscape(jobID), url.QueryEscape(c.consumerID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.pullToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.pullToken)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return resp, nil
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	return nil, fmt.Errorf("artifact download failed: %s", strings.TrimSpace(string(body)))
+}
+
+func (c *ehBotClient) doJSON(ctx context.Context, method string, endpoint string, payload any, out any) error {
+	var body io.Reader
+	if payload != nil {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		body = strings.NewReader(string(raw))
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err != nil {
+		return err
+	}
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if c.pullToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.pullToken)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+		return fmt.Errorf("ehbot request failed: %s", strings.TrimSpace(string(body)))
+	}
+	if out == nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}

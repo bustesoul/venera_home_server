@@ -13,6 +13,7 @@ type Config struct {
 	Server    ServerConfig
 	Scan      ScanConfig
 	Metadata  MetadataConfig
+	EHBot     EHBotConfig
 	Libraries []LibraryConfig
 }
 
@@ -37,6 +38,21 @@ type MetadataConfig struct {
 	ReadSidecar      bool
 	AllowRemoteFetch bool
 	DatabasePath     string
+}
+
+type EHBotConfig struct {
+	Enabled                bool
+	BaseURL                string
+	PullToken              string
+	ConsumerID             string
+	TargetID               string
+	TargetLibraryID        string
+	TargetSubdir           string
+	PollIntervalSeconds    int
+	LeaseSeconds           int
+	DownloadTimeoutSeconds int
+	AutoRescan             bool
+	MaxJobsPerPoll         int
 }
 
 type LibraryConfig struct {
@@ -74,6 +90,13 @@ func LoadConfig(path string) (*Config, error) {
 		Metadata: MetadataConfig{
 			ReadComicInfo: true,
 			ReadSidecar:   true,
+		},
+		EHBot: EHBotConfig{
+			PollIntervalSeconds:    60,
+			LeaseSeconds:           1800,
+			DownloadTimeoutSeconds: 1800,
+			AutoRescan:             true,
+			MaxJobsPerPoll:         1,
 		},
 	}
 
@@ -120,6 +143,8 @@ func LoadConfig(path string) (*Config, error) {
 			assignScan(&cfg.Scan, key, val)
 		case "metadata":
 			assignMetadata(&cfg.Metadata, key, val)
+		case "ehbot":
+			assignEHBot(&cfg.EHBot, key, val)
 		case "libraries":
 			if currentLib == nil {
 				return nil, fmt.Errorf("library entry not initialized")
@@ -224,6 +249,35 @@ func assignMetadata(cfg *MetadataConfig, key string, value any) {
 		cfg.AllowRemoteFetch = asBool(value)
 	case "database_path":
 		cfg.DatabasePath = asString(value)
+	}
+}
+
+func assignEHBot(cfg *EHBotConfig, key string, value any) {
+	switch key {
+	case "enabled":
+		cfg.Enabled = asBool(value)
+	case "base_url":
+		cfg.BaseURL = asString(value)
+	case "pull_token":
+		cfg.PullToken = asString(value)
+	case "consumer_id":
+		cfg.ConsumerID = asString(value)
+	case "target_id":
+		cfg.TargetID = asString(value)
+	case "target_library_id":
+		cfg.TargetLibraryID = asString(value)
+	case "target_subdir":
+		cfg.TargetSubdir = asString(value)
+	case "poll_interval_seconds":
+		cfg.PollIntervalSeconds = asInt(value)
+	case "lease_seconds":
+		cfg.LeaseSeconds = asInt(value)
+	case "download_timeout_seconds":
+		cfg.DownloadTimeoutSeconds = asInt(value)
+	case "auto_rescan":
+		cfg.AutoRescan = asBool(value)
+	case "max_jobs_per_poll":
+		cfg.MaxJobsPerPoll = asInt(value)
 	}
 }
 
