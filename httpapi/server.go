@@ -309,6 +309,8 @@ func (s *Server) handleComicDetails(w http.ResponseWriter, r *http.Request, comi
 			"page_count": chapter.PageCount,
 		})
 	}
+	relativePath := s.comicRelativePath(comic)
+	localPath := s.comicLocalPath(comic)
 	tags := map[string][]string{
 		"Author":  comic.Authors,
 		"Tag":     comic.Tags,
@@ -317,19 +319,66 @@ func (s *Server) handleComicDetails(w http.ResponseWriter, r *http.Request, comi
 	}
 	recommend := s.relatedComics(comic)
 	writeData(w, map[string]any{
-		"id":          comic.ID,
-		"title":       comic.Title,
-		"subtitle":    comic.Subtitle,
-		"cover_url":   s.mediaURL(base, shared.SignedPayload{Type: "cover", ComicID: comic.ID}),
-		"description": comic.Description,
-		"tags":        tags,
-		"chapters":    chapters,
-		"favorite":    map[string]any{"is_favorited": len(folders) > 0, "folder_ids": folders},
-		"recommend":   s.toCards(base, recommend, false),
-		"update_time": comic.UpdatedAt.Format(time.RFC3339),
-		"upload_time": comic.AddedAt.Format(time.RFC3339),
-		"source_url":  comic.SourceURL,
+		"id":            comic.ID,
+		"title":         comic.Title,
+		"subtitle":      comic.Subtitle,
+		"cover_url":     s.mediaURL(base, shared.SignedPayload{Type: "cover", ComicID: comic.ID}),
+		"description":   comic.Description,
+		"tags":          tags,
+		"chapters":      chapters,
+		"favorite":      map[string]any{"is_favorited": len(folders) > 0, "folder_ids": folders},
+		"recommend":     s.toCards(base, recommend, false),
+		"update_time":   comic.UpdatedAt.Format(time.RFC3339),
+		"upload_time":   comic.AddedAt.Format(time.RFC3339),
+		"source_url":    comic.SourceURL,
+		"relative_path": relativePath,
+		"local_path":    localPath,
 	})
+}
+
+func (s *Server) comicRelativePath(comic *apppkg.Comic) string {
+	if comic == nil {
+		return ""
+	}
+	return shared.CleanRel(comic.RootRef)
+}
+
+func (s *Server) comicLocalPath(comic *apppkg.Comic) string {
+	if comic == nil {
+		return ""
+	}
+	relativePath := s.comicRelativePath(comic)
+	for _, lib := range s.app.Config().Libraries {
+		if lib.ID == comic.LibraryID {
+			return resolveLibraryRootPath(lib, relativePath)
+		}
+	}
+	return relativePath
+}
+
+func resolveLibraryRootPath(lib configpkg.LibraryConfig, rootRef string) string {
+	cleaned := shared.CleanRel(rootRef)
+	switch strings.ToLower(strings.TrimSpace(lib.Kind)) {
+	case "local":
+		if cleaned == "" {
+			return filepath.Clean(lib.Root)
+		}
+		return filepath.Clean(filepath.Join(lib.Root, filepath.FromSlash(cleaned)))
+	case "smb":
+		base := `\\` + strings.TrimSpace(lib.Host) + `\` + strings.Trim(strings.ReplaceAll(lib.Share, "/", `\`), `\`)
+		if cleaned == "" {
+			return base
+		}
+		return base + `\` + strings.ReplaceAll(cleaned, "/", `\`)
+	case "webdav":
+		base := strings.TrimRight(strings.TrimSpace(lib.URL), "/")
+		if cleaned == "" {
+			return base
+		}
+		return base + "/" + cleaned
+	default:
+		return cleaned
+	}
 }
 
 func (s *Server) handleComicThumbnails(w http.ResponseWriter, r *http.Request, comicID string) {

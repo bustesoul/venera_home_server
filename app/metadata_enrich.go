@@ -48,17 +48,21 @@ type MetadataSourceBrowseResult struct {
 }
 
 type MetadataRecordActionRequest struct {
-	Locator  metadatapkg.Locator `json:"locator"`
-	Action   string              `json:"action"`
-	SourceID string              `json:"source_id,omitempty"`
-	MinScore float64             `json:"min_score,omitempty"`
-	Workers  int                 `json:"workers,omitempty"`
+	Locator  metadatapkg.Locator   `json:"locator,omitempty"`
+	Locators []metadatapkg.Locator `json:"locators,omitempty"`
+	Action   string                `json:"action"`
+	SourceID string                `json:"source_id,omitempty"`
+	MinScore float64               `json:"min_score,omitempty"`
+	Workers  int                   `json:"workers,omitempty"`
 }
 
 type MetadataRecordActionResult struct {
-	Action string              `json:"action"`
-	Job    *MetadataRefreshJob `json:"job,omitempty"`
-	Record *metadatapkg.Record `json:"record,omitempty"`
+	Action    string               `json:"action"`
+	Processed int                  `json:"processed,omitempty"`
+	Job       *MetadataRefreshJob  `json:"job,omitempty"`
+	Jobs      []MetadataRefreshJob `json:"jobs,omitempty"`
+	Record    *metadatapkg.Record  `json:"record,omitempty"`
+	Records   []metadatapkg.Record `json:"records,omitempty"`
 }
 
 type exdbSourceHandle struct {
@@ -119,48 +123,116 @@ func (a *App) MetadataSourceBrowse(ctx context.Context, sourceID string, query e
 	return MetadataSourceBrowseResult{Source: handles[0].Summary, Browse: browse}, nil
 }
 
+func normalizeMetadataActionLocators(req MetadataRecordActionRequest) ([]metadatapkg.Locator, error) {
+	out := make([]metadatapkg.Locator, 0, 1+len(req.Locators))
+	seen := map[string]struct{}{}
+	appendLocator := func(locator metadatapkg.Locator) {
+		if !locator.Valid() {
+			return
+		}
+		key := locator.LibraryID + "\x00" + locator.RootType + "\x00" + locator.RootRef
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, locator)
+	}
+	appendLocator(req.Locator)
+	for _, locator := range req.Locators {
+		appendLocator(locator)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("invalid metadata locator")
+	}
+	return out, nil
+}
+
+func buildMetadataRecordActionResult(action string, locators []metadatapkg.Locator, records []metadatapkg.Record, jobs []MetadataRefreshJob) MetadataRecordActionResult {
+	result := MetadataRecordActionResult{Action: action, Processed: len(locators)}
+	if len(records) > 0 {
+		result.Records = records
+		firstRecord := records[0]
+		result.Record = &firstRecord
+	}
+	if len(jobs) > 0 {
+		result.Jobs = jobs
+		firstJob := jobs[0]
+		result.Job = &firstJob
+	}
+	return result
+}
+
 func (a *App) MetadataRecordAction(ctx context.Context, req MetadataRecordActionRequest) (MetadataRecordActionResult, error) {
-	if !req.Locator.Valid() {
-		return MetadataRecordActionResult{}, fmt.Errorf("invalid metadata locator")
+	locators, err := normalizeMetadataActionLocators(req)
+	if err != nil {
+		return MetadataRecordActionResult{}, err
 	}
 	action := strings.ToLower(strings.TrimSpace(req.Action))
 	switch action {
-	case "lock":
-		if err := a.UpdateMetadata(ctx, req.Locator, metadatapkg.Update{ManualLocked: true, HasManualLocked: true}); err != nil {
-			return MetadataRecordActionResult{}, err
+	case "lock", "unlock":
+		records := make([]metadatapkg.Record, 0, len(locators))
+		locked := action == "lock"
+		for _, locator := range locators {
+			if err := a.UpdateMetadata(ctx, locator, metadatapkg.Update{ManualLocked: locked, HasManualLocked: true}); err != nil {
+				return MetadataRecordActionResult{}, err
+			}
+			record, err := a.metadataStore.GetByLocator(ctx, locator)
+			if err != nil {
+				return MetadataRecordActionResult{}, err
+			}
+			if record != nil {
+				records = append(records, *record)
+			}
 		}
-		record, err := a.metadataStore.GetByLocator(ctx, req.Locator)
-		return MetadataRecordActionResult{Action: action, Record: record}, err
-	case "unlock":
-		if err := a.UpdateMetadata(ctx, req.Locator, metadatapkg.Update{ManualLocked: false, HasManualLocked: true}); err != nil {
-			return MetadataRecordActionResult{}, err
-		}
-		record, err := a.metadataStore.GetByLocator(ctx, req.Locator)
-		return MetadataRecordActionResult{Action: action, Record: record}, err
+		return buildMetadataRecordActionResult(action, locators, records, nil), nil
 	case "reset":
-		if err := a.ResetMetadata(ctx, req.Locator); err != nil {
-			return MetadataRecordActionResult{}, err
+		touchedLibraries := map[string]struct{}{}
+		for _, locator := range locators {
+			if err := a.ResetMetadata(ctx, locator); err != nil {
+				return MetadataRecordActionResult{}, err
+			}
+			touchedLibraries[locator.LibraryID] = struct{}{}
 		}
-		if err := a.Rescan(ctx, req.Locator.LibraryID); err != nil {
-			return MetadataRecordActionResult{}, err
+		libraries := make([]string, 0, len(touchedLibraries))
+		for libraryID := range touchedLibraries {
+			libraries = append(libraries, libraryID)
 		}
-		record, err := a.metadataStore.GetByLocator(ctx, req.Locator)
-		return MetadataRecordActionResult{Action: action, Record: record}, err
+		sort.Strings(libraries)
+		for _, libraryID := range libraries {
+			if err := a.Rescan(ctx, libraryID); err != nil {
+				return MetadataRecordActionResult{}, err
+			}
+		}
+		records := make([]metadatapkg.Record, 0, len(locators))
+		for _, locator := range locators {
+			record, err := a.metadataStore.GetByLocator(ctx, locator)
+			if err != nil {
+				return MetadataRecordActionResult{}, err
+			}
+			if record != nil {
+				records = append(records, *record)
+			}
+		}
+		return buildMetadataRecordActionResult(action, locators, records, nil), nil
 	case "enrich":
-		job, err := a.StartMetadataEnrichment(ctx, MetadataEnrichRequest{
-			LibraryID:    req.Locator.LibraryID,
-			Locator:      &req.Locator,
-			State:        "",
-			Limit:        1,
-			MinScore:     req.MinScore,
-			SourceID:     req.SourceID,
-			Workers:      req.Workers,
-			IgnoreLocked: true,
-		})
-		if err != nil {
-			return MetadataRecordActionResult{}, err
+		jobs := make([]MetadataRefreshJob, 0, len(locators))
+		for _, locator := range locators {
+			job, err := a.StartMetadataEnrichment(ctx, MetadataEnrichRequest{
+				LibraryID:    locator.LibraryID,
+				Locator:      &locator,
+				State:        "",
+				Limit:        1,
+				MinScore:     req.MinScore,
+				SourceID:     req.SourceID,
+				Workers:      req.Workers,
+				IgnoreLocked: true,
+			})
+			if err != nil {
+				return MetadataRecordActionResult{}, err
+			}
+			jobs = append(jobs, job)
 		}
-		return MetadataRecordActionResult{Action: action, Job: &job}, nil
+		return buildMetadataRecordActionResult(action, locators, nil, jobs), nil
 	default:
 		return MetadataRecordActionResult{}, fmt.Errorf("unsupported action %q", req.Action)
 	}

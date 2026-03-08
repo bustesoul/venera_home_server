@@ -45,6 +45,7 @@ The current version also includes a **manual-triggered, auto-apply** metadata en
 - Cached page rendering for PDF on first access
 - Manual rescan endpoint
 - Signed media URLs for covers and pages
+- `venera_home.js` details can show local and relative paths
 
 ### Metadata features
 
@@ -53,11 +54,10 @@ The current version also includes a **manual-triggered, auto-apply** metadata en
 - Fill-only metadata merge: enrichment does not overwrite explicit local metadata
 - External SQLite metadata enrichment
 - Dry-run matcher tool: `exdb_dryrun`
-- Per-record admin actions from the web UI:
+- Admin actions from the web UI:
   - manual batch enrichment
   - single-record retry
-  - lock / unlock
-  - reset back to local metadata only
+  - multi-select batch lock / unlock / reset / re-enrich
   - browse external data sources
 
 ### Built-in web admin
@@ -67,10 +67,11 @@ The root path `/` is now a built-in admin page.
 It currently supports:
 
 - viewing job progress
-- querying local metadata records
+- querying local metadata records, including `state=locked` filtering
 - triggering manual enrichment jobs
 - browsing external sources under `data/externaldb`
 - locking, unlocking, resetting, and re-enriching a single record
+- batch lock / unlock / reset / re-enrich on selected records from the current page
 
 ## Current Limitations
 
@@ -228,6 +229,8 @@ Typical flow:
 
 - browse a source first to confirm the data looks correct
 - trigger a batch enrichment job for `state=empty`
+- use `state=locked` in the records view to find already locked items quickly
+- select multiple records on the current page for batch lock / unlock / reset / re-enrich
 - wait for the job to finish
 - the server auto-applies matches and performs a final `Rescan`
 

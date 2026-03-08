@@ -99,6 +99,7 @@
             <option value="stale">stale</option>
             <option value="error">error</option>
             <option value="missing">missing</option>
+            <option value="locked">locked</option>
           </select>
         </label>
         <label><span>Search</span><input id="recordSearch" placeholder="title / path / source 模糊搜索"></label>
@@ -124,8 +125,19 @@
   <section class="panel wide">
     <div class="row">
       <h2>记录列表</h2>
+      <div class="spacer"></div>
+      <span id="recordSelectionSummary" class="muted">未选择记录</span>
+      <select id="recordBatchAction">
+        <option value="">批量操作</option>
+        <option value="lock">锁定</option>
+        <option value="unlock">解锁</option>
+        <option value="reset">重置状态</option>
+        <option value="enrich">补一次</option>
+      </select>
+      <button id="applyBatchActionBtn" class="primary" disabled>应用到已选</button>
+      <button id="clearSelectedRecordsBtn" class="ghost" disabled>清空选择</button>
     </div>
-    <div class="scroll"><table id="recordsTable"><thead><tr><th>State</th><th>Title</th><th>Path</th><th>Source</th><th>Confidence</th><th>Locked</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+    <div class="scroll"><table id="recordsTable"><thead><tr><th><input id="selectAllRecords" type="checkbox" aria-label="选择当前页全部记录"></th><th>State</th><th>Title</th><th>Path</th><th>Source</th><th>Confidence</th><th>Locked</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <div class="grid">
@@ -152,7 +164,7 @@
   </div>
 </main>
 <script>
-const state = { poll: true, sources: [] };
+const state = { poll: true, sources: [], selectedRecords: {}, lastRecordItems: [] };
 const tokenInput = document.getElementById('tokenInput');
 const statusBox = document.getElementById('statusBox');
 const togglePollBtn = document.getElementById('togglePollBtn');
@@ -168,6 +180,10 @@ document.getElementById('refreshSourcesBtn').addEventListener('click', refreshSo
 document.getElementById('refreshJobsBtn').addEventListener('click', refreshJobs);
 document.getElementById('queryRecordsBtn').addEventListener('click', () => refreshRecords(true));
 document.getElementById('browseBtn').addEventListener('click', browseSource);
+document.getElementById('recordBatchAction').addEventListener('change', syncRecordSelectionUI);
+document.getElementById('applyBatchActionBtn').addEventListener('click', applyBatchRecordAction);
+document.getElementById('clearSelectedRecordsBtn').addEventListener('click', clearRecordSelection);
+document.getElementById('selectAllRecords').addEventListener('change', (event) => setAllVisibleRecordSelection(event.target.checked));
 togglePollBtn.addEventListener('click', () => {
   state.poll = !state.poll;
   updatePollButton();
@@ -214,6 +230,75 @@ function actionLabel(action) {
   if (action === 'reset') return '重置状态';
   if (action === 'enrich') return '补一次';
   return action;
+}
+
+function encodeLocator(locator) {
+  return encodeURIComponent(JSON.stringify(locator || {}));
+}
+
+function decodeLocator(encodedLocator) {
+  try {
+    return JSON.parse(decodeURIComponent(encodedLocator || '')) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function locatorKey(locator) {
+  if (!locator || typeof locator !== 'object') {
+    return '';
+  }
+  return `${locator.library_id || ''}::${locator.root_type || ''}::${locator.root_ref || ''}`;
+}
+
+function storeSelectedRecord(locator, checked) {
+  const key = locatorKey(locator);
+  if (!key) {
+    return;
+  }
+  if (checked) {
+    state.selectedRecords[key] = locator;
+    return;
+  }
+  delete state.selectedRecords[key];
+}
+
+function clearRecordSelection() {
+  state.selectedRecords = {};
+  syncRecordSelectionUI();
+}
+
+function toggleRecordSelection(encodedLocator, checked) {
+  storeSelectedRecord(decodeLocator(encodedLocator), checked);
+  syncRecordSelectionUI();
+}
+
+function setAllVisibleRecordSelection(checked) {
+  for (const item of state.lastRecordItems || []) {
+    storeSelectedRecord(item.locator || {}, checked);
+  }
+  syncRecordSelectionUI();
+}
+
+function syncRecordSelectionUI() {
+  const keys = Object.keys(state.selectedRecords);
+  const count = keys.length;
+  document.getElementById('recordSelectionSummary').textContent = count > 0 ? `已选 ${count} 条` : '未选择记录';
+  document.getElementById('applyBatchActionBtn').disabled = count === 0 || !document.getElementById('recordBatchAction').value;
+  document.getElementById('clearSelectedRecordsBtn').disabled = count === 0;
+
+  const visibleCheckboxes = Array.from(document.querySelectorAll('#recordsTable tbody input[data-record-key]'));
+  let checkedVisible = 0;
+  for (const input of visibleCheckboxes) {
+    const key = input.getAttribute('data-record-key') || '';
+    input.checked = !!state.selectedRecords[key];
+    if (input.checked) {
+      checkedVisible += 1;
+    }
+  }
+  const selectAll = document.getElementById('selectAllRecords');
+  selectAll.checked = visibleCheckboxes.length > 0 && checkedVisible === visibleCheckboxes.length;
+  selectAll.indeterminate = checkedVisible > 0 && checkedVisible < visibleCheckboxes.length;
 }
 
 async function triggerEnrich() {
@@ -282,10 +367,13 @@ async function refreshRecords(resetPage = false) {
     });
     const data = await fetchJSON(`/api/v1/admin/metadata/records?${params.toString()}`);
     document.getElementById('recordSummary').textContent = `共 ${data.total} 条记录，第 ${data.page} 页，每页 ${data.page_size} 条`;
+    state.lastRecordItems = data.items || [];
     const tbody = document.querySelector('#recordsTable tbody');
-    tbody.innerHTML = (data.items || []).map(item => {
-      const locator = JSON.stringify(item.locator || {});
+    tbody.innerHTML = state.lastRecordItems.map(item => {
+      const encodedLocator = encodeLocator(item.locator || {});
+      const key = locatorKey(item.locator || {});
       return `<tr>
+        <td><input type="checkbox" data-record-key="${htmlEscape(key)}" onchange='toggleRecordSelection("${encodedLocator}", this.checked)'></td>
         <td>${renderState(item.state)}</td>
         <td><div>${htmlEscape(item.title || item.title_jpn || '(empty)')}</div><div class="muted mono">${htmlEscape(item.subtitle || '')}</div></td>
         <td><div class="mono">${htmlEscape(item.root_ref || '')}</div><div class="muted">${htmlEscape(item.folder_path || '')}</div></td>
@@ -293,34 +381,71 @@ async function refreshRecords(resetPage = false) {
         <td>${item.confidence == null ? '' : htmlEscape(item.confidence)}</td>
         <td>${item.manual_locked ? pill('locked', 'warn') : pill('-', '')}</td>
         <td><div class="actions">
-          <button class="ghost" onclick='recordAction(${JSON.stringify(item.manual_locked ? 'unlock' : 'lock')}, ${locator})'>${item.manual_locked ? '解锁' : '锁定'}</button>
-          <button class="warn" onclick='recordAction("reset", ${locator})'>重置状态</button>
-          <button class="primary" onclick='recordAction("enrich", ${locator})'>补一次</button>
+          <button class="ghost" onclick='recordAction("${item.manual_locked ? 'unlock' : 'lock'}", "${encodedLocator}")'>${item.manual_locked ? '解锁' : '锁定'}</button>
+          <button class="warn" onclick='recordAction("reset", "${encodedLocator}")'>重置状态</button>
+          <button class="primary" onclick='recordAction("enrich", "${encodedLocator}")'>补一次</button>
         </div></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="7" class="muted">暂无记录</td></tr>';
+    }).join('') || '<tr><td colspan="8" class="muted">暂无记录</td></tr>';
+    syncRecordSelectionUI();
   } catch (error) {
     setStatus(error.message, 'err');
   }
 }
 
-async function recordAction(action, locator) {
+async function recordAction(action, encodedLocator) {
   try {
     const payload = {
       action,
-      locator,
+      locator: decodeLocator(encodedLocator),
       source_id: document.getElementById('enrichSource').value,
       min_score: Number(document.getElementById('enrichScore').value || 0.72),
       workers: Number(document.getElementById('enrichWorkers').value || 3),
     };
     const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
-    if (data.job?.job_id) {
+    if (Array.isArray(data.jobs) && data.jobs.length > 0) {
+      setStatus(`已创建 ${data.jobs.length} 个任务：${actionLabel(action)}`, 'ok');
+      await refreshJobs();
+    } else if (data.job?.job_id) {
       setStatus(`已创建单条补全任务：${data.job.job_id}`, 'ok');
       await refreshJobs();
     } else {
       setStatus(`操作已完成：${actionLabel(action)}`, 'ok');
-      await refreshRecords(false);
     }
+    await refreshRecords(false);
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+async function applyBatchRecordAction() {
+  try {
+    const action = document.getElementById('recordBatchAction').value;
+    if (!action) {
+      setStatus('请先选择批量操作', 'err');
+      return;
+    }
+    const locators = Object.values(state.selectedRecords);
+    if (locators.length === 0) {
+      setStatus('请先选择至少一条记录', 'err');
+      return;
+    }
+    const payload = {
+      action,
+      locators,
+      source_id: document.getElementById('enrichSource').value,
+      min_score: Number(document.getElementById('enrichScore').value || 0.72),
+      workers: Number(document.getElementById('enrichWorkers').value || 3),
+    };
+    const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
+    if (Array.isArray(data.jobs) && data.jobs.length > 0) {
+      setStatus(`已创建 ${data.jobs.length} 个任务：${actionLabel(action)}`, 'ok');
+      await refreshJobs();
+    } else {
+      setStatus(`批量操作已完成：${actionLabel(action)}（${data.processed || locators.length} 条）`, 'ok');
+    }
+    clearRecordSelection();
+    await refreshRecords(false);
   } catch (error) {
     setStatus(error.message, 'err');
   }
@@ -388,6 +513,7 @@ async function browseSource() {
 
 async function boot() {
   updatePollButton();
+  syncRecordSelectionUI();
   await Promise.all([refreshSources(), refreshJobs(), refreshRecords(false)]);
   setStatus('管理页已就绪', 'ok');
 }

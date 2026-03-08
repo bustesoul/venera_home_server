@@ -4,7 +4,7 @@ class VeneraHome extends ComicSource {
 
     key = "venera_home"
 
-    version = "0.1.6"
+    version = "0.1.9"
 
     minAppVersion = "1.6.0"
 
@@ -426,6 +426,33 @@ class VeneraHome extends ComicSource {
         return result
     }
 
+    mergeDetailTags(data) {
+        let tags = {}
+        if (data && data.tags && typeof data.tags === 'object') {
+            for (let key of Object.keys(data.tags)) {
+                let values = data.tags[key]
+                tags[key] = Array.isArray(values) ? values.filter(value => !!value) : []
+            }
+        }
+        return tags
+    }
+
+    formatDetailDescription(data) {
+        let lines = []
+        let relativePath = data && data.relative_path ? data.relative_path.toString().trim() : ''
+        let description = data && data.description ? data.description.toString().trim() : ''
+        if (relativePath) {
+            lines.push(`Relative Path: ${relativePath}`)
+        }
+        if (description) {
+            if (lines.length > 0) {
+                lines.push('')
+            }
+            lines.push(description)
+        }
+        return lines.join('\n')
+    }
+
     toComic(item) {
         return new Comic({
             id: item.id,
@@ -667,8 +694,8 @@ class VeneraHome extends ComicSource {
                 title: data.title,
                 subTitle: data.subtitle || '',
                 cover: this.withMediaMode(data.cover_url || ''),
-                description: data.description || '',
-                tags: data.tags || {},
+                description: this.formatDetailDescription(data),
+                tags: this.mergeDetailTags(data),
                 chapters: chapters,
                 isFavorite: data.favorite && data.favorite.is_favorited ? data.favorite.is_favorited : false,
                 thumbnails: null,
