@@ -206,19 +206,7 @@ func (s *Source) resolveTable(name string) (TableInfo, error) {
 }
 
 func browseColumns(table TableInfo) []string {
-	columns := uniqueValues(
-		table.Mapping.ID,
-		table.Mapping.GID,
-		table.Mapping.Token,
-		table.Mapping.Title,
-		table.Mapping.TitleJPN,
-		table.Mapping.Artists,
-		table.Mapping.Tags,
-		table.Mapping.Category,
-		table.Mapping.Rating,
-		table.Mapping.CoverURL,
-		table.Mapping.SourceURL,
-	)
+	columns := mappingSelectedColumns(table.Mapping)
 	if len(columns) > 0 {
 		return columns
 	}
@@ -229,13 +217,7 @@ func browseColumns(table TableInfo) []string {
 }
 
 func browseSearchColumns(table TableInfo) []string {
-	return uniqueValues(
-		table.Mapping.GID,
-		table.Mapping.Token,
-		table.Mapping.Title,
-		table.Mapping.TitleJPN,
-		table.Mapping.Artists,
-		table.Mapping.Tags,
-		table.Mapping.Category,
-	)
+	columns := []string{table.Mapping.GID, table.Mapping.Token}
+	columns = append(columns, mappingSearchColumns(table.Mapping)...)
+	return uniqueValues(columns...)
 }

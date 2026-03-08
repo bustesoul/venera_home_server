@@ -587,6 +587,9 @@ func (s *Server) handleMetadataCleanup(w http.ResponseWriter, r *http.Request) {
 }
 
 func metadataRecordState(record metadatapkg.Record) string {
+	if record.ManualLocked {
+		return "locked"
+	}
 	if record.MissingSince != nil {
 		return "missing"
 	}

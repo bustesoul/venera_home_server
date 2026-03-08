@@ -3,6 +3,7 @@ package exdbdryrun
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -90,17 +91,19 @@ type TableInfo struct {
 }
 
 type ColumnMapping struct {
-	ID        string `json:"id,omitempty"`
-	GID       string `json:"gid,omitempty"`
-	Token     string `json:"token,omitempty"`
-	Title     string `json:"title,omitempty"`
-	TitleJPN  string `json:"title_jpn,omitempty"`
-	Artists   string `json:"artists,omitempty"`
-	Tags      string `json:"tags,omitempty"`
-	Category  string `json:"category,omitempty"`
-	Rating    string `json:"rating,omitempty"`
-	CoverURL  string `json:"cover_url,omitempty"`
-	SourceURL string `json:"source_url,omitempty"`
+	ID         string   `json:"id,omitempty"`
+	GID        string   `json:"gid,omitempty"`
+	Token      string   `json:"token,omitempty"`
+	Title      string   `json:"title,omitempty"`
+	TitleJPN   string   `json:"title_jpn,omitempty"`
+	Artists    string   `json:"artists,omitempty"`
+	Tags       string   `json:"tags,omitempty"`
+	TagColumns []string `json:"tag_columns,omitempty"`
+	Language   string   `json:"language,omitempty"`
+	Category   string   `json:"category,omitempty"`
+	Rating     string   `json:"rating,omitempty"`
+	CoverURL   string   `json:"cover_url,omitempty"`
+	SourceURL  string   `json:"source_url,omitempty"`
 }
 
 type RecordMatch struct {
@@ -131,6 +134,7 @@ type Candidate struct {
 	TitleJPN  string  `json:"title_jpn,omitempty"`
 	Artists   string  `json:"artists,omitempty"`
 	Tags      string  `json:"tags,omitempty"`
+	Language  string  `json:"language,omitempty"`
 	Category  string  `json:"category,omitempty"`
 	Rating    string  `json:"rating,omitempty"`
 	CoverURL  string  `json:"cover_url,omitempty"`
@@ -380,6 +384,13 @@ func inferColumnMapping(columns []string) ColumnMapping {
 		[]string{"tags", "tag", "tagsjson", "tagjson", "taglist", "genres", "genre"},
 		[]string{"tagsjson", "tagjson", "taglist", "tags", "genres", "genre"},
 	)
+	mapping.TagColumns = pickColumns(columns,
+		[]string{"parody", "character", "female", "male", "language", "mixed", "other", "cosplayer", "rest"},
+	)
+	mapping.Language = pickColumn(columns, used,
+		[]string{"language", "lang"},
+		[]string{"language", "lang"},
+	)
 	mapping.Category = pickColumn(columns, used,
 		[]string{"category", "type", "class"},
 		[]string{"category", "type"},
@@ -430,6 +441,26 @@ func pickColumn(columns []string, used map[string]bool, exacts []string, contain
 	return ""
 }
 
+func pickColumns(columns []string, exacts []string) []string {
+	normalizedToOriginals := map[string][]string{}
+	for _, column := range columns {
+		normalized := normalizeIdent(column)
+		normalizedToOriginals[normalized] = append(normalizedToOriginals[normalized], column)
+	}
+	matched := []string{}
+	seen := map[string]bool{}
+	for _, candidate := range exacts {
+		for _, column := range normalizedToOriginals[normalizeIdent(candidate)] {
+			if seen[column] {
+				continue
+			}
+			seen[column] = true
+			matched = append(matched, column)
+		}
+	}
+	return matched
+}
+
 func tableScore(mapping ColumnMapping) int {
 	score := 0
 	if mapping.Title != "" {
@@ -444,11 +475,14 @@ func tableScore(mapping ColumnMapping) int {
 	if mapping.Token != "" {
 		score += 15
 	}
-	if mapping.Tags != "" {
+	if len(mappingSearchTagColumns(mapping)) > 0 {
 		score += 12
 	}
 	if mapping.Artists != "" {
 		score += 10
+	}
+	if mapping.Language != "" {
+		score += 4
 	}
 	if mapping.Category != "" {
 		score += 5
@@ -530,7 +564,7 @@ func findBestMatch(ctx context.Context, db *sql.DB, table TableInfo, rec metadat
 		}
 	}
 
-	searchColumns := nonEmptyStrings(table.Mapping.Title, table.Mapping.TitleJPN, table.Mapping.Artists, table.Mapping.Tags)
+	searchColumns := mappingSearchColumns(table.Mapping)
 	for _, seed := range searchSeeds(local) {
 		if len(searchColumns) == 0 {
 			break
@@ -679,7 +713,8 @@ func scoreCandidate(local localSearch, row exRow) (Candidate, bool) {
 		Title:     row.value(row.Mapping.Title),
 		TitleJPN:  row.value(row.Mapping.TitleJPN),
 		Artists:   row.value(row.Mapping.Artists),
-		Tags:      row.value(row.Mapping.Tags),
+		Tags:      row.tagsValue(),
+		Language:  row.languageValue(),
 		Category:  row.value(row.Mapping.Category),
 		Rating:    row.value(row.Mapping.Rating),
 		CoverURL:  row.value(row.Mapping.CoverURL),
@@ -760,7 +795,7 @@ func scoreCandidate(local localSearch, row exRow) (Candidate, bool) {
 	}
 
 	localKeywords := tokenSet(append(append([]string{}, local.Titles...), append(local.Keywords, local.Artists...)...)...)
-	candidateKeywords := tokenSet(candidate.Title, candidate.TitleJPN, candidate.Artists, candidate.Tags, candidate.Category)
+	candidateKeywords := tokenSet(candidate.Title, candidate.TitleJPN, candidate.Artists, candidate.Tags, candidate.Language, candidate.Category)
 	overlap := jaccard(localKeywords, candidateKeywords)
 	if overlap > 0 {
 		score := 0.55 + overlap*0.30
@@ -798,19 +833,7 @@ type filter struct {
 }
 
 func queryRows(ctx context.Context, db *sql.DB, table TableInfo, filters []filter, limit int) ([]exRow, error) {
-	selectedColumns := uniqueValues(
-		table.Mapping.ID,
-		table.Mapping.GID,
-		table.Mapping.Token,
-		table.Mapping.Title,
-		table.Mapping.TitleJPN,
-		table.Mapping.Artists,
-		table.Mapping.Tags,
-		table.Mapping.Category,
-		table.Mapping.Rating,
-		table.Mapping.CoverURL,
-		table.Mapping.SourceURL,
-	)
+	selectedColumns := mappingSelectedColumns(table.Mapping)
 	if len(selectedColumns) == 0 || len(filters) == 0 {
 		return nil, nil
 	}
@@ -869,6 +892,163 @@ func (row exRow) value(column string) string {
 		return ""
 	}
 	return strings.TrimSpace(row.Values[column])
+}
+
+func mappingSearchColumns(mapping ColumnMapping) []string {
+	columns := []string{mapping.Title, mapping.TitleJPN, mapping.Artists, mapping.Language, mapping.Category}
+	columns = append(columns, mappingSearchTagColumns(mapping)...)
+	return uniqueValues(columns...)
+}
+
+func mappingSelectedColumns(mapping ColumnMapping) []string {
+	columns := []string{
+		mapping.ID,
+		mapping.GID,
+		mapping.Token,
+		mapping.Title,
+		mapping.TitleJPN,
+		mapping.Artists,
+		mapping.Language,
+		mapping.Category,
+		mapping.Rating,
+		mapping.CoverURL,
+		mapping.SourceURL,
+	}
+	columns = append(columns, mappingSearchTagColumns(mapping)...)
+	return uniqueValues(columns...)
+}
+
+func mappingSearchTagColumns(mapping ColumnMapping) []string {
+	columns := append([]string{mapping.Tags}, mapping.TagColumns...)
+	return uniqueValues(columns...)
+}
+
+func (row exRow) tagsValue() string {
+	return encodeStringList(row.tagValues())
+}
+
+func (row exRow) tagValues() []string {
+	tags := parseDBStringList(row.value(row.Mapping.Tags))
+	for _, column := range row.Mapping.TagColumns {
+		namespace := normalizeTagNamespace(column)
+		if namespace == "language" {
+			continue
+		}
+		for _, value := range parseDBStringList(row.value(column)) {
+			tag := namespaceTag(namespace, value)
+			if tag == "" {
+				continue
+			}
+			tags = append(tags, tag)
+		}
+	}
+	return uniqueValues(tags...)
+}
+
+func (row exRow) languageValue() string {
+	if value := firstLanguageValue(parseDBStringList(row.value(row.Mapping.Language))); value != "" {
+		return value
+	}
+	for _, column := range row.Mapping.TagColumns {
+		if normalizeTagNamespace(column) != "language" {
+			continue
+		}
+		if value := firstLanguageValue(parseDBStringList(row.value(column))); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func normalizeTagNamespace(column string) string {
+	return normalizeIdent(column)
+}
+
+func namespaceTag(namespace string, value string) string {
+	trimmed := strings.Trim(strings.TrimSpace(value), `"'`)
+	if trimmed == "" {
+		return ""
+	}
+	if namespace == "" || namespace == "rest" {
+		return trimmed
+	}
+	if strings.Contains(trimmed, ":") {
+		return trimmed
+	}
+	return namespace + ":" + trimmed
+}
+
+func firstLanguageValue(values []string) string {
+	for _, value := range values {
+		trimmed := strings.Trim(strings.TrimSpace(value), `"'`)
+		if trimmed == "" {
+			continue
+		}
+		return trimmed
+	}
+	return ""
+}
+
+func parseDBStringList(raw string) []string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+	candidates := []string{trimmed}
+	if strings.Contains(trimmed, `'`) {
+		candidates = append(candidates, strings.ReplaceAll(trimmed, `'`, `"`))
+	}
+	for _, item := range candidates {
+		var values []string
+		if json.Unmarshal([]byte(item), &values) == nil {
+			return cleanDBStringList(values)
+		}
+		var mixed []any
+		if json.Unmarshal([]byte(item), &mixed) == nil {
+			values = make([]string, 0, len(mixed))
+			for _, value := range mixed {
+				values = append(values, strings.TrimSpace(fmt.Sprint(value)))
+			}
+			return cleanDBStringList(values)
+		}
+	}
+	trimmed = strings.Trim(trimmed, "[]")
+	parts := strings.FieldsFunc(trimmed, func(r rune) bool {
+		switch r {
+		case ',', ';', '|':
+			return true
+		default:
+			return false
+		}
+	})
+	if len(parts) == 0 {
+		parts = []string{trimmed}
+	}
+	return cleanDBStringList(parts)
+}
+
+func cleanDBStringList(values []string) []string {
+	cleaned := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.Trim(strings.TrimSpace(value), `"'`)
+		if trimmed == "" {
+			continue
+		}
+		cleaned = append(cleaned, trimmed)
+	}
+	return uniqueValues(cleaned...)
+}
+
+func encodeStringList(values []string) string {
+	values = cleanDBStringList(values)
+	if len(values) == 0 {
+		return ""
+	}
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return strings.Join(values, ", ")
+	}
+	return string(encoded)
 }
 
 func stringifyDBValue(value any) string {
