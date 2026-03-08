@@ -475,6 +475,20 @@ func TestMetadataExternalSourceEndpoints(t *testing.T) {
 		t.Fatalf("expected source_id 2708021, got %#v", recordItem)
 	}
 
+	testkit.PostJSON(t, srv.URL+"/api/v1/admin/metadata/records/actions", cfg.Server.Token, map[string]any{"action": "lock", "locator": recordItem["locator"]})
+
+	locked := testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?state=locked&library_id=local-main&search=Match%20Book&page=1&limit=10", cfg.Server.Token)
+	lockedData := locked["data"].(map[string]any)
+	if int(lockedData["total"].(float64)) != 1 {
+		t.Fatalf("expected 1 locked record, got %#v", lockedData)
+	}
+	ready := testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?state=ready&library_id=local-main&search=Match%20Book&page=1&limit=10", cfg.Server.Token)
+	readyData := ready["data"].(map[string]any)
+	if int(readyData["total"].(float64)) != 0 {
+		t.Fatalf("expected locked record to be excluded from ready filter, got %#v", readyData)
+	}
+
+	testkit.PostJSON(t, srv.URL+"/api/v1/admin/metadata/records/actions", cfg.Server.Token, map[string]any{"action": "unlock", "locator": recordItem["locator"]})
 	testkit.PostJSON(t, srv.URL+"/api/v1/admin/metadata/records/actions", cfg.Server.Token, map[string]any{"action": "reset", "locator": recordItem["locator"]})
 	records = testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?library_id=local-main&search=Match%20Book&page=1&limit=10", cfg.Server.Token)
 	recordItem = records["data"].(map[string]any)["items"].([]any)[0].(map[string]any)

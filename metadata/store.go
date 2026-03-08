@@ -121,12 +121,13 @@ type Update struct {
 }
 
 type ListQuery struct {
-	State     string
-	LibraryID string
-	Path      string
-	Search    string
-	Limit     int
-	Offset    int
+	State         string
+	LibraryID     string
+	Path          string
+	Search        string
+	Limit         int
+	Offset        int
+	IncludeLocked bool
 }
 
 type ListResult struct {
@@ -537,18 +538,52 @@ func buildListRecordsFilter(query ListQuery) ([]string, []any) {
 			args = append(args, pattern)
 		}
 	}
+	now := formatTime(time.Now().UTC())
 	switch strings.ToLower(strings.TrimSpace(query.State)) {
+	case "locked":
+		where = append(where, "manual_locked <> 0")
 	case "empty":
-		where = append(where, emptyStateWhere())
+		if !query.IncludeLocked {
+			where = append(where, "manual_locked = 0")
+		}
+		where = append(where,
+			"missing_since IS NULL",
+			"COALESCE(last_error, '') = ''",
+			"(stale_after IS NULL OR stale_after = '' OR stale_after > ?)",
+			emptyStateWhere(),
+		)
+		args = append(args, now)
 	case "missing":
+		if !query.IncludeLocked {
+			where = append(where, "manual_locked = 0")
+		}
 		where = append(where, "missing_since IS NOT NULL")
 	case "error":
-		where = append(where, "COALESCE(last_error, '') <> ''")
+		if !query.IncludeLocked {
+			where = append(where, "manual_locked = 0")
+		}
+		where = append(where, "missing_since IS NULL", "COALESCE(last_error, '') <> ''")
 	case "stale":
-		where = append(where, "stale_after IS NOT NULL AND stale_after <> '' AND stale_after <= ?")
-		args = append(args, formatTime(time.Now().UTC()))
+		if !query.IncludeLocked {
+			where = append(where, "manual_locked = 0")
+		}
+		where = append(where,
+			"missing_since IS NULL",
+			"COALESCE(last_error, '') = ''",
+			"stale_after IS NOT NULL AND stale_after <> '' AND stale_after <= ?",
+		)
+		args = append(args, now)
 	case "ready":
-		where = append(where, "missing_since IS NULL")
+		if !query.IncludeLocked {
+			where = append(where, "manual_locked = 0")
+		}
+		where = append(where,
+			"missing_since IS NULL",
+			"COALESCE(last_error, '') = ''",
+			"(stale_after IS NULL OR stale_after = '' OR stale_after > ?)",
+			"NOT ("+emptyStateWhere()+")",
+		)
+		args = append(args, now)
 	}
 	return where, args
 }

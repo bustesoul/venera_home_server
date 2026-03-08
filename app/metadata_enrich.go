@@ -349,6 +349,7 @@ func buildMetadataUpdateFromCandidate(source exdbSourceSummary, candidate exdbdr
 		TitleJPN:       strings.TrimSpace(candidate.TitleJPN),
 		Artists:        parseExternalStringList(candidate.Artists),
 		Tags:           parseExternalStringList(candidate.Tags),
+		Language:       strings.TrimSpace(candidate.Language),
 		Category:       strings.TrimSpace(candidate.Category),
 		Source:         "exdb:" + source.Name,
 		SourceID:       firstNonEmpty(strings.TrimSpace(candidate.GID), strings.TrimSpace(candidate.RowID)),
@@ -486,10 +487,11 @@ func (a *App) metadataEnrichmentTargets(ctx context.Context, req MetadataEnrichR
 		return []metadatapkg.Record{*record}, nil
 	}
 	page, err := a.MetadataRecordsPage(ctx, metadatapkg.ListQuery{
-		LibraryID: req.LibraryID,
-		State:     req.State,
-		Limit:     req.Limit,
-		Offset:    0,
+		LibraryID:     req.LibraryID,
+		State:         req.State,
+		Limit:         req.Limit,
+		Offset:        0,
+		IncludeLocked: true,
 	})
 	if err != nil {
 		return nil, err

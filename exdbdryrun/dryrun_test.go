@@ -3,6 +3,7 @@ package exdbdryrun_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -181,6 +182,70 @@ func TestRunRejectsGenericNoTextOnlyMatch(t *testing.T) {
 	}
 }
 
+func TestRunSynthesizesEHNamespaceTags(t *testing.T) {
+	metadataPath := filepath.Join(t.TempDir(), "metadata.db")
+	store, err := metadatapkg.OpenStore(filepath.Dir(metadataPath), metadataPath)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	store.Close()
+	insertLocalRecord(t, metadataPath, map[string]any{
+		"library_id":  "lib-eh",
+		"root_type":   "archive",
+		"root_ref":    "Shelf/[Itsutsuse] Case Chan [Chinese].zip",
+		"folder_path": "Shelf/[Itsutsuse] Case Chan [Chinese].zip",
+	})
+
+	exdbPath := filepath.Join(t.TempDir(), "exdb.sqlite")
+	db := openSQLite(t, exdbPath)
+	mustExec(t, db, `CREATE TABLE gallery (gid TEXT, token TEXT, title TEXT, title_jpn TEXT, artist TEXT, category TEXT, rating TEXT, parody TEXT, female TEXT, language TEXT, other TEXT)`)
+	mustExec(t, db, `INSERT INTO gallery (gid, token, title, title_jpn, artist, category, rating, parody, female, language, other) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"2540609",
+		"dced1832ac",
+		"[Itsutsuse] Case Chan [Chinese] [Uncensored]",
+		"[Itsutsuse] Case Chan [Chinese] [Uncensored]",
+		"['itsutsuse']",
+		"Doujinshi",
+		"4.5",
+		"['original']",
+		"['blowjob', 'masked face']",
+		"['chinese']",
+		"['uncensored']",
+	)
+	db.Close()
+
+	report, err := exdbdryrun.Run(context.Background(), exdbdryrun.Config{
+		MetadataDBPath: metadataPath,
+		ExDBPath:       exdbPath,
+		LibraryID:      "lib-eh",
+		State:          "all",
+		Limit:          10,
+		MinScore:       0.7,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Summary.Matched != 1 {
+		t.Fatalf("expected 1 matched record, got %+v", report.Summary)
+	}
+	match := report.Matches[0].Match
+	if match == nil {
+		t.Fatal("expected a match")
+	}
+	var tags []string
+	if err := json.Unmarshal([]byte(match.Tags), &tags); err != nil {
+		t.Fatalf("expected synthesized tags json, got %q: %v", match.Tags, err)
+	}
+	joined := strings.Join(tags, "|")
+	for _, expected := range []string{"parody:original", "female:blowjob", "female:masked face", "other:uncensored"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected tag %q in %#v", expected, tags)
+		}
+	}
+	if match.Language != "chinese" {
+		t.Fatalf("expected language chinese, got %#v", match.Language)
+	}
+}
 func TestInspectChoosesMostLikelyTable(t *testing.T) {
 	exdbPath := filepath.Join(t.TempDir(), "exdb.sqlite")
 	db := openSQLite(t, exdbPath)
