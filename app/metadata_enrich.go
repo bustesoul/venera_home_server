@@ -559,11 +559,10 @@ func (a *App) metadataEnrichmentTargets(ctx context.Context, req MetadataEnrichR
 		return []metadatapkg.Record{*record}, nil
 	}
 	page, err := a.MetadataRecordsPage(ctx, metadatapkg.ListQuery{
-		LibraryID:     req.LibraryID,
-		State:         req.State,
-		Limit:         req.Limit,
-		Offset:        0,
-		IncludeLocked: true,
+		LibraryID: req.LibraryID,
+		State:     req.State,
+		Limit:     req.Limit,
+		Offset:    0,
 	})
 	if err != nil {
 		return nil, err

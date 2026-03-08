@@ -85,8 +85,8 @@ func TestMetadataEnrichmentJobAndRecordActions(t *testing.T) {
 		t.Fatalf("StartMetadataEnrichment after reset: %v", err)
 	}
 	job = waitForAppMetadataJob(t, application, job.ID)
-	if job.Updated != 0 || job.Skipped != 1 {
-		t.Fatalf("expected locked record skip, got %#v", job)
+	if job.Updated != 0 || job.Skipped != 0 || job.Unmatched != 1 {
+		t.Fatalf("expected batch empty enrich to exclude locked records, got %#v", job)
 	}
 
 	if _, err := application.MetadataRecordAction(context.Background(), apppkg.MetadataRecordActionRequest{Locator: locatorFromRecord(matchedRecord), Action: `unlock`}); err != nil {
