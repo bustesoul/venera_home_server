@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"html"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -21,7 +22,7 @@ type metadataScanStartedKey struct{}
 var ehIDPattern = regexp.MustCompile(`(?i)\[?EH-?(\d+)\]?`)
 var ehURLPattern = regexp.MustCompile(`(?i)g/(\d+)/([0-9a-f]+)`)
 var pixivIDPattern = regexp.MustCompile(`\d{8,10}`)
-var keywordSplitPattern = regexp.MustCompile(`[\s\[\]\(\)\{\}_\-.,]+`)
+var keywordSplitPattern = regexp.MustCompile(`[^\p{L}\p{Nd}]+`)
 
 func withMetadataScanStarted(ctx context.Context, seenAt time.Time) context.Context {
 	return context.WithValue(ctx, metadataScanStartedKey{}, seenAt.UTC())
@@ -102,7 +103,8 @@ func metadataFolderPath(lib configpkg.LibraryConfig, rootRef string) string {
 }
 
 func metadataHintForRoot(rootRef string, fallbackTitle string) metadatapkg.Hint {
-	target := shared.CleanRel(rootRef)
+	target := html.UnescapeString(shared.CleanRel(rootRef))
+	fallbackTitle = strings.TrimSpace(html.UnescapeString(fallbackTitle))
 	if fallbackTitle != "" {
 		if target != "" {
 			target += " "

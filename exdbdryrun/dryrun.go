@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -660,7 +661,7 @@ func buildLocalSearch(rec metadatapkg.Record) localSearch {
 		FolderBase: cleanSearchText(baseNameFromAnyPath(firstNonEmpty(rec.FolderPath, rec.RootRef))),
 		Artists:    append([]string{}, rec.Artists...),
 		Tags:       append([]string{}, rec.Tags...),
-		Keywords:   append([]string{}, rec.Hint.Keywords...),
+		Keywords:   meaningfulValues(rec.Hint.Keywords...),
 	}
 	search.Titles = meaningfulValues(rec.Title, rec.TitleJPN, search.FolderBase)
 	for _, title := range search.Titles {
@@ -678,28 +679,48 @@ func buildLocalSearch(rec metadatapkg.Record) localSearch {
 
 func searchSeeds(local localSearch) []string {
 	seedMap := map[string]string{}
-	for _, value := range append(append([]string{}, local.Titles...), local.Keywords...) {
-		trimmed := strings.TrimSpace(value)
+	seeds := make([]string, 0, 12)
+	appendSeed := func(value string) {
+		trimmed := strings.TrimSpace(cleanSearchText(value))
 		if trimmed == "" || !isMeaningfulSeed(trimmed) {
-			continue
+			return
 		}
 		dense := normalizeDense(trimmed)
 		if len([]rune(dense)) < 2 {
-			continue
+			return
 		}
-		if _, exists := seedMap[dense]; !exists {
-			seedMap[dense] = trimmed
+		if _, exists := seedMap[dense]; exists {
+			return
+		}
+		seedMap[dense] = trimmed
+		seeds = append(seeds, trimmed)
+	}
+	for _, title := range local.Titles {
+		appendSeed(title)
+		for _, token := range tokenize(title) {
+			appendSeed(token)
 		}
 	}
-	seeds := make([]string, 0, len(seedMap))
-	for _, value := range seedMap {
-		seeds = append(seeds, value)
+	for _, artist := range local.Artists {
+		appendSeed(artist)
+		for _, token := range tokenize(artist) {
+			appendSeed(token)
+		}
 	}
-	sort.SliceStable(seeds, func(i, j int) bool {
-		return len([]rune(seeds[i])) > len([]rune(seeds[j]))
-	})
-	if len(seeds) > 4 {
-		seeds = seeds[:4]
+	for _, tag := range local.Tags {
+		appendSeed(tag)
+		for _, token := range tokenize(tag) {
+			appendSeed(token)
+		}
+	}
+	for _, keyword := range local.Keywords {
+		appendSeed(keyword)
+		for _, token := range tokenize(keyword) {
+			appendSeed(token)
+		}
+	}
+	if len(seeds) > 8 {
+		seeds = seeds[:8]
 	}
 	return seeds
 }
@@ -1093,8 +1114,9 @@ func escapeLike(value string) string {
 }
 
 func normalizeIdent(value string) string {
+	decoded := html.UnescapeString(value)
 	var builder strings.Builder
-	for _, r := range strings.ToLower(value) {
+	for _, r := range strings.ToLower(decoded) {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			builder.WriteRune(r)
 		}
@@ -1124,11 +1146,12 @@ func tokenize(values ...string) []string {
 	out := []string{}
 	seen := map[string]bool{}
 	for _, value := range values {
-		fields := strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		decoded := strings.TrimSpace(html.UnescapeString(value))
+		fields := strings.FieldsFunc(strings.ToLower(decoded), func(r rune) bool {
 			return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 		})
 		if len(fields) == 0 {
-			fields = []string{strings.ToLower(strings.TrimSpace(value))}
+			fields = []string{strings.ToLower(decoded)}
 		}
 		for _, field := range fields {
 			trimmed := strings.TrimSpace(field)
@@ -1217,7 +1240,7 @@ func meaningfulValues(values ...string) []string {
 }
 
 func cleanSearchText(value string) string {
-	trimmed := strings.TrimSpace(value)
+	trimmed := strings.TrimSpace(html.UnescapeString(value))
 	lower := strings.ToLower(trimmed)
 	for _, ext := range archiveExtensions {
 		if strings.HasSuffix(lower, ext) {
@@ -1242,7 +1265,11 @@ func isMeaningfulSeed(value string) bool {
 }
 
 func isMeaningfulPhrase(value string) bool {
-	dense := normalizeDense(cleanSearchText(value))
+	cleaned := cleanSearchText(value)
+	if strings.ContainsAny(cleaned, `/\`) {
+		return false
+	}
+	dense := normalizeDense(cleaned)
 	if dense == "" || isGenericDense(dense) || isAllDigits(dense) || isCatalogCode(dense) {
 		return false
 	}

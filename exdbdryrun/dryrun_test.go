@@ -246,6 +246,68 @@ func TestRunSynthesizesEHNamespaceTags(t *testing.T) {
 		t.Fatalf("expected language chinese, got %#v", match.Language)
 	}
 }
+func TestRunMatchesHTMLDecodedArchiveTitle(t *testing.T) {
+	metadataPath := filepath.Join(t.TempDir(), "metadata.db")
+	store, err := metadatapkg.OpenStore(filepath.Dir(metadataPath), metadataPath)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	store.Close()
+	hintJSON, err := json.Marshal(metadatapkg.Hint{Keywords: []string{"2020/other/5", "12random/", "rei&#039;s", "room", "rei", "ロイヤルハーレム", "アズールレーン"}})
+	if err != nil {
+		t.Fatalf("Marshal hint: %v", err)
+	}
+	insertLocalRecord(t, metadataPath, map[string]any{
+		"library_id":  "lib-entity",
+		"root_type":   "archive",
+		"root_ref":    "2020/other/5.12random/(C93) [REI&#039;s ROOM (REI)] ロイヤルハーレム (アズールレーン) [中国翻訳].zip",
+		"folder_path": "2020/other/5.12random/(C93) [REI&#039;s ROOM (REI)] ロイヤルハーレム (アズールレーン) [中国翻訳].zip",
+		"hint_json":   string(hintJSON),
+	})
+
+	exdbPath := filepath.Join(t.TempDir(), "exdb.sqlite")
+	db := openSQLite(t, exdbPath)
+	mustExec(t, db, `CREATE TABLE gallery (gid TEXT, token TEXT, title TEXT, title_jpn TEXT, artist TEXT, parody TEXT, female TEXT, language TEXT, other TEXT, category TEXT, rating TEXT, thumb TEXT)`)
+	mustExec(t, db, `INSERT INTO gallery (gid, token, title, title_jpn, artist, parody, female, language, other, category, rating, thumb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"1183006",
+		"7fe6e47759",
+		"(C93) [REI's ROOM (REI)] ROYAL HAREM (Azur Lane) [Chinese] [女子力研究X无毒汉化组]",
+		"(C93) [REI's ROOM (REI)] ロイヤルハーレム (アズールレーン) [中国翻訳]",
+		"['rei']",
+		"['azur lane']",
+		"['anal', 'paizuri']",
+		"['chinese', 'translated']",
+		"['full color']",
+		"Doujinshi",
+		"4.87",
+		"https://ehgt.org/b3/6c/b36cb51bef7bf5b27a3823fffa792043f175faaf-3124704-4000-5740-jpg_250.jpg",
+	)
+	db.Close()
+
+	report, err := exdbdryrun.Run(context.Background(), exdbdryrun.Config{
+		MetadataDBPath: metadataPath,
+		ExDBPath:       exdbPath,
+		LibraryID:      "lib-entity",
+		State:          "all",
+		Limit:          10,
+		MinScore:       0.7,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if report.Summary.Matched != 1 {
+		t.Fatalf("expected 1 matched record, got %+v", report.Summary)
+	}
+	if report.Matches[0].Match == nil {
+		t.Fatal("expected a match")
+	}
+	if report.Matches[0].Match.GID != "1183006" {
+		t.Fatalf("expected gid 1183006, got %#v", report.Matches[0].Match)
+	}
+	if got := report.Matches[0].Match.Method; got != "title_exact" && got != "title_fuzzy" {
+		t.Fatalf("expected title-based match, got %#v", report.Matches[0].Match)
+	}
+}
 func TestInspectChoosesMostLikelyTable(t *testing.T) {
 	exdbPath := filepath.Join(t.TempDir(), "exdb.sqlite")
 	db := openSQLite(t, exdbPath)
