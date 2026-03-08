@@ -37,10 +37,22 @@ func TestAdminHomePageUsesReadableUTF8Text(t *testing.T) {
 		t.Fatalf("read body: %v", err)
 	}
 	text := string(body)
-	if !strings.Contains(text, "批量补全") || !strings.Contains(text, "数据源列表") || !strings.Contains(text, "保存 Token") {
-		t.Fatalf("expected readable admin page text, got %q", text)
+	for _, needle := range []string{
+		"Metadata Admin",
+		"themeToggleBtn",
+		"rescanLibraryBtn",
+		"cleanupDryRunBtn",
+		"sidecarModal",
+		"/api/v1/admin/metadata/sidecar",
+		"切换浅色",
+		"批量补全任务（Batch Enrich）",
+		"保存或删除后，自动触发该书库的 Rescan 任务",
+	} {
+		if !strings.Contains(text, needle) {
+			t.Fatalf("expected admin page to contain %q, got %q", needle, text)
+		}
 	}
-	if strings.Contains(text, "閹") || strings.Contains(text, "鈧") {
-		t.Fatalf("expected admin page without mojibake, got %q", text)
+	if strings.ContainsRune(text, '\uFFFD') {
+		t.Fatalf("expected admin page without invalid utf-8 replacement chars, got %q", text)
 	}
 }

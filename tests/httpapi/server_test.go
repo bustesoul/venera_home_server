@@ -28,7 +28,7 @@ func TestLocalServerFlow(t *testing.T) {
 	testkit.MustWriteFile(t, filepath.Join(root, "Series Alpha", "02", "ComicInfo.xml"), []byte(`<ComicInfo><Series>Series Alpha</Series><Title>Chapter 02</Title><Writer>Alpha Author</Writer></ComicInfo>`))
 	testkit.MustWriteFile(t, filepath.Join(root, "Standalone", "001.jpg"), []byte("img4"))
 	testkit.MustWriteFile(t, filepath.Join(root, "Standalone", "ComicInfo.xml"), []byte(`<ComicInfo><Title>Standalone Book</Title><Writer>Jane Doe</Writer><Genre>Drama,Slice of Life</Genre></ComicInfo>`))
-	testkit.MustWriteZip(t, filepath.Join(root, "Bundle.cbz"), map[string][]byte{
+	testkit.MustWriteZip(t, filepath.Join(root, "2021.6", "Archive Shelf", "Bundle.cbz"), map[string][]byte{
 		"001.jpg":       []byte("zipimg"),
 		"ComicInfo.xml": []byte(`<ComicInfo><Title>Zipped Book</Title><Writer>John Doe</Writer><Genre>Mystery</Genre></ComicInfo>`),
 	})
@@ -54,6 +54,24 @@ func TestLocalServerFlow(t *testing.T) {
 	searchItems := search["data"].(map[string]any)["items"].([]any)
 	if len(searchItems) != 1 {
 		t.Fatalf("expected 1 search result, got %d", len(searchItems))
+	}
+
+	pathSearch := testkit.GetJSON(t, srv.URL+"/api/v1/search?q=2021.6", cfg.Server.Token)
+	pathItems := pathSearch["data"].(map[string]any)["items"].([]any)
+	if len(pathItems) != 1 {
+		t.Fatalf("expected 1 path search result, got %d", len(pathItems))
+	}
+	if pathItems[0].(map[string]any)["title"] != "Zipped Book" {
+		t.Fatalf("expected path search to find zipped book, got %#v", pathItems[0])
+	}
+
+	pathModeSearch := testkit.GetJSON(t, srv.URL+"/api/v1/search?q=path:archive%20shelf", cfg.Server.Token)
+	pathModeItems := pathModeSearch["data"].(map[string]any)["items"].([]any)
+	if len(pathModeItems) != 1 {
+		t.Fatalf("expected 1 path: search result, got %d", len(pathModeItems))
+	}
+	if pathModeItems[0].(map[string]any)["title"] != "Zipped Book" {
+		t.Fatalf("expected path: search to find zipped book, got %#v", pathModeItems[0])
 	}
 
 	var zippedID string

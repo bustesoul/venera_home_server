@@ -93,6 +93,7 @@ func newHTTPServer(app *apppkg.App, logger *log.Logger) http.Handler {
 	mux.HandleFunc("/api/v1/admin/metadata/sources", srv.auth(srv.handleMetadataSources))
 	mux.HandleFunc("/api/v1/admin/metadata/sources/", srv.auth(srv.handleMetadataSources))
 	mux.HandleFunc("/api/v1/admin/metadata/cleanup", srv.auth(srv.handleMetadataCleanup))
+	mux.HandleFunc("/api/v1/admin/metadata/sidecar", srv.auth(srv.handleMetadataSidecar))
 	mux.HandleFunc("/media/", srv.handleMedia)
 	mux.HandleFunc("/", srv.handleIndex)
 	return loggingMiddleware(levelLogger, mux)
@@ -1251,6 +1252,22 @@ func (s *Server) filteredComics(libraryID, category, param, sortKey string) []*a
 	return out
 }
 
+func comicMatchesPath(comic *apppkg.Comic, needle string) bool {
+	needle = strings.TrimSpace(strings.ToLower(needle))
+	if needle == "" {
+		return false
+	}
+	if strings.Contains(strings.ToLower(comic.RootRef), needle) || strings.Contains(strings.ToLower(comic.SourceURL), needle) {
+		return true
+	}
+	for _, chapter := range comic.Chapters {
+		if strings.Contains(strings.ToLower(chapter.SourceRef), needle) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) searchComics(libraryID, q, sortKey string) []*apppkg.Comic {
 	q = strings.TrimSpace(strings.ToLower(q))
 	if q == "" {
@@ -1260,7 +1277,13 @@ func (s *Server) searchComics(libraryID, q, sortKey string) []*apppkg.Comic {
 	needle := q
 	if strings.Contains(q, ":") {
 		parts := strings.SplitN(q, ":", 2)
-		mode, needle = parts[0], parts[1]
+		candidateMode := strings.TrimSpace(parts[0])
+		candidateNeedle := strings.TrimSpace(parts[1])
+		switch candidateMode {
+		case "tag", "author", "path", "dir", "folder":
+			mode = candidateMode
+			needle = candidateNeedle
+		}
 	}
 	out := []*apppkg.Comic{}
 	for _, comic := range s.app.Comics() {
@@ -1273,12 +1296,15 @@ func (s *Server) searchComics(libraryID, q, sortKey string) []*apppkg.Comic {
 			match = containsStringFold(comic.Tags, needle)
 		case "author":
 			match = containsStringFold(comic.Authors, needle)
+		case "path", "dir", "folder":
+			match = comicMatchesPath(comic, needle)
 		default:
 			match = strings.Contains(strings.ToLower(comic.Title), needle) ||
 				strings.Contains(strings.ToLower(comic.Subtitle), needle) ||
 				strings.Contains(strings.ToLower(comic.Description), needle) ||
 				containsStringFold(comic.Tags, needle) ||
-				containsStringFold(comic.Authors, needle)
+				containsStringFold(comic.Authors, needle) ||
+				comicMatchesPath(comic, needle)
 		}
 		if match {
 			out = append(out, comic)

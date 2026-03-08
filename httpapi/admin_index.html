@@ -5,66 +5,284 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Venera Metadata Admin</title>
   <style>
-    :root { color-scheme: dark; --bg:#0f1115; --panel:#171a21; --soft:#202532; --text:#e8ecf1; --muted:#9aa6b2; --line:#2a3142; --accent:#4f8cff; --ok:#2db784; --warn:#d79b35; --err:#d65454; }
-    * { box-sizing:border-box; }
-    body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text); }
-    header { padding:20px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(15,17,21,.92); backdrop-filter:blur(8px); z-index:10; }
-    h1, h2, h3 { margin:0; }
-    main { padding:20px; display:grid; gap:16px; }
-    .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); }
-    .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
-    .panel.wide { grid-column:1 / -1; }
-    .muted { color:var(--muted); }
-    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .row + .row { margin-top:10px; }
-    label { display:grid; gap:6px; min-width:120px; }
-    input, select, button, textarea { background:var(--soft); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:9px 11px; }
-    input, select { min-width:0; }
-    button { cursor:pointer; }
-    button.primary { background:var(--accent); border-color:var(--accent); }
-    button.warn { background:var(--warn); border-color:var(--warn); color:#111; }
-    button.ghost { background:transparent; }
-    .status { padding:10px 12px; border-radius:10px; background:var(--soft); }
-    .status.ok { border:1px solid rgba(45,183,132,.35); }
-    .status.err { border:1px solid rgba(214,84,84,.35); }
-    table { width:100%; border-collapse:collapse; font-size:13px; }
-    th, td { padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
-    th { color:var(--muted); font-weight:600; }
-    .actions { display:flex; gap:6px; flex-wrap:wrap; }
-    .pill { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px; background:var(--soft); color:var(--muted); font-size:12px; }
-    .pill.ok { color:#9ef0cf; }
-    .pill.warn { color:#ffd789; }
-    .pill.err { color:#ff9b9b; }
-    .scroll { overflow:auto; }
-    code { white-space:nowrap; }
-    .mono { font-family:ui-monospace, SFMono-Regular, Consolas, monospace; }
-    .spacer { flex:1; }
+    :root {
+      color-scheme: dark;
+      --bg: #09090b;
+      --panel: #18181b;
+      --bg-hover: #27272a;
+      --border: #27272a;
+      --text-main: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-alpha: rgba(59, 130, 246, 0.2);
+      --ok: #10b981;
+      --ok-bg: rgba(16, 185, 129, 0.1);
+      --warn: #f59e0b;
+      --warn-bg: rgba(245, 158, 11, 0.1);
+      --err: #ef4444;
+      --err-bg: rgba(239, 68, 68, 0.1);
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+    }
+
+    body[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f3f4f6;
+      --panel: #ffffff;
+      --bg-hover: #f9fafb;
+      --border: #e5e7eb;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      line-height: 1.5;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.025em; }
+    h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; color: var(--text-main); }
+    .muted { color: var(--text-muted); font-size: 0.875rem; }
+
+    header {
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: color-mix(in srgb, var(--panel) 85%, transparent);
+      backdrop-filter: blur(12px);
+      z-index: 10;
+      box-shadow: var(--shadow-sm);
+    }
+
+    main { padding: 32px; display: grid; gap: 24px; max-width: 1600px; margin: 0 auto; }
+    .grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+    .panel {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-md);
+      transition: box-shadow 0.3s ease;
+    }
+    .panel:hover { box-shadow: var(--shadow-lg); }
+    .panel.wide { grid-column: 1 / -1; }
+
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .row + .row { margin-top: 16px; }
+    .spacer { flex: 1; }
+
+    label { display: flex; flex-direction: column; gap: 6px; min-width: 140px; flex: 1; font-size: 0.875rem; font-weight: 500; color: var(--text-main); }
+    label span { color: var(--text-muted); }
+
+    input:not([type="checkbox"]), select, textarea {
+      background: var(--bg);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-family: inherit;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-alpha);
+    }
+    textarea { min-height: 200px; resize: vertical; line-height: 1.6; }
+
+    input[type="checkbox"] { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--primary); }
+    .checkbox { display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
+
+    button {
+      cursor: pointer;
+      transition: all 0.15s ease;
+      background: var(--bg);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    button:hover:not(:disabled) { background: var(--bg-hover); transform: translateY(-1px); }
+    button:active:not(:disabled) { transform: translateY(0); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    button.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); box-shadow: 0 4px 12px var(--primary-alpha); }
+    button.warn { background: transparent; border-color: var(--err); color: var(--err); }
+    button.warn:hover:not(:disabled) { background: var(--err); color: #fff; }
+    button.ghost { background: transparent; border-color: transparent; }
+    button.ghost:hover:not(:disabled) { background: var(--bg-hover); }
+
+    .status {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      border-left: 4px solid var(--border);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+    }
+    .status.ok { border-left-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+    .status.err { border-left-color: var(--err); background: var(--err-bg); color: var(--err); }
+    .status.warn { border-left-color: var(--warn); background: var(--warn-bg); color: var(--warn); }
+
+    .scroll {
+      width: 100%;
+      overflow: auto;
+      max-height: 60vh;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
+    th, td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--panel);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: none;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--border);
+    }
+    tbody tr { transition: background-color 0.15s ease; }
+    tbody tr:hover { background-color: var(--panel); }
+    tbody tr:last-child td { border-bottom: none; }
+    .wide-table th, .wide-table td { white-space: nowrap; }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: var(--bg-hover);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border: 1px solid var(--border);
+    }
+    .pill.ok { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
+    .pill.warn { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
+    .pill.err { color: var(--err); background: var(--err-bg); border-color: transparent; }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.85em; word-break: normal; overflow-wrap: anywhere; }
+    .help { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; }
+    .hidden { display: none !important; }
+
+    @keyframes fadeIn { from { opacity: 0; backdrop-filter: blur(0); } to { opacity: 1; backdrop-filter: blur(6px); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(6px);
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+    .dialog {
+      width: min(980px, 100%);
+      max-height: min(90vh, 100%);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 32px;
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
+      animation: slideUp 0.3s ease-out forwards;
+    }
+
+    .summary-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .summary-card { padding: 16px; border-radius: var(--radius-md); background: var(--bg); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+    .summary-card .muted { font-size: 0.75rem; text-transform: none; letter-spacing: 0.03em; font-weight: 600; }
+    .summary-card div:last-child { font-weight: 500; }
+
+    @media (max-width: 900px) {
+      header { padding: 16px 20px; }
+      main { padding: 20px; gap: 16px; }
+      .grid { grid-template-columns: 1fr; gap: 16px; }
+      .panel { padding: 18px; }
+      .dialog { padding: 20px; }
+    }
+
+    @media (max-width: 640px) {
+      header { padding: 12px 16px; }
+      main { padding: 16px; }
+      .row { gap: 10px; }
+      label { min-width: 100%; }
+      .summary-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
-<body>
+<body data-theme="dark">
 <header>
   <div class="row">
     <div>
-      <h1>Metadata Admin</h1>
-      <div class="muted">管理本地 metadata store、外部数据源，以及手动补全任务。</div>
+      <h1>Venera Metadata Admin</h1>
+      <div class="muted" style="margin-top: 4px;">管理本地 metadata store、外部数据源，以及手动补全任务。</div>
     </div>
     <div class="spacer"></div>
-    <label>
-      <span>Bearer Token</span>
-      <input id="tokenInput" type="password" placeholder="若服务端启用了 token，请在这里填写">
+    <label style="flex: 0 1 320px; flex-direction: row; align-items: center; gap: 12px;">
+      <span style="font-size: 14px;">Bearer Token</span>
+      <input id="tokenInput" type="password" placeholder="填写服务端 Token" style="width: min(220px, 100%);">
     </label>
-    <button id="saveTokenBtn" class="ghost">保存 Token</button>
+    <button id="saveTokenBtn" class="ghost">保存配置</button>
+    <button id="themeToggleBtn" class="ghost">切换浅色</button>
   </div>
 </header>
 <main>
-  <div id="statusBox" class="status">等待操作</div>
+  <div id="statusBox" class="status">系统已就绪，等待操作</div>
 
   <div class="grid">
     <section class="panel">
-      <h2>批量补全</h2>
+      <h2>批量补全任务（Batch Enrich）</h2>
       <div class="row">
-        <label><span>Library</span><input id="enrichLibrary" placeholder="例如 local-main"></label>
-        <label><span>State</span>
+        <label><span>书库 (Library)</span><input id="enrichLibrary" placeholder="例如 local-main"></label>
+        <label><span>状态 (State)</span>
           <select id="enrichState">
             <option value="empty">empty</option>
             <option value="ready">ready</option>
@@ -73,27 +291,27 @@
             <option value="missing">missing</option>
           </select>
         </label>
-        <label><span>Source</span><select id="enrichSource"><option value="">自动选择可用数据源</option></select></label>
+        <label><span>数据源 (Source)</span><select id="enrichSource"><option value="">自动选择可用数据源</option></select></label>
       </div>
       <div class="row">
-        <label><span>Limit</span><input id="enrichLimit" type="number" value="200" min="1" max="2000"></label>
-        <label><span>Min Score</span><input id="enrichScore" type="number" value="0.72" min="0" max="1" step="0.01"></label>
-        <label><span>Workers</span><input id="enrichWorkers" type="number" value="3" min="1" max="4"></label>
+        <label><span>上限 (Limit)</span><input id="enrichLimit" type="number" value="200" min="1" max="2000"></label>
+        <label><span>最低分数 (Min Score)</span><input id="enrichScore" type="number" value="0.72" min="0" max="1" step="0.01"></label>
+        <label><span>并发数 (Workers)</span><input id="enrichWorkers" type="number" value="3" min="1" max="4"></label>
       </div>
-      <div class="row">
-        <button id="triggerEnrichBtn" class="primary">开始补全</button>
+      <div class="row" style="margin-top: 24px;">
+        <button id="triggerEnrichBtn" class="primary">开始补全任务</button>
         <button id="refreshSourcesBtn" class="ghost">刷新数据源</button>
-        <button id="refreshJobsBtn" class="ghost">刷新任务</button>
+        <button id="refreshJobsBtn" class="ghost">刷新任务状态</button>
       </div>
     </section>
 
     <section class="panel">
-      <h2>元数据记录</h2>
+      <h2>元数据管理（Metadata Records）</h2>
       <div class="row">
-        <label><span>Library</span><input id="recordLibrary" placeholder="留空表示全部书库"></label>
-        <label><span>State</span>
+        <label><span>书库 (Library)</span><input id="recordLibrary" placeholder="留空表示全部书库"></label>
+        <label><span>状态 (State)</span>
           <select id="recordState">
-            <option value="">全部</option>
+            <option value="">全部状态</option>
             <option value="empty">empty</option>
             <option value="ready">ready</option>
             <option value="stale">stale</option>
@@ -102,95 +320,187 @@
             <option value="locked">locked</option>
           </select>
         </label>
-        <label><span>Search</span><input id="recordSearch" placeholder="title / path / source 模糊搜索"></label>
+        <label><span>搜索内容</span><input id="recordSearch" placeholder="标题 / 路径 / 来源模糊搜索"></label>
       </div>
       <div class="row">
-        <label><span>Page</span><input id="recordPage" type="number" value="1" min="1"></label>
-        <label><span>Page Size</span><input id="recordLimit" type="number" value="50" min="1" max="200"></label>
-        <button id="queryRecordsBtn" class="primary">查询记录</button>
+        <label><span>页码</span><input id="recordPage" type="number" value="1" min="1"></label>
+        <label><span>每页条数</span><input id="recordLimit" type="number" value="50" min="1" max="200"></label>
+        <label style="justify-content: flex-end;"><button id="queryRecordsBtn" class="primary" style="width: 100%;">查询记录</button></label>
       </div>
-      <div class="muted" id="recordSummary"></div>
+      <div class="row" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
+        <label><span>missing 保留天数</span><input id="cleanupOlderThanDays" type="number" value="0" min="0"></label>
+        <button id="rescanLibraryBtn" class="ghost">重扫当前书库</button>
+        <button id="rescanAllBtn" class="ghost">重扫全部</button>
+        <button id="cleanupDryRunBtn" class="ghost">测试清理 (Dry Run)</button>
+        <button id="cleanupExecuteBtn" class="warn">清理失效记录</button>
+      </div>
+      <div class="help" id="cleanupSummary" style="margin-top: 12px;">清理仅处理 missing 记录，建议先试运行（Dry Run）；重扫使用上方书库条件。</div>
+      <div class="help" id="recordSummary"></div>
     </section>
   </div>
 
   <section class="panel wide">
-    <div class="row">
-      <h2>任务列表</h2>
+    <div class="row" style="margin-bottom: 16px;">
+      <h2>后台任务（Jobs）</h2>
       <div class="spacer"></div>
       <button id="togglePollBtn" class="ghost">暂停自动刷新</button>
     </div>
-    <div class="scroll"><table id="jobsTable"><thead><tr><th>Job</th><th>Kind</th><th>Status</th><th>Library</th><th>Sources</th><th>Progress</th><th>Error</th></tr></thead><tbody></tbody></table></div>
+    <div class="scroll"><table id="jobsTable"><thead><tr><th>任务 ID</th><th>类型</th><th>状态</th><th>书库</th><th>来源</th><th>进度</th><th>错误日志</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="panel wide">
-    <div class="row">
-      <h2>记录列表</h2>
+    <div class="row" style="margin-bottom: 16px;">
+      <h2>本地元数据记录（Local Records）</h2>
       <div class="spacer"></div>
-      <span id="recordSelectionSummary" class="muted">未选择记录</span>
-      <select id="recordBatchAction">
-        <option value="">批量操作</option>
-        <option value="lock">锁定</option>
-        <option value="unlock">解锁</option>
-        <option value="reset">重置状态</option>
-        <option value="enrich">补一次</option>
-      </select>
-      <button id="applyBatchActionBtn" class="primary" disabled>应用到已选</button>
-      <button id="clearSelectedRecordsBtn" class="ghost" disabled>清空选择</button>
+      <div class="row" style="margin-top: 0;">
+        <span id="recordSelectionSummary" class="muted" style="margin-right: 12px;">未选择记录</span>
+        <select id="recordBatchAction" style="width: auto;">
+          <option value="">批量操作...</option>
+          <option value="lock">锁定 (Lock)</option>
+          <option value="unlock">解锁 (Unlock)</option>
+          <option value="reset">重置状态 (Reset)</option>
+          <option value="enrich">重新补全 (Enrich)</option>
+        </select>
+        <button id="applyBatchActionBtn" class="primary" disabled>应用到已选</button>
+        <button id="clearSelectedRecordsBtn" class="ghost" disabled>清空选择</button>
+      </div>
     </div>
-    <div class="scroll"><table id="recordsTable"><thead><tr><th><input id="selectAllRecords" type="checkbox" aria-label="选择当前页全部记录"></th><th>State</th><th>Title</th><th>Path</th><th>Source</th><th>Confidence</th><th>Locked</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+    <div class="scroll"><table id="recordsTable"><thead><tr><th style="width: 40px;"><input id="selectAllRecords" type="checkbox" aria-label="选择当前页全部记录"></th><th style="width: 80px;">状态</th><th>标题 / 副标题</th><th>路径 / 文件夹</th><th>来源信息</th><th style="width: 90px;">置信度</th><th style="width: 80px;">锁定</th><th style="width: 280px; text-align: right;">操作</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <div class="grid">
     <section class="panel">
-      <h2>数据源列表</h2>
-      <div class="muted" id="sourceDirLabel"></div>
-      <div class="scroll"><table id="sourcesTable"><thead><tr><th>Name</th><th>Table</th><th>Rows</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table></div>
+      <div class="row" style="margin-bottom: 16px;">
+        <h2>外部数据源（External Sources）</h2>
+      </div>
+      <div class="help" id="sourceDirLabel" style="margin-bottom: 16px;"></div>
+      <div class="scroll"><table id="sourcesTable" class="wide-table"><thead><tr><th>名称 / 路径</th><th>目标表</th><th>行数</th><th>状态</th><th>操作</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <section class="panel">
-      <h2>数据源浏览</h2>
+      <h2>数据源浏览（Browse Data）</h2>
       <div class="row">
-        <label><span>Source</span><select id="browseSource"></select></label>
-        <label><span>Query</span><input id="browseQuery" placeholder="title / artist like"></label>
+        <label><span>选择源库</span><select id="browseSource"></select></label>
+        <label><span>模糊查询</span><input id="browseQuery" placeholder="标题 / 作者模糊搜索"></label>
       </div>
       <div class="row">
-        <label><span>Page</span><input id="browsePage" type="number" value="1" min="1"></label>
-        <label><span>Page Size</span><input id="browseLimit" type="number" value="30" min="1" max="200"></label>
-        <button id="browseBtn" class="primary">查询数据源</button>
+        <label><span>页码</span><input id="browsePage" type="number" value="1" min="1"></label>
+        <label><span>每页条数</span><input id="browseLimit" type="number" value="30" min="1" max="200"></label>
+        <label style="justify-content: flex-end;"><button id="browseBtn" class="primary" style="width:100%;">查询数据</button></label>
       </div>
-      <div class="muted" id="browseSummary"></div>
-      <div class="scroll"><table id="browseTable"><thead></thead><tbody></tbody></table></div>
+      <div class="help" id="browseSummary" style="margin-top: 16px;"></div>
+      <div class="scroll" style="margin-top: 8px;"><table id="browseTable" class="wide-table"><thead></thead><tbody></tbody></table></div>
     </section>
   </div>
 </main>
+
+<div id="sidecarModal" class="modal hidden" aria-hidden="true">
+  <div class="dialog">
+    <div class="row">
+      <div>
+        <h2 style="margin: 0;">编辑 `.venera.json` (Sidecar)</h2>
+        <div id="sidecarMeta" class="muted" style="margin-top: 4px;">未选择记录</div>
+      </div>
+      <div class="spacer"></div>
+      <button id="sidecarReloadBtn" class="ghost">重新读取</button>
+      <button id="sidecarTemplateBtn" class="ghost">生成模板</button>
+      <button id="closeSidecarBtn" class="ghost">✕ 关闭</button>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card"><div class="muted">文件路径</div><div id="sidecarPath" class="mono">-</div></div>
+      <div class="summary-card"><div class="muted">当前状态</div><div id="sidecarState">-</div></div>
+      <div class="summary-card"><div class="muted">存储后端</div><div id="sidecarBackend">-</div></div>
+    </div>
+    <label class="checkbox" style="font-size: 14px; font-weight: normal;"><input id="sidecarAutoRescan" type="checkbox" checked> 保存或删除后，自动触发该书库的 Rescan 任务</label>
+    <textarea id="sidecarEditor" class="mono" spellcheck="false" placeholder="在此处直接编辑 JSON 内容..."></textarea>
+    <div class="row" style="margin-top: 8px;">
+      <button id="sidecarSaveBtn" class="primary">保存 Sidecar 文件</button>
+      <button id="sidecarDeleteBtn" class="warn">删除文件</button>
+      <div class="spacer"></div>
+      <span id="sidecarSummary" class="muted">等待操作</span>
+    </div>
+  </div>
+</div>
 <script>
-const state = { poll: true, sources: [], selectedRecords: {}, lastRecordItems: [] };
+const state = {
+  poll: true,
+  theme: 'dark',
+  sources: [],
+  selectedRecords: {},
+  lastRecordItems: [],
+  sidecar: { locator: null, item: null, info: null },
+};
+
 const tokenInput = document.getElementById('tokenInput');
 const statusBox = document.getElementById('statusBox');
 const togglePollBtn = document.getElementById('togglePollBtn');
+const themeToggleBtn = document.getElementById('themeToggleBtn');
+const sidecarModal = document.getElementById('sidecarModal');
 
 tokenInput.value = localStorage.getItem('venera_admin_token') || '';
+applyTheme(preferredTheme());
+
 document.getElementById('saveTokenBtn').addEventListener('click', () => {
   localStorage.setItem('venera_admin_token', tokenInput.value.trim());
-  setStatus('Token 已保存', 'ok');
+  setStatus('配置已保存', 'ok');
 });
-
 document.getElementById('triggerEnrichBtn').addEventListener('click', triggerEnrich);
 document.getElementById('refreshSourcesBtn').addEventListener('click', refreshSources);
 document.getElementById('refreshJobsBtn').addEventListener('click', refreshJobs);
 document.getElementById('queryRecordsBtn').addEventListener('click', () => refreshRecords(true));
+document.getElementById('cleanupDryRunBtn').addEventListener('click', () => runCleanup(true));
+document.getElementById('cleanupExecuteBtn').addEventListener('click', () => runCleanup(false));
+document.getElementById('rescanLibraryBtn').addEventListener('click', rescanSelectedLibrary);
+document.getElementById('rescanAllBtn').addEventListener('click', rescanAllLibraries);
 document.getElementById('browseBtn').addEventListener('click', browseSource);
 document.getElementById('recordBatchAction').addEventListener('change', syncRecordSelectionUI);
 document.getElementById('applyBatchActionBtn').addEventListener('click', applyBatchRecordAction);
 document.getElementById('clearSelectedRecordsBtn').addEventListener('click', clearRecordSelection);
 document.getElementById('selectAllRecords').addEventListener('change', (event) => setAllVisibleRecordSelection(event.target.checked));
+document.getElementById('sidecarReloadBtn').addEventListener('click', loadSidecar);
+document.getElementById('sidecarTemplateBtn').addEventListener('click', applySidecarTemplate);
+document.getElementById('sidecarSaveBtn').addEventListener('click', saveSidecar);
+document.getElementById('sidecarDeleteBtn').addEventListener('click', deleteSidecar);
+document.getElementById('closeSidecarBtn').addEventListener('click', closeSidecar);
+document.getElementById('recordSearch').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') refreshRecords(true);
+});
+document.getElementById('browseQuery').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') browseSource();
+});
 togglePollBtn.addEventListener('click', () => {
   state.poll = !state.poll;
   updatePollButton();
 });
+themeToggleBtn.addEventListener('click', () => {
+  applyTheme(state.theme === 'dark' ? 'light' : 'dark');
+});
+sidecarModal.addEventListener('click', (event) => {
+  if (event.target === sidecarModal) closeSidecar();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !sidecarModal.classList.contains('hidden')) closeSidecar();
+});
+
+function preferredTheme() {
+  const stored = localStorage.getItem('venera_admin_theme');
+  if (stored === 'dark' || stored === 'light') return stored;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(theme) {
+  state.theme = theme;
+  document.body.dataset.theme = theme;
+  localStorage.setItem('venera_admin_theme', theme);
+  themeToggleBtn.textContent = theme === 'dark' ? '切换到浅色' : '切换到深色';
+}
 
 function updatePollButton() {
   togglePollBtn.textContent = state.poll ? '暂停自动刷新' : '恢复自动刷新';
+}
+
+function currentMaintenanceLibrary() {
+  return document.getElementById('recordLibrary').value.trim();
 }
 
 function authHeaders() {
@@ -199,11 +509,16 @@ function authHeaders() {
 }
 
 async function fetchJSON(url, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}), ...authHeaders() };
+  const headers = { ...(options.headers || {}), ...authHeaders() };
+  if (options.body != null && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   const response = await fetch(url, { ...options, headers });
   const text = await response.text();
   let json = {};
-  try { json = text ? JSON.parse(text) : {}; } catch (_) {}
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch (_) {}
   if (!response.ok) {
     const message = json?.error?.message || `${response.status} ${response.statusText}`;
     throw new Error(message);
@@ -212,23 +527,28 @@ async function fetchJSON(url, options = {}) {
 }
 
 function setStatus(message, kind = '') {
-  statusBox.textContent = message;
-  statusBox.className = `status ${kind}`.trim();
+  statusBox.textContent = message || '系统已就绪，等待操作';
+  statusBox.className = `status${kind ? ` ${kind}` : ''}`;
 }
 
 function htmlEscape(value) {
-  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function pill(text, kind = '') {
-  return `<span class="pill ${kind}">${htmlEscape(text)}</span>`;
+  return `<span class="pill ${kind}">${htmlEscape(text || '-')}</span>`;
 }
 
 function actionLabel(action) {
   if (action === 'lock') return '锁定';
   if (action === 'unlock') return '解锁';
   if (action === 'reset') return '重置状态';
-  if (action === 'enrich') return '补一次';
+  if (action === 'enrich') return '重新补全';
   return action;
 }
 
@@ -253,19 +573,12 @@ function locatorKey(locator) {
 
 function storeSelectedRecord(locator, checked) {
   const key = locatorKey(locator);
-  if (!key) {
-    return;
-  }
+  if (!key) return;
   if (checked) {
     state.selectedRecords[key] = locator;
-    return;
+  } else {
+    delete state.selectedRecords[key];
   }
-  delete state.selectedRecords[key];
-}
-
-function clearRecordSelection() {
-  state.selectedRecords = {};
-  syncRecordSelectionUI();
 }
 
 function toggleRecordSelection(encodedLocator, checked) {
@@ -274,45 +587,89 @@ function toggleRecordSelection(encodedLocator, checked) {
 }
 
 function setAllVisibleRecordSelection(checked) {
-  for (const item of state.lastRecordItems || []) {
+  for (const item of state.lastRecordItems) {
     storeSelectedRecord(item.locator || {}, checked);
   }
   syncRecordSelectionUI();
 }
 
+function clearRecordSelection() {
+  state.selectedRecords = {};
+  syncRecordSelectionUI();
+}
+
 function syncRecordSelectionUI() {
-  const keys = Object.keys(state.selectedRecords);
-  const count = keys.length;
-  document.getElementById('recordSelectionSummary').textContent = count > 0 ? `已选 ${count} 条` : '未选择记录';
+  const selectedKeys = Object.keys(state.selectedRecords);
+  const count = selectedKeys.length;
+  document.getElementById('recordSelectionSummary').textContent = count === 0 ? '未选择记录' : `已选择 ${count} 条记录`;
   document.getElementById('applyBatchActionBtn').disabled = count === 0 || !document.getElementById('recordBatchAction').value;
   document.getElementById('clearSelectedRecordsBtn').disabled = count === 0;
 
-  const visibleCheckboxes = Array.from(document.querySelectorAll('#recordsTable tbody input[data-record-key]'));
-  let checkedVisible = 0;
-  for (const input of visibleCheckboxes) {
-    const key = input.getAttribute('data-record-key') || '';
-    input.checked = !!state.selectedRecords[key];
-    if (input.checked) {
-      checkedVisible += 1;
-    }
-  }
+  const visibleKeys = state.lastRecordItems.map((item) => locatorKey(item.locator || {})).filter(Boolean);
+  const selectedVisibleCount = visibleKeys.filter((key) => state.selectedRecords[key]).length;
   const selectAll = document.getElementById('selectAllRecords');
-  selectAll.checked = visibleCheckboxes.length > 0 && checkedVisible === visibleCheckboxes.length;
-  selectAll.indeterminate = checkedVisible > 0 && checkedVisible < visibleCheckboxes.length;
+  selectAll.checked = visibleKeys.length > 0 && selectedVisibleCount === visibleKeys.length;
+  selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleKeys.length;
+
+  document.querySelectorAll('#recordsTable tbody input[data-record-key]').forEach((input) => {
+    input.checked = Boolean(state.selectedRecords[input.dataset.recordKey || '']);
+  });
 }
 
+function renderState(value) {
+  const labelMap = {
+    empty: '空白',
+    ready: '就绪',
+    stale: '需刷新',
+    error: '错误',
+    missing: '缺失',
+    locked: '已锁定',
+    done: '完成',
+    failed: '失败',
+    running: '进行中',
+    queued: '排队中',
+  };
+  const kind = value === 'done' || value === 'ready'
+    ? 'ok'
+    : value === 'failed' || value === 'error' || value === 'missing'
+      ? 'err'
+      : value === 'running' || value === 'stale' || value === 'locked' || value === 'queued'
+        ? 'warn'
+        : '';
+  return pill(labelMap[value] || value || '-', kind);
+}
+
+function formatJobSources(job) {
+  if (Array.isArray(job.sources) && job.sources.length > 0) {
+    return job.sources.join(', ');
+  }
+  return job.source_id || '-';
+}
+
+function formatJobProgress(job) {
+  const parts = [];
+  if (job.path) parts.push(job.path);
+  if (job.examined || job.processed) {
+    parts.push(`${job.processed || 0}/${job.examined || job.processed || 0}`);
+  }
+  if (job.matched || job.matched === 0) parts.push(`matched ${job.matched || 0}`);
+  if (job.updated || job.updated === 0) parts.push(`updated ${job.updated || 0}`);
+  if (job.skipped || job.skipped === 0) parts.push(`skipped ${job.skipped || 0}`);
+  if (job.unmatched || job.unmatched === 0) parts.push(`unmatched ${job.unmatched || 0}`);
+  return parts.join(' · ') || '-';
+}
 async function triggerEnrich() {
   try {
     const payload = {
       library_id: document.getElementById('enrichLibrary').value.trim(),
       state: document.getElementById('enrichState').value,
-      source_id: document.getElementById('enrichSource').value,
       limit: Number(document.getElementById('enrichLimit').value || 200),
       min_score: Number(document.getElementById('enrichScore').value || 0.72),
+      source_id: document.getElementById('enrichSource').value,
       workers: Number(document.getElementById('enrichWorkers').value || 3),
     };
     const data = await fetchJSON('/api/v1/admin/metadata/enrich', { method: 'POST', body: JSON.stringify(payload) });
-    setStatus(`已创建补全任务：${data.job_id}`, 'ok');
+    setStatus(`已提交补全任务：${data.job_id || '-'}`, 'ok');
     await refreshJobs();
   } catch (error) {
     setStatus(error.message, 'err');
@@ -322,35 +679,20 @@ async function triggerEnrich() {
 async function refreshJobs() {
   try {
     const data = await fetchJSON('/api/v1/admin/metadata/jobs');
+    const items = data.items || [];
     const tbody = document.querySelector('#jobsTable tbody');
-    tbody.innerHTML = (data.items || []).map(job => {
-      const progress = job.kind === 'enrich'
-        ? `${job.processed || 0}/${job.examined || 0} · matched ${job.matched || 0} · updated ${job.updated || 0} · skipped ${job.skipped || 0}`
-        : `${job.processed || 0}`;
-      return `<tr>
-        <td class="mono">${htmlEscape(job.job_id)}</td>
-        <td>${htmlEscape(job.kind || 'refresh')}</td>
-        <td>${renderState(job.status)}</td>
-        <td>${htmlEscape(job.library_id || '')}</td>
-        <td>${htmlEscape((job.sources || []).join(', '))}</td>
-        <td>${htmlEscape(progress)}</td>
-        <td>${htmlEscape(job.error || '')}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="7" class="muted">暂无任务</td></tr>';
+    tbody.innerHTML = items.map((job) => `<tr>
+      <td class="mono" style="font-weight: 500;">${htmlEscape(job.job_id || '')}</td>
+      <td>${pill(job.kind || '')}</td>
+      <td>${renderState(job.status)}</td>
+      <td class="mono">${htmlEscape(job.library_id || '')}</td>
+      <td class="muted">${htmlEscape(formatJobSources(job))}</td>
+      <td class="mono">${htmlEscape(formatJobProgress(job))}</td>
+      <td class="mono" style="color: var(--err);">${htmlEscape(job.error || '')}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="muted" style="text-align: center; padding: 32px;">当前没有运行中的任务</td></tr>';
   } catch (error) {
     setStatus(error.message, 'err');
   }
-}
-
-function renderState(value) {
-  const kind = value === 'done' || value === 'ready'
-    ? 'ok'
-    : value === 'failed' || value === 'error' || value === 'missing'
-      ? 'err'
-      : value === 'running' || value === 'stale' || value === 'locked'
-        ? 'warn'
-        : '';
-  return pill(value || '-', kind);
 }
 
 async function refreshRecords(resetPage = false) {
@@ -366,30 +708,224 @@ async function refreshRecords(resetPage = false) {
       search: document.getElementById('recordSearch').value.trim(),
     });
     const data = await fetchJSON(`/api/v1/admin/metadata/records?${params.toString()}`);
-    document.getElementById('recordSummary').textContent = `共 ${data.total} 条记录，第 ${data.page} 页，每页 ${data.page_size} 条`;
+    document.getElementById('recordSummary').textContent = `共 ${data.total} 条记录 · 第 ${data.page} 页 · 每页 ${data.page_size} 条`;
     state.lastRecordItems = data.items || [];
     const tbody = document.querySelector('#recordsTable tbody');
-    tbody.innerHTML = state.lastRecordItems.map(item => {
+    tbody.innerHTML = state.lastRecordItems.map((item) => {
       const encodedLocator = encodeLocator(item.locator || {});
       const key = locatorKey(item.locator || {});
       return `<tr>
         <td><input type="checkbox" data-record-key="${htmlEscape(key)}" onchange='toggleRecordSelection("${encodedLocator}", this.checked)'></td>
         <td>${renderState(item.state)}</td>
-        <td><div>${htmlEscape(item.title || item.title_jpn || '(empty)')}</div><div class="muted mono">${htmlEscape(item.subtitle || '')}</div></td>
-        <td><div class="mono">${htmlEscape(item.root_ref || '')}</div><div class="muted">${htmlEscape(item.folder_path || '')}</div></td>
+        <td><div style="font-weight: 500;">${htmlEscape(item.title || item.title_jpn || '(未匹配到标题)')}</div><div class="muted mono">${htmlEscape(item.subtitle || '')}</div></td>
+        <td><div class="mono">${htmlEscape(item.root_ref || '')}</div><div class="muted mono">${htmlEscape(item.folder_path || '')}</div></td>
         <td><div>${htmlEscape(item.source || '')}</div><div class="muted mono">${htmlEscape(item.source_id || '')}</div></td>
-        <td>${item.confidence == null ? '' : htmlEscape(item.confidence)}</td>
-        <td>${item.manual_locked ? pill('locked', 'warn') : pill('-', '')}</td>
-        <td><div class="actions">
+        <td class="mono">${item.confidence == null ? '-' : htmlEscape(item.confidence)}</td>
+        <td>${item.manual_locked ? pill('已锁定', 'warn') : pill('-', '')}</td>
+        <td><div class="actions" style="justify-content: flex-end;">
+          <button class="ghost" onclick='openSidecarEditor("${encodedLocator}")'>Sidecar</button>
           <button class="ghost" onclick='recordAction("${item.manual_locked ? 'unlock' : 'lock'}", "${encodedLocator}")'>${item.manual_locked ? '解锁' : '锁定'}</button>
-          <button class="warn" onclick='recordAction("reset", "${encodedLocator}")'>重置状态</button>
-          <button class="primary" onclick='recordAction("enrich", "${encodedLocator}")'>补一次</button>
+          <button class="ghost" onclick='recordAction("reset", "${encodedLocator}")'>重置</button>
+          <button class="ghost" style="color: var(--primary);" onclick='recordAction("enrich", "${encodedLocator}")'>补全</button>
         </div></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="8" class="muted">暂无记录</td></tr>';
+    }).join('') || '<tr><td colspan="8" class="muted" style="text-align: center; padding: 32px;">暂无符合条件的记录</td></tr>';
     syncRecordSelectionUI();
   } catch (error) {
     setStatus(error.message, 'err');
+  }
+}
+
+function cleanupPayload(dryRun) {
+  return {
+    library_id: currentMaintenanceLibrary(),
+    older_than_days: Number(document.getElementById('cleanupOlderThanDays').value || 0),
+    dry_run: dryRun,
+  };
+}
+
+function renderCleanupSummary(result, dryRun, payload) {
+  const scope = payload.library_id || '全部书库';
+  const olderThan = Number(payload.older_than_days || 0);
+  const prefix = dryRun ? 'Dry run 结果' : '清理结果';
+  document.getElementById('cleanupSummary').innerHTML = `<strong>${htmlEscape(prefix)}：</strong> 范围 [${htmlEscape(scope)}] · 保留 ${htmlEscape(olderThan)} 天 · 匹配到 <span style="color:var(--warn)">${htmlEscape(result.matched || 0)}</span> 条 · 删除 <span style="color:var(--ok)">${htmlEscape(result.deleted || 0)}</span> 条`;
+}
+
+async function runCleanup(dryRun) {
+  try {
+    if (!dryRun && !window.confirm('确认物理删除数据库中 missing 的记录吗？(建议先执行 Dry Run)')) return;
+    const payload = cleanupPayload(dryRun);
+    const data = await fetchJSON('/api/v1/admin/metadata/cleanup', { method: 'POST', body: JSON.stringify(payload) });
+    renderCleanupSummary(data, dryRun, payload);
+    if (dryRun) {
+      setStatus(`测试清理完成：共匹配到 ${data.matched || 0} 条 missing 数据`, 'ok');
+    } else {
+      setStatus(`清理完成：成功删除 ${data.deleted || 0}/${data.matched || 0} 条记录`, 'ok');
+      clearRecordSelection();
+    }
+    await refreshRecords(false);
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+function recordByLocator(locator) {
+  const key = locatorKey(locator || {});
+  return state.lastRecordItems.find((item) => locatorKey(item.locator || {}) === key) || null;
+}
+
+function guessTitleFromRecord(item) {
+  if (!item) return '';
+  if (item.title || item.title_jpn) return item.title || item.title_jpn;
+  const keywords = Array.isArray(item.hint?.keywords) ? [...item.hint.keywords] : [];
+  keywords.sort((left, right) => String(right).length - String(left).length);
+  if (keywords.length > 0) return keywords[0];
+  const parts = String(item.root_ref || item.folder_path || '').split('/').filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
+}
+
+function buildSidecarTemplate(item) {
+  const out = {};
+  const guessed = guessTitleFromRecord(item);
+  if (item?.root_type === 'series') {
+    if (guessed) out.series = guessed;
+    out.scan_mode = 'auto';
+  } else if (guessed) {
+    out.title = guessed;
+  }
+  if (item?.subtitle) out.subtitle = item.subtitle;
+  if (Array.isArray(item?.artists) && item.artists.length > 0) out.authors = item.artists;
+  if (Array.isArray(item?.tags) && item.tags.length > 0) out.tags = item.tags;
+  if (item?.language) out.language = item.language;
+  return JSON.stringify(out, null, 2);
+}
+
+function formatSidecarContent(raw, fallback) {
+  try {
+    return JSON.stringify(JSON.parse(raw || '{}'), null, 2);
+  } catch (_) {
+    return raw || fallback;
+  }
+}
+
+async function triggerRescanRequest(libraryID) {
+  return fetchJSON('/api/v1/admin/rescan', { method: 'POST', body: JSON.stringify({ library_id: libraryID || '' }) });
+}
+
+async function rescanSelectedLibrary() {
+  try {
+    const libraryID = currentMaintenanceLibrary();
+    if (!libraryID) {
+      setStatus('请先在"书库 (Library)"输入框中填写书库 ID', 'err');
+      return;
+    }
+    const data = await triggerRescanRequest(libraryID);
+    setStatus(`已提交该书库 Rescan 任务：${data.job_id}`, 'ok');
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+async function rescanAllLibraries() {
+  try {
+    if (!window.confirm('确认对系统全部书库触发扫描任务吗？系统开销可能较大。')) return;
+    const data = await triggerRescanRequest('');
+    setStatus(`已提交全局扫描任务：${data.job_id}`, 'ok');
+  } catch (error) {
+    setStatus(error.message, 'err');
+  }
+}
+
+function closeSidecar() {
+  sidecarModal.classList.add('hidden');
+  sidecarModal.setAttribute('aria-hidden', 'true');
+}
+
+async function openSidecarEditor(encodedLocator) {
+  const locator = decodeLocator(encodedLocator);
+  state.sidecar.locator = locator;
+  state.sidecar.item = recordByLocator(locator);
+  state.sidecar.info = null;
+  document.getElementById('sidecarMeta').textContent = `书库: ${locator.library_id || '-'} · 类型: ${locator.root_type || '-'} · 引用: ${locator.root_ref || '-'}`;
+  document.getElementById('sidecarPath').textContent = '加载中...';
+  document.getElementById('sidecarState').innerHTML = pill('加载中', 'warn');
+  document.getElementById('sidecarBackend').textContent = '-';
+  document.getElementById('sidecarEditor').value = '';
+  document.getElementById('sidecarSummary').textContent = '正在向服务器请求文件状态...';
+  sidecarModal.classList.remove('hidden');
+  sidecarModal.setAttribute('aria-hidden', 'false');
+  await loadSidecar();
+}
+
+async function loadSidecar() {
+  try {
+    const locator = state.sidecar.locator;
+    if (!locator) return;
+    const params = new URLSearchParams(locator);
+    const data = await fetchJSON(`/api/v1/admin/metadata/sidecar?${params.toString()}`);
+    state.sidecar.info = data;
+    document.getElementById('sidecarPath').textContent = data.display_path || data.sidecar_ref || '-';
+    document.getElementById('sidecarState').innerHTML = data.exists
+      ? pill(data.writable ? '已存在 / 可写' : '已存在 / 只读', data.writable ? 'ok' : 'warn')
+      : pill(data.writable ? '缺失 / 可写' : '缺失 / 只读', data.writable ? 'warn' : 'err');
+    document.getElementById('sidecarBackend').textContent = `${data.backend_kind || '-'}${data.writable ? '' : ' (受保护)'}`;
+    document.getElementById('sidecarEditor').value = data.exists
+      ? formatSidecarContent(data.content, buildSidecarTemplate(state.sidecar.item))
+      : buildSidecarTemplate(state.sidecar.item);
+    document.getElementById('sidecarSaveBtn').disabled = !data.writable;
+    document.getElementById('sidecarDeleteBtn').disabled = !data.writable || !data.exists;
+    document.getElementById('sidecarSummary').textContent = data.exists ? '文件读取成功。' : '本地暂无 Sidecar 文件，您可以直接编辑并保存以创建。';
+  } catch (error) {
+    document.getElementById('sidecarSummary').textContent = error.message;
+    setStatus(`读取失败: ${error.message}`, 'err');
+  }
+}
+
+function applySidecarTemplate() {
+  document.getElementById('sidecarEditor').value = buildSidecarTemplate(state.sidecar.item);
+  document.getElementById('sidecarSummary').textContent = '已自动生成模板结构。';
+}
+
+async function saveSidecar() {
+  try {
+    const locator = state.sidecar.locator;
+    if (!locator) return;
+    const content = document.getElementById('sidecarEditor').value.trim();
+    JSON.parse(content);
+    await fetchJSON('/api/v1/admin/metadata/sidecar', { method: 'PUT', body: JSON.stringify({ locator, content }) });
+    await loadSidecar();
+    document.getElementById('sidecarSummary').textContent = '保存成功。';
+    if (document.getElementById('sidecarAutoRescan').checked) {
+      const data = await triggerRescanRequest(locator.library_id || '');
+      setStatus(`Sidecar 已保存并触发重扫任务: ${data.job_id}`, 'ok');
+    } else {
+      setStatus('Sidecar 文件已成功保存到本地', 'ok');
+    }
+    await refreshRecords(false);
+  } catch (error) {
+    document.getElementById('sidecarSummary').textContent = `JSON 格式错误或保存失败: ${error.message}`;
+    setStatus('文件保存失败，请检查格式', 'err');
+  }
+}
+
+async function deleteSidecar() {
+  try {
+    const locator = state.sidecar.locator;
+    if (!locator) return;
+    if (!window.confirm('危险操作：确定要彻底删除该 Sidecar 配置文件吗？')) return;
+    await fetchJSON('/api/v1/admin/metadata/sidecar', { method: 'DELETE', body: JSON.stringify({ locator }) });
+    await loadSidecar();
+    document.getElementById('sidecarSummary').textContent = '文件已删除。';
+    if (document.getElementById('sidecarAutoRescan').checked) {
+      const data = await triggerRescanRequest(locator.library_id || '');
+      setStatus(`Sidecar 已移除并触发重扫任务: ${data.job_id}`, 'ok');
+    } else {
+      setStatus('Sidecar 文件已被删除', 'ok');
+    }
+    await refreshRecords(false);
+  } catch (error) {
+    document.getElementById('sidecarSummary').textContent = error.message;
+    setStatus(`删除失败: ${error.message}`, 'err');
   }
 }
 
@@ -404,17 +940,17 @@ async function recordAction(action, encodedLocator) {
     };
     const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
     if (Array.isArray(data.jobs) && data.jobs.length > 0) {
-      setStatus(`已创建 ${data.jobs.length} 个任务：${actionLabel(action)}`, 'ok');
+      setStatus(`单条记录 [${actionLabel(action)}]：分配了 ${data.jobs.length} 个任务队列`, 'ok');
       await refreshJobs();
     } else if (data.job?.job_id) {
-      setStatus(`已创建单条补全任务：${data.job.job_id}`, 'ok');
+      setStatus(`补全任务已投递：${data.job.job_id}`, 'ok');
       await refreshJobs();
     } else {
-      setStatus(`操作已完成：${actionLabel(action)}`, 'ok');
+      setStatus(`记录 [${actionLabel(action)}] 操作执行成功`, 'ok');
     }
     await refreshRecords(false);
   } catch (error) {
-    setStatus(error.message, 'err');
+    setStatus(`操作失败: ${error.message}`, 'err');
   }
 }
 
@@ -422,12 +958,12 @@ async function applyBatchRecordAction() {
   try {
     const action = document.getElementById('recordBatchAction').value;
     if (!action) {
-      setStatus('请先选择批量操作', 'err');
+      setStatus('操作取消：请先在下拉框选择批量动作类型', 'warn');
       return;
     }
     const locators = Object.values(state.selectedRecords);
     if (locators.length === 0) {
-      setStatus('请先选择至少一条记录', 'err');
+      setStatus('操作取消：当前未勾选任何记录', 'warn');
       return;
     }
     const payload = {
@@ -439,58 +975,67 @@ async function applyBatchRecordAction() {
     };
     const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
     if (Array.isArray(data.jobs) && data.jobs.length > 0) {
-      setStatus(`已创建 ${data.jobs.length} 个任务：${actionLabel(action)}`, 'ok');
+      setStatus(`批量触发任务 [${actionLabel(action)}] 成功：拆分为 ${data.jobs.length} 个队列`, 'ok');
       await refreshJobs();
     } else {
-      setStatus(`批量操作已完成：${actionLabel(action)}（${data.processed || locators.length} 条）`, 'ok');
+      setStatus(`批量操作执行完成：处理了 ${data.processed || locators.length} 条数据`, 'ok');
     }
     clearRecordSelection();
     await refreshRecords(false);
   } catch (error) {
-    setStatus(error.message, 'err');
+    setStatus(`批量处理中断: ${error.message}`, 'err');
   }
 }
 
 async function refreshSources() {
   try {
+    const prevEnrich = document.getElementById('enrichSource').value;
+    const prevBrowse = document.getElementById('browseSource').value;
     const data = await fetchJSON('/api/v1/admin/metadata/sources');
     state.sources = data.items || [];
-    document.getElementById('sourceDirLabel').textContent = `数据源目录：${data.directory || ''}`;
-    renderSourceSelectors();
+    document.getElementById('sourceDirLabel').innerHTML = `<span class="mono">数据源目录：${htmlEscape(data.directory || '未配置')}</span>`;
+    renderSourceSelectors(prevEnrich, prevBrowse);
     const tbody = document.querySelector('#sourcesTable tbody');
-    tbody.innerHTML = state.sources.map(source => `<tr>
-      <td><div>${htmlEscape(source.name)}</div><div class="muted mono">${htmlEscape(source.relative_path || '')}</div></td>
-      <td>${htmlEscape(source.chosen_table || '')}</td>
-      <td>${htmlEscape(source.row_count ?? '')}</td>
-      <td>${source.error ? pill(source.error, 'err') : pill('ready', 'ok')}</td>
-      <td><button class="ghost" ${source.error ? 'disabled' : ''} onclick='pickSource(${JSON.stringify(source.id)})'>选中</button></td>
-    </tr>`).join('') || '<tr><td colspan="5" class="muted">请将 sqlite 数据库放到 `data/externaldb` 目录</td></tr>';
+    tbody.innerHTML = state.sources.map((source) => `<tr>
+      <td><div style="font-weight: 500;">${htmlEscape(source.name)}</div><div class="muted mono">${htmlEscape(source.relative_path || '')}</div></td>
+      <td class="mono">${htmlEscape(source.chosen_table || '')}</td>
+      <td class="mono">${htmlEscape(source.row_count ?? '-')}</td>
+      <td>${source.error ? pill(source.error, 'err') : pill('就绪', 'ok')}</td>
+      <td><button class="ghost" ${source.error ? 'disabled' : ''} onclick='pickSource(${JSON.stringify(source.id)})' style="color: var(--primary);">去查询</button></td>
+    </tr>`).join('') || '<tr><td colspan="5" class="muted" style="text-align: center; padding: 32px;">目录为空。请将外部 sqlite 数据库存放至 `data/externaldb` 目录。</td></tr>';
   } catch (error) {
-    setStatus(error.message, 'err');
+    setStatus(`加载数据源失败: ${error.message}`, 'err');
   }
 }
 
-function renderSourceSelectors() {
+function renderSourceSelectors(prevEnrich = '', prevBrowse = '') {
   const enrichSource = document.getElementById('enrichSource');
-  const browseSource = document.getElementById('browseSource');
+  const browseSourceSelect = document.getElementById('browseSource');
   const options = state.sources
-    .filter(item => !item.error)
-    .map(item => `<option value="${htmlEscape(item.id)}">${htmlEscape(item.name)}</option>`)
+    .filter((item) => !item.error)
+    .map((item) => `<option value="${htmlEscape(item.id)}">${htmlEscape(item.name)}</option>`)
     .join('');
   enrichSource.innerHTML = `<option value="">自动选择可用数据源</option>${options}`;
-  browseSource.innerHTML = options ? options : '<option value="">暂无可浏览数据源</option>';
+  browseSourceSelect.innerHTML = options || '<option value="">暂无可用数据源</option>';
+  if (prevEnrich && Array.from(enrichSource.options).some((option) => option.value === prevEnrich)) {
+    enrichSource.value = prevEnrich;
+  }
+  if (prevBrowse && Array.from(browseSourceSelect.options).some((option) => option.value === prevBrowse)) {
+    browseSourceSelect.value = prevBrowse;
+  }
 }
 
 function pickSource(id) {
   document.getElementById('browseSource').value = id;
   browseSource();
+  document.getElementById('browseQuery').focus();
 }
 
 async function browseSource() {
   try {
     const sourceId = document.getElementById('browseSource').value;
     if (!sourceId) {
-      setStatus('请先选择一个数据源', 'err');
+      setStatus('查询失败：未选择或无可用数据源', 'warn');
       return;
     }
     const params = new URLSearchParams({
@@ -500,14 +1045,14 @@ async function browseSource() {
     });
     const data = await fetchJSON(`/api/v1/admin/metadata/sources/${encodeURIComponent(sourceId)}/records?${params.toString()}`);
     const browse = data.browse || {};
-    document.getElementById('browseSummary').textContent = `${data.source?.name || ''} · table=${browse.table || ''} · total=${browse.total || 0}`;
+    document.getElementById('browseSummary').innerHTML = `<strong>${htmlEscape(data.source?.name || '-')}</strong> · 数据表：<span class="mono">${htmlEscape(browse.table || '-')}</span> · 命中：${htmlEscape(browse.total || 0)} 条`;
     const head = document.querySelector('#browseTable thead');
     const body = document.querySelector('#browseTable tbody');
     const columns = browse.columns || [];
-    head.innerHTML = `<tr>${columns.map(col => `<th>${htmlEscape(col)}</th>`).join('')}</tr>`;
-    body.innerHTML = (browse.items || []).map(item => `<tr>${columns.map(col => `<td>${htmlEscape(item[col] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(columns.length, 1)}" class="muted">暂无匹配结果</td></tr>`;
+    head.innerHTML = `<tr>${columns.map((col) => `<th>${htmlEscape(col)}</th>`).join('')}</tr>`;
+    body.innerHTML = (browse.items || []).map((item) => `<tr>${columns.map((col) => `<td class="mono">${htmlEscape(item[col] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(columns.length, 1)}" class="muted" style="text-align: center; padding: 32px;">暂无匹配查询结果</td></tr>`;
   } catch (error) {
-    setStatus(error.message, 'err');
+    setStatus(`数据查询异常: ${error.message}`, 'err');
   }
 }
 
@@ -515,7 +1060,7 @@ async function boot() {
   updatePollButton();
   syncRecordSelectionUI();
   await Promise.all([refreshSources(), refreshJobs(), refreshRecords(false)]);
-  setStatus('管理页已就绪', 'ok');
+  setStatus('控制面板初始化完成', 'ok');
 }
 
 setInterval(() => {
@@ -528,7 +1073,7 @@ setInterval(() => {
   refreshRecords(false);
 }, 8000);
 
-boot().catch(error => setStatus(error.message, 'err'));
+boot().catch((error) => setStatus(`系统启动失败: ${error.message}`, 'err'));
 </script>
 </body>
 </html>
