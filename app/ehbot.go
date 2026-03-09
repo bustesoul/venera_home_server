@@ -740,3 +740,110 @@ func (c *ehBotClient) doJSON(ctx context.Context, method string, endpoint string
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
+
+type EHBotLibraryOption struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
+type EHBotConfigView struct {
+	Writable               bool                 `json:"writable"`
+	ConfigPath             string               `json:"config_path,omitempty"`
+	RewriteWarning         string               `json:"rewrite_warning,omitempty"`
+	PullTokenConfigured    bool                 `json:"pull_token_configured"`
+	Enabled                bool                 `json:"enabled"`
+	BaseURL                string               `json:"base_url,omitempty"`
+	ConsumerID             string               `json:"consumer_id,omitempty"`
+	TargetID               string               `json:"target_id,omitempty"`
+	TargetLibraryID        string               `json:"target_library_id,omitempty"`
+	TargetSubdir           string               `json:"target_subdir,omitempty"`
+	PollIntervalSeconds    int                  `json:"poll_interval_seconds"`
+	LeaseSeconds           int                  `json:"lease_seconds"`
+	DownloadTimeoutSeconds int                  `json:"download_timeout_seconds"`
+	AutoRescan             bool                 `json:"auto_rescan"`
+	MaxJobsPerPoll         int                  `json:"max_jobs_per_poll"`
+	Libraries              []EHBotLibraryOption `json:"libraries,omitempty"`
+}
+
+type EHBotConfigUpdate struct {
+	Enabled                bool   `json:"enabled"`
+	BaseURL                string `json:"base_url"`
+	PullToken              string `json:"pull_token,omitempty"`
+	ClearPullToken         bool   `json:"clear_pull_token,omitempty"`
+	ConsumerID             string `json:"consumer_id"`
+	TargetID               string `json:"target_id"`
+	TargetLibraryID        string `json:"target_library_id"`
+	TargetSubdir           string `json:"target_subdir"`
+	PollIntervalSeconds    int    `json:"poll_interval_seconds"`
+	LeaseSeconds           int    `json:"lease_seconds"`
+	DownloadTimeoutSeconds int    `json:"download_timeout_seconds"`
+	AutoRescan             bool   `json:"auto_rescan"`
+	MaxJobsPerPoll         int    `json:"max_jobs_per_poll"`
+}
+
+func (a *App) restartEHBotService() {
+	a.stopEHBotService()
+	a.startEHBotService()
+}
+
+func (a *App) EHBotConfigView() EHBotConfigView {
+	cfg := normalizeEHBotConfig(a.cfg.EHBot)
+	libraries := make([]EHBotLibraryOption, 0, len(a.cfg.Libraries))
+	for _, lib := range a.cfg.Libraries {
+		libraries = append(libraries, EHBotLibraryOption{ID: lib.ID, Name: lib.Name, Kind: lib.Kind})
+	}
+	return EHBotConfigView{
+		Writable:               strings.TrimSpace(a.cfg.SourcePath) != "",
+		ConfigPath:             a.cfg.SourcePath,
+		RewriteWarning:         "Saving rewrites the current server config file.",
+		PullTokenConfigured:    strings.TrimSpace(cfg.PullToken) != "",
+		Enabled:                cfg.Enabled,
+		BaseURL:                cfg.BaseURL,
+		ConsumerID:             cfg.ConsumerID,
+		TargetID:               cfg.TargetID,
+		TargetLibraryID:        cfg.TargetLibraryID,
+		TargetSubdir:           cfg.TargetSubdir,
+		PollIntervalSeconds:    cfg.PollIntervalSeconds,
+		LeaseSeconds:           cfg.LeaseSeconds,
+		DownloadTimeoutSeconds: cfg.DownloadTimeoutSeconds,
+		AutoRescan:             cfg.AutoRescan,
+		MaxJobsPerPoll:         cfg.MaxJobsPerPoll,
+		Libraries:              libraries,
+	}
+}
+
+func (a *App) UpdateEHBotConfig(_ context.Context, update EHBotConfigUpdate) (EHBotConfigView, error) {
+	path := strings.TrimSpace(a.cfg.SourcePath)
+	if path == "" {
+		return a.EHBotConfigView(), fmt.Errorf("config source path is not available")
+	}
+	previous := a.cfg.EHBot
+	next := configpkg.EHBotConfig{
+		Enabled:                update.Enabled,
+		BaseURL:                strings.TrimSpace(update.BaseURL),
+		PullToken:              strings.TrimSpace(update.PullToken),
+		ConsumerID:             strings.TrimSpace(update.ConsumerID),
+		TargetID:               strings.TrimSpace(update.TargetID),
+		TargetLibraryID:        strings.TrimSpace(update.TargetLibraryID),
+		TargetSubdir:           strings.TrimSpace(update.TargetSubdir),
+		PollIntervalSeconds:    update.PollIntervalSeconds,
+		LeaseSeconds:           update.LeaseSeconds,
+		DownloadTimeoutSeconds: update.DownloadTimeoutSeconds,
+		AutoRescan:             update.AutoRescan,
+		MaxJobsPerPoll:         update.MaxJobsPerPoll,
+	}
+	if next.PullToken == "" && !update.ClearPullToken {
+		next.PullToken = previous.PullToken
+	}
+	if update.ClearPullToken {
+		next.PullToken = ""
+	}
+	a.cfg.EHBot = normalizeEHBotConfig(next)
+	if err := configpkg.SaveConfig(path, a.cfg); err != nil {
+		a.cfg.EHBot = previous
+		return a.EHBotConfigView(), err
+	}
+	a.restartEHBotService()
+	return a.EHBotConfigView(), nil
+}

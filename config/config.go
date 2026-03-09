@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,11 +11,12 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig
-	Scan      ScanConfig
-	Metadata  MetadataConfig
-	EHBot     EHBotConfig
-	Libraries []LibraryConfig
+	SourcePath string
+	Server     ServerConfig
+	Scan       ScanConfig
+	Metadata   MetadataConfig
+	EHBot      EHBotConfig
+	Libraries  []LibraryConfig
 }
 
 type ServerConfig struct {
@@ -75,6 +77,7 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 	cfg := &Config{
+		SourcePath: path,
 		Server: ServerConfig{
 			Listen:        "127.0.0.1:34123",
 			DataDir:       filepath.Join(filepath.Dir(path), "data"),
@@ -180,6 +183,145 @@ func LoadConfig(path string) (*Config, error) {
 	return cfg, nil
 }
 
+func SaveConfig(path string, cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		path = strings.TrimSpace(cfg.SourcePath)
+	}
+	if path == "" {
+		return fmt.Errorf("config source path is empty")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data := renderConfig(cfg)
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return err
+	}
+	_ = os.Remove(path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	cfg.SourcePath = path
+	return nil
+}
+
+func renderConfig(cfg *Config) []byte {
+	var buf bytes.Buffer
+	writeSectionHeader(&buf, "server")
+	writeStringKV(&buf, "listen", cfg.Server.Listen)
+	writeStringKV(&buf, "token", cfg.Server.Token)
+	writeStringKV(&buf, "data_dir", cfg.Server.DataDir)
+	writeStringKV(&buf, "cache_dir", cfg.Server.CacheDir)
+	writeIntKV(&buf, "memory_cache_mb", cfg.Server.MemoryCacheMB)
+	writeStringKV(&buf, "log_level", cfg.Server.LogLevel)
+	buf.WriteString("\n")
+
+	writeSectionHeader(&buf, "scan")
+	writeIntKV(&buf, "concurrency", cfg.Scan.Concurrency)
+	writeBoolKV(&buf, "extract_archives", cfg.Scan.ExtractArchives)
+	writeBoolKV(&buf, "watch_local", cfg.Scan.WatchLocal)
+	writeIntKV(&buf, "rescan_interval_minutes", cfg.Scan.RescanIntervalMinutes)
+	buf.WriteString("\n")
+
+	writeSectionHeader(&buf, "metadata")
+	writeBoolKV(&buf, "read_comicinfo", cfg.Metadata.ReadComicInfo)
+	writeBoolKV(&buf, "read_sidecar", cfg.Metadata.ReadSidecar)
+	writeBoolKV(&buf, "allow_remote_fetch", cfg.Metadata.AllowRemoteFetch)
+	writeStringKV(&buf, "database_path", cfg.Metadata.DatabasePath)
+	buf.WriteString("\n")
+
+	writeSectionHeader(&buf, "ehbot")
+	writeBoolKV(&buf, "enabled", cfg.EHBot.Enabled)
+	writeStringKV(&buf, "base_url", cfg.EHBot.BaseURL)
+	writeStringKV(&buf, "pull_token", cfg.EHBot.PullToken)
+	writeStringKV(&buf, "consumer_id", cfg.EHBot.ConsumerID)
+	writeStringKV(&buf, "target_id", cfg.EHBot.TargetID)
+	writeStringKV(&buf, "target_library_id", cfg.EHBot.TargetLibraryID)
+	writeStringKV(&buf, "target_subdir", cfg.EHBot.TargetSubdir)
+	writeIntKV(&buf, "poll_interval_seconds", cfg.EHBot.PollIntervalSeconds)
+	writeIntKV(&buf, "lease_seconds", cfg.EHBot.LeaseSeconds)
+	writeIntKV(&buf, "download_timeout_seconds", cfg.EHBot.DownloadTimeoutSeconds)
+	writeBoolKV(&buf, "auto_rescan", cfg.EHBot.AutoRescan)
+	writeIntKV(&buf, "max_jobs_per_poll", cfg.EHBot.MaxJobsPerPoll)
+	buf.WriteString("\n")
+
+	for _, lib := range cfg.Libraries {
+		buf.WriteString("[[libraries]]\n")
+		writeStringKV(&buf, "id", lib.ID)
+		writeStringKV(&buf, "name", lib.Name)
+		writeStringKV(&buf, "kind", lib.Kind)
+		if lib.Root != "" {
+			writeStringKV(&buf, "root", lib.Root)
+		}
+		if lib.Host != "" {
+			writeStringKV(&buf, "host", lib.Host)
+		}
+		if lib.Share != "" {
+			writeStringKV(&buf, "share", lib.Share)
+		}
+		if lib.Path != "" {
+			writeStringKV(&buf, "path", lib.Path)
+		}
+		if lib.Username != "" {
+			writeStringKV(&buf, "username", lib.Username)
+		}
+		if lib.PasswordEnv != "" {
+			writeStringKV(&buf, "password_env", lib.PasswordEnv)
+		}
+		if lib.URL != "" {
+			writeStringKV(&buf, "url", lib.URL)
+		}
+		writeStringKV(&buf, "scan_mode", lib.ScanMode)
+		buf.WriteString("\n")
+	}
+	return buf.Bytes()
+}
+
+func writeSectionHeader(buf *bytes.Buffer, name string) {
+	buf.WriteString("[")
+	buf.WriteString(name)
+	buf.WriteString("]\n")
+}
+
+func writeStringKV(buf *bytes.Buffer, key string, value string) {
+	buf.WriteString(key)
+	buf.WriteString(" = ")
+	buf.WriteString(quoteValue(value))
+	buf.WriteString("\n")
+}
+
+func writeIntKV(buf *bytes.Buffer, key string, value int) {
+	buf.WriteString(key)
+	buf.WriteString(" = ")
+	buf.WriteString(strconv.Itoa(value))
+	buf.WriteString("\n")
+}
+
+func writeBoolKV(buf *bytes.Buffer, key string, value bool) {
+	buf.WriteString(key)
+	buf.WriteString(" = ")
+	if value {
+		buf.WriteString("true")
+	} else {
+		buf.WriteString("false")
+	}
+	buf.WriteString("\n")
+}
+
+func quoteValue(value string) string {
+	value = strings.ReplaceAll(value, "\\", "\\\\")
+	value = strings.ReplaceAll(value, "\r", " ")
+	value = strings.ReplaceAll(value, "\n", " ")
+	value = strings.ReplaceAll(value, `"`, `\"`)
+	return "\"" + value + "\""
+}
+
 func stripComments(line string) string {
 	inQuote := false
 	for i, r := range line {
@@ -198,6 +340,9 @@ func stripComments(line string) string {
 func parseValue(raw string) any {
 	raw = strings.TrimSpace(raw)
 	if len(raw) >= 2 && raw[0] == '"' && raw[len(raw)-1] == '"' {
+		if unquoted, err := strconv.Unquote(raw); err == nil {
+			return unquoted
+		}
 		return raw[1 : len(raw)-1]
 	}
 	if raw == "true" || raw == "false" {

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	configpkg "venera_home_server/config"
 	httpapipkg "venera_home_server/httpapi"
 	"venera_home_server/tests/testkit"
 )
@@ -202,4 +203,143 @@ func stringValueAdmin(value any) string {
 		return raw
 	}
 	return ""
+}
+
+func TestEHBotConfigEndpointUpdatesConfigFile(t *testing.T) {
+	root := t.TempDir()
+	comicsRoot := filepath.Join(root, "comics")
+	if err := os.MkdirAll(comicsRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll comicsRoot: %v", err)
+	}
+	cfgPath := filepath.Join(root, "server.toml")
+	seed := &configpkg.Config{
+		SourcePath: cfgPath,
+		Server: configpkg.ServerConfig{
+			Listen:        "127.0.0.1:0",
+			Token:         "test-token",
+			DataDir:       filepath.Join(root, "data"),
+			CacheDir:      filepath.Join(root, "cache"),
+			MemoryCacheMB: 16,
+			LogLevel:      "info",
+		},
+		Scan:     configpkg.ScanConfig{Concurrency: 1, ExtractArchives: true},
+		Metadata: configpkg.MetadataConfig{ReadComicInfo: true, ReadSidecar: true},
+		EHBot: configpkg.EHBotConfig{
+			Enabled:                false,
+			BaseURL:                "https://old.example",
+			PullToken:              "old-secret",
+			ConsumerID:             "consumer-old",
+			TargetID:               "target-old",
+			TargetLibraryID:        "local-main",
+			TargetSubdir:           `EH\Inbox`,
+			PollIntervalSeconds:    60,
+			LeaseSeconds:           300,
+			DownloadTimeoutSeconds: 600,
+			AutoRescan:             true,
+			MaxJobsPerPoll:         1,
+		},
+		Libraries: []configpkg.LibraryConfig{{ID: "local-main", Name: "Local", Kind: "local", Root: comicsRoot, ScanMode: "auto"}},
+	}
+	if err := configpkg.SaveConfig(cfgPath, seed); err != nil {
+		t.Fatalf("SaveConfig seed: %v", err)
+	}
+	cfg, err := configpkg.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	viewResp := testkit.GetJSON(t, srv.URL+"/api/v1/admin/ehbot/config", cfg.Server.Token)
+	view := viewResp["data"].(map[string]any)
+	if writable, _ := view["writable"].(bool); !writable {
+		t.Fatalf("expected writable config view, got %#v", view)
+	}
+	if configured, _ := view["pull_token_configured"].(bool); !configured {
+		t.Fatalf("expected configured pull token, got %#v", view)
+	}
+	if view["target_library_id"] != "local-main" {
+		t.Fatalf("unexpected target library: %#v", view)
+	}
+	if libs, _ := view["libraries"].([]any); len(libs) != 1 {
+		t.Fatalf("expected 1 library option, got %#v", view["libraries"])
+	}
+
+	payload := map[string]any{
+		"enabled":                  false,
+		"base_url":                 "https://new.example",
+		"consumer_id":              "consumer-new",
+		"target_id":                "target-new",
+		"target_library_id":        "local-main",
+		"target_subdir":            "Imported/EH",
+		"poll_interval_seconds":    120,
+		"lease_seconds":            900,
+		"download_timeout_seconds": 1800,
+		"auto_rescan":              false,
+		"max_jobs_per_poll":        3,
+	}
+	updated := putJSON(t, srv.URL+"/api/v1/admin/ehbot/config", cfg.Server.Token, payload)
+	updatedView := updated["data"].(map[string]any)
+	if updatedView["base_url"] != "https://new.example" || updatedView["consumer_id"] != "consumer-new" {
+		t.Fatalf("unexpected updated view: %#v", updatedView)
+	}
+	if configured, _ := updatedView["pull_token_configured"].(bool); !configured {
+		t.Fatalf("expected existing pull token to be preserved, got %#v", updatedView)
+	}
+	body, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile config: %v", err)
+	}
+	if !strings.Contains(string(body), `pull_token = "old-secret"`) {
+		t.Fatalf("expected existing token to stay in config, got %q", string(body))
+	}
+	status := testkit.GetJSON(t, srv.URL+"/api/v1/admin/ehbot/status", cfg.Server.Token)["data"].(map[string]any)
+	if status["base_url"] != "https://new.example" || status["target_subdir"] != "Imported/EH" {
+		t.Fatalf("status not refreshed after save: %#v", status)
+	}
+
+	payload["clear_pull_token"] = true
+	cleared := putJSON(t, srv.URL+"/api/v1/admin/ehbot/config", cfg.Server.Token, payload)
+	clearedView := cleared["data"].(map[string]any)
+	if configured, _ := clearedView["pull_token_configured"].(bool); configured {
+		t.Fatalf("expected token to be cleared, got %#v", clearedView)
+	}
+	reloaded, err := configpkg.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadConfig after clear: %v", err)
+	}
+	if reloaded.EHBot.PullToken != "" {
+		t.Fatalf("expected empty pull token after clear, got %#v", reloaded.EHBot)
+	}
+}
+
+func putJSON(t *testing.T, url, token string, payload map[string]any) map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("unexpected status %d: %s", res.StatusCode, string(body))
+	}
+	var out map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }

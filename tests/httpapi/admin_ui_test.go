@@ -45,8 +45,12 @@ func TestAdminHomePageUsesReadableUTF8Text(t *testing.T) {
 		"sidecarModal",
 		"/api/v1/admin/metadata/sidecar",
 		"EH Bot Pull / Import",
+		"botTabBtn",
+		"metadataTabBtn",
 		"runEHBotPullBtn",
+		"saveEHBotConfigBtn",
 		"/api/v1/admin/ehbot/status",
+		"/api/v1/admin/ehbot/config",
 	} {
 		if !strings.Contains(text, needle) {
 			t.Fatalf("expected admin page to contain %q, got %q", needle, text)

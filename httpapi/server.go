@@ -95,6 +95,7 @@ func newHTTPServer(app *apppkg.App, logger *log.Logger) http.Handler {
 	mux.HandleFunc("/api/v1/admin/metadata/cleanup", srv.auth(srv.handleMetadataCleanup))
 	mux.HandleFunc("/api/v1/admin/metadata/sidecar", srv.auth(srv.handleMetadataSidecar))
 	mux.HandleFunc("/api/v1/admin/ehbot/status", srv.auth(srv.handleEHBotStatus))
+	mux.HandleFunc("/api/v1/admin/ehbot/config", srv.auth(srv.handleEHBotConfig))
 	mux.HandleFunc("/api/v1/admin/ehbot/jobs", srv.auth(srv.handleEHBotJobs))
 	mux.HandleFunc("/api/v1/admin/ehbot/pull/run-once", srv.auth(srv.handleEHBotRunOnce))
 	mux.HandleFunc("/media/", srv.handleMedia)

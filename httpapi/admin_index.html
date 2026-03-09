@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -204,6 +204,13 @@
 
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.85em; word-break: normal; overflow-wrap: anywhere; }
     .help { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; }
+    .tab-nav { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+    .tab-btn { min-width: 120px; }
+    .tab-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .tab-panel { display: none; gap: 24px; }
+    .tab-panel.active { display: grid; }
+    .field-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 16px; }
+    .field-span-2 { grid-column: span 2; }
     .hidden { display: none !important; }
 
     @keyframes fadeIn { from { opacity: 0; backdrop-filter: blur(0); } to { opacity: 1; backdrop-filter: blur(6px); } }
@@ -255,6 +262,7 @@
       .row { gap: 10px; }
       label { min-width: 100%; }
       .summary-grid { grid-template-columns: 1fr; }
+      .field-span-2 { grid-column: span 1; }
     }
   </style>
 </head>
@@ -263,19 +271,26 @@
   <div class="row">
     <div>
       <h1>Venera Metadata Admin</h1>
-      <div class="muted" style="margin-top: 4px;">绠＄悊鏈湴 metadata store銆佸閮ㄦ暟鎹簮锛屼互鍙婃墜鍔ㄨˉ鍏ㄤ换鍔°€?/div>
+      <div class="muted" style="margin-top: 4px;">缁狅紕鎮婇張顒€婀?metadata store閵嗕礁顦婚柈銊︽殶閹诡喗绨敍灞间簰閸欏﹥澧滈崝銊ㄋ夐崗銊ゆ崲閸斅扳偓?/div>
     </div>
     <div class="spacer"></div>
     <label style="flex: 0 1 320px; flex-direction: row; align-items: center; gap: 12px;">
       <span style="font-size: 14px;">Bearer Token</span>
-      <input id="tokenInput" type="password" placeholder="濉啓鏈嶅姟绔?Token" style="width: min(220px, 100%);">
+      <input id="tokenInput" type="password" placeholder="婵夘偄鍟撻張宥呭缁?Token" style="width: min(220px, 100%);">
     </label>
-    <button id="saveTokenBtn" class="ghost">淇濆瓨閰嶇疆</button>
-    <button id="themeToggleBtn" class="ghost">鍒囨崲娴呰壊</button>
+    <button id="saveTokenBtn" class="ghost">娣囨繂鐡ㄩ柊宥囩枂</button>
+    <button id="themeToggleBtn" class="ghost">閸掑洦宕插ù鍛板</button>
   </div>
 </header>
 <main>
-  <div id="statusBox" class="status">绯荤粺宸插氨缁紝绛夊緟鎿嶄綔</div>
+  <div id="statusBox" class="status">缁崵绮哄鎻掓皑缂侇亷绱濈粵澶婄窡閹垮秳缍?/div>
+
+  <nav class="tab-nav" aria-label="Admin sections">
+    <button id="botTabBtn" class="tab-btn active" data-tab="bot">EH Bot</button>
+    <button id="metadataTabBtn" class="tab-btn" data-tab="metadata">Metadata</button>
+  </nav>
+
+  <div id="botTabPanel" class="tab-panel active">
 
   <section class="panel wide">
     <div class="row" style="margin-bottom: 16px;">
@@ -287,6 +302,33 @@
       <button id="runEHBotPullBtn" class="primary">Run Once</button>
       <button id="refreshEHBotBtn" class="ghost">Refresh EH Bot</button>
     </div>
+    <div class="row" style="margin-top: 0; margin-bottom: 8px;">
+      <strong>EH Bot Config</strong>
+      <div class="spacer"></div>
+      <button id="loadEHBotConfigBtn" class="ghost">Reload Config</button>
+      <button id="saveEHBotConfigBtn" class="primary">Save Config</button>
+    </div>
+    <div class="field-grid" id="ehbotConfigForm">
+      <label class="checkbox field-span-2" style="min-width: 0; align-items: center;"><input id="ehbotConfigEnabled" type="checkbox"> Enable automatic EH Bot polling</label>
+      <label class="field-span-2"><span>Base URL</span><input id="ehbotConfigBaseURL" type="text" placeholder="https://ehbot.example.com"></label>
+      <label><span>Consumer ID</span><input id="ehbotConfigConsumerID" type="text" placeholder="home-server"></label>
+      <label><span>Target ID</span><input id="ehbotConfigTargetID" type="text" placeholder="home-server"></label>
+      <label><span>Target Library</span><select id="ehbotConfigTargetLibraryID"></select></label>
+      <label><span>Target Subdir</span><input id="ehbotConfigTargetSubdir" type="text" placeholder="EH Inbox"></label>
+      <label><span>Poll Interval (s)</span><input id="ehbotConfigPollIntervalSeconds" type="number" min="1" step="1"></label>
+      <label><span>Lease Seconds</span><input id="ehbotConfigLeaseSeconds" type="number" min="1" step="1"></label>
+      <label><span>Download Timeout (s)</span><input id="ehbotConfigDownloadTimeoutSeconds" type="number" min="1" step="1"></label>
+      <label><span>Max Jobs Per Poll</span><input id="ehbotConfigMaxJobsPerPoll" type="number" min="1" step="1"></label>
+      <label class="checkbox" style="min-width: 0; align-items: center;"><input id="ehbotConfigAutoRescan" type="checkbox"> Auto rescan after import</label>
+      <label class="checkbox" style="min-width: 0; align-items: center;"><input id="ehbotConfigClearPullToken" type="checkbox"> Clear stored pull token</label>
+      <label class="field-span-2"><span>Pull Token</span><input id="ehbotConfigPullToken" type="password" placeholder="Leave blank to keep current token"></label>
+    </div>
+    <div class="row" style="margin-top: 12px;">
+      <div class="muted">Config file: <span id="ehbotConfigPath" class="mono">-</span></div>
+      <div id="ehbotConfigWritableState">-</div>
+      <div id="ehbotPullTokenState">-</div>
+    </div>
+    <div class="help" id="ehbotConfigSaveSummary">Leave pull token blank to keep the current secret. Enable clear token to remove it.</div>
     <div class="summary-grid">
       <div class="summary-card"><div class="muted">Mode</div><div id="ehbotRunState">-</div></div>
       <div class="summary-card"><div class="muted">Target</div><div id="ehbotTarget">-</div></div>
@@ -302,12 +344,15 @@
       </table>
     </div>
   </section>
+  </div>
+
+  <div id="metadataTabPanel" class="tab-panel">
   <div class="grid">
     <section class="panel">
-      <h2>鎵归噺琛ュ叏浠诲姟锛圔atch Enrich锛?/h2>
+      <h2>閹靛綊鍣虹悰銉ュ弿娴犺濮熼敍鍦攁tch Enrich閿?/h2>
       <div class="row">
-        <label><span>涔﹀簱 (Library)</span><input id="enrichLibrary" placeholder="渚嬪 local-main"></label>
-        <label><span>鐘舵€?(State)</span>
+        <label><span>娑旓箑绨?(Library)</span><input id="enrichLibrary" placeholder="娓氬顩?local-main"></label>
+        <label><span>閻樿埖鈧?(State)</span>
           <select id="enrichState">
             <option value="empty">empty</option>
             <option value="ready">ready</option>
@@ -316,27 +361,27 @@
             <option value="missing">missing</option>
           </select>
         </label>
-        <label><span>鏁版嵁婧?(Source)</span><select id="enrichSource"><option value="">鑷姩閫夋嫨鍙敤鏁版嵁婧?/option></select></label>
+        <label><span>閺佺増宓佸┃?(Source)</span><select id="enrichSource"><option value="">閼奉亜濮╅柅澶嬪閸欘垳鏁ら弫鐗堝祦濠?/option></select></label>
       </div>
       <div class="row">
-        <label><span>涓婇檺 (Limit)</span><input id="enrichLimit" type="number" value="200" min="1" max="2000"></label>
-        <label><span>鏈€浣庡垎鏁?(Min Score)</span><input id="enrichScore" type="number" value="0.72" min="0" max="1" step="0.01"></label>
-        <label><span>骞跺彂鏁?(Workers)</span><input id="enrichWorkers" type="number" value="3" min="1" max="4"></label>
+        <label><span>娑撳﹪妾?(Limit)</span><input id="enrichLimit" type="number" value="200" min="1" max="2000"></label>
+        <label><span>閺堚偓娴ｅ骸鍨庨弫?(Min Score)</span><input id="enrichScore" type="number" value="0.72" min="0" max="1" step="0.01"></label>
+        <label><span>楠炶泛褰傞弫?(Workers)</span><input id="enrichWorkers" type="number" value="3" min="1" max="4"></label>
       </div>
       <div class="row" style="margin-top: 24px;">
-        <button id="triggerEnrichBtn" class="primary">寮€濮嬭ˉ鍏ㄤ换鍔?/button>
-        <button id="refreshSourcesBtn" class="ghost">鍒锋柊鏁版嵁婧?/button>
-        <button id="refreshJobsBtn" class="ghost">鍒锋柊浠诲姟鐘舵€?/button>
+        <button id="triggerEnrichBtn" class="primary">瀵偓婵藟閸忋劋鎹㈤崝?/button>
+        <button id="refreshSourcesBtn" class="ghost">閸掗攱鏌婇弫鐗堝祦濠?/button>
+        <button id="refreshJobsBtn" class="ghost">閸掗攱鏌婃禒璇插閻樿埖鈧?/button>
       </div>
     </section>
 
     <section class="panel">
-      <h2>鍏冩暟鎹鐞嗭紙Metadata Records锛?/h2>
+      <h2>閸忓啯鏆熼幑顔绢吀閻炲棴绱橫etadata Records閿?/h2>
       <div class="row">
-        <label><span>涔﹀簱 (Library)</span><input id="recordLibrary" placeholder="鐣欑┖琛ㄧず鍏ㄩ儴涔﹀簱"></label>
-        <label><span>鐘舵€?(State)</span>
+        <label><span>娑旓箑绨?(Library)</span><input id="recordLibrary" placeholder="閻ｆ瑧鈹栫悰銊с仛閸忋劑鍎存稊锕€绨?></label>
+        <label><span>閻樿埖鈧?(State)</span>
           <select id="recordState">
-            <option value="">鍏ㄩ儴鐘舵€?/option>
+            <option value="">閸忋劑鍎撮悩鑸碘偓?/option>
             <option value="empty">empty</option>
             <option value="ready">ready</option>
             <option value="stale">stale</option>
@@ -345,78 +390,79 @@
             <option value="locked">locked</option>
           </select>
         </label>
-        <label><span>鎼滅储鍐呭</span><input id="recordSearch" placeholder="鏍囬 / 璺緞 / 鏉ユ簮妯＄硦鎼滅储"></label>
+        <label><span>閹兼粎鍌ㄩ崘鍛啇</span><input id="recordSearch" placeholder="閺嶅洭顣?/ 鐠侯垰绶?/ 閺夈儲绨Ο锛勭ˇ閹兼粎鍌?></label>
       </div>
       <div class="row">
-        <label><span>椤电爜</span><input id="recordPage" type="number" value="1" min="1"></label>
-        <label><span>姣忛〉鏉℃暟</span><input id="recordLimit" type="number" value="50" min="1" max="200"></label>
-        <label style="justify-content: flex-end;"><button id="queryRecordsBtn" class="primary" style="width: 100%;">鏌ヨ璁板綍</button></label>
+        <label><span>妞ょ數鐖?/span><input id="recordPage" type="number" value="1" min="1"></label>
+        <label><span>濮ｅ繘銆夐弶鈩冩殶</span><input id="recordLimit" type="number" value="50" min="1" max="200"></label>
+        <label style="justify-content: flex-end;"><button id="queryRecordsBtn" class="primary" style="width: 100%;">閺屻儴顕楃拋鏉跨秿</button></label>
       </div>
       <div class="row" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
-        <label><span>missing 淇濈暀澶╂暟</span><input id="cleanupOlderThanDays" type="number" value="0" min="0"></label>
-        <button id="rescanLibraryBtn" class="ghost">閲嶆壂褰撳墠涔﹀簱</button>
-        <button id="rescanAllBtn" class="ghost">閲嶆壂鍏ㄩ儴</button>
-        <button id="cleanupDryRunBtn" class="ghost">娴嬭瘯娓呯悊 (Dry Run)</button>
-        <button id="cleanupExecuteBtn" class="warn">娓呯悊澶辨晥璁板綍</button>
+        <label><span>missing 娣囨繄鏆€婢垛晜鏆?/span><input id="cleanupOlderThanDays" type="number" value="0" min="0"></label>
+        <button id="rescanLibraryBtn" class="ghost">闁插秵澹傝ぐ鎾冲娑旓箑绨?/button>
+        <button id="rescanAllBtn" class="ghost">闁插秵澹傞崗銊╁劥</button>
+        <button id="cleanupDryRunBtn" class="ghost">濞村鐦〒鍛倞 (Dry Run)</button>
+        <button id="cleanupExecuteBtn" class="warn">濞撳懐鎮婃径杈ㄦ櫏鐠佹澘缍?/button>
       </div>
-      <div class="help" id="cleanupSummary" style="margin-top: 12px;">娓呯悊浠呭鐞?missing 璁板綍锛屽缓璁厛璇曡繍琛岋紙Dry Run锛夛紱閲嶆壂浣跨敤涓婃柟涔﹀簱鏉′欢銆?/div>
+      <div class="help" id="cleanupSummary" style="margin-top: 12px;">濞撳懐鎮婃禒鍛槱閻?missing 鐠佹澘缍嶉敍灞界紦鐠侇喖鍘涚拠鏇＄箥鐞涘矉绱橠ry Run閿涘绱遍柌宥嗗娴ｈ法鏁ゆ稉濠冩煙娑旓箑绨遍弶鈥叉閵?/div>
       <div class="help" id="recordSummary"></div>
     </section>
   </div>
 
   <section class="panel wide">
     <div class="row" style="margin-bottom: 16px;">
-      <h2>鍚庡彴浠诲姟锛圝obs锛?/h2>
+      <h2>閸氬骸褰存禒璇插閿涘湞obs閿?/h2>
       <div class="spacer"></div>
-      <button id="togglePollBtn" class="ghost">鏆傚仠鑷姩鍒锋柊</button>
+      <button id="togglePollBtn" class="ghost">閺嗗倸浠犻懛顏勫З閸掗攱鏌?/button>
     </div>
-    <div class="scroll"><table id="jobsTable"><thead><tr><th>浠诲姟 ID</th><th>绫诲瀷</th><th>鐘舵€?/th><th>涔﹀簱</th><th>鏉ユ簮</th><th>杩涘害</th><th>閿欒鏃ュ織</th></tr></thead><tbody></tbody></table></div>
+    <div class="scroll"><table id="jobsTable"><thead><tr><th>娴犺濮?ID</th><th>缁鐎?/th><th>閻樿埖鈧?/th><th>娑旓箑绨?/th><th>閺夈儲绨?/th><th>鏉╂稑瀹?/th><th>闁挎瑨顕ら弮銉ョ箶</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="panel wide">
     <div class="row" style="margin-bottom: 16px;">
-      <h2>鏈湴鍏冩暟鎹褰曪紙Local Records锛?/h2>
+      <h2>閺堫剙婀撮崗鍐╂殶閹诡喛顔囪ぐ鏇礄Local Records閿?/h2>
       <div class="spacer"></div>
       <div class="row" style="margin-top: 0;">
-        <span id="recordSelectionSummary" class="muted" style="margin-right: 12px;">鏈€夋嫨璁板綍</span>
+        <span id="recordSelectionSummary" class="muted" style="margin-right: 12px;">閺堫亪鈧瀚ㄧ拋鏉跨秿</span>
         <select id="recordBatchAction" style="width: auto;">
-          <option value="">鎵归噺鎿嶄綔...</option>
-          <option value="lock">閿佸畾 (Lock)</option>
-          <option value="unlock">瑙ｉ攣 (Unlock)</option>
-          <option value="reset">閲嶇疆鐘舵€?(Reset)</option>
-          <option value="enrich">閲嶆柊琛ュ叏 (Enrich)</option>
+          <option value="">閹靛綊鍣洪幙宥勭稊...</option>
+          <option value="lock">闁夸礁鐣?(Lock)</option>
+          <option value="unlock">鐟欙綁鏀?(Unlock)</option>
+          <option value="reset">闁插秶鐤嗛悩鑸碘偓?(Reset)</option>
+          <option value="enrich">闁插秵鏌婄悰銉ュ弿 (Enrich)</option>
         </select>
-        <button id="applyBatchActionBtn" class="primary" disabled>搴旂敤鍒板凡閫?/button>
-        <button id="clearSelectedRecordsBtn" class="ghost" disabled>娓呯┖閫夋嫨</button>
+        <button id="applyBatchActionBtn" class="primary" disabled>鎼存梻鏁ら崚鏉垮嚒闁?/button>
+        <button id="clearSelectedRecordsBtn" class="ghost" disabled>濞撳懐鈹栭柅澶嬪</button>
       </div>
     </div>
-    <div class="scroll"><table id="recordsTable"><thead><tr><th style="width: 40px;"><input id="selectAllRecords" type="checkbox" aria-label="閫夋嫨褰撳墠椤靛叏閮ㄨ褰?></th><th style="width: 80px;">鐘舵€?/th><th>鏍囬 / 鍓爣棰?/th><th>璺緞 / 鏂囦欢澶?/th><th>鏉ユ簮淇℃伅</th><th style="width: 90px;">缃俊搴?/th><th style="width: 80px;">閿佸畾</th><th style="width: 280px; text-align: right;">鎿嶄綔</th></tr></thead><tbody></tbody></table></div>
+    <div class="scroll"><table id="recordsTable"><thead><tr><th style="width: 40px;"><input id="selectAllRecords" type="checkbox" aria-label="闁瀚ㄨぐ鎾冲妞ら潧鍙忛柈銊唶瑜?></th><th style="width: 80px;">閻樿埖鈧?/th><th>閺嶅洭顣?/ 閸擃垱鐖ｆ０?/th><th>鐠侯垰绶?/ 閺傚洣娆㈡径?/th><th>閺夈儲绨穱鈩冧紖</th><th style="width: 90px;">缂冾喕淇婃惔?/th><th style="width: 80px;">闁夸礁鐣?/th><th style="width: 280px; text-align: right;">閹垮秳缍?/th></tr></thead><tbody></tbody></table></div>
   </section>
 
 
   <div class="grid">
     <section class="panel">
       <div class="row" style="margin-bottom: 16px;">
-        <h2>澶栭儴鏁版嵁婧愶紙External Sources锛?/h2>
+        <h2>婢舵牠鍎撮弫鐗堝祦濠ф劧绱橢xternal Sources閿?/h2>
       </div>
       <div class="help" id="sourceDirLabel" style="margin-bottom: 16px;"></div>
-      <div class="scroll"><table id="sourcesTable" class="wide-table"><thead><tr><th>鍚嶇О / 璺緞</th><th>鐩爣琛?/th><th>琛屾暟</th><th>鐘舵€?/th><th>鎿嶄綔</th></tr></thead><tbody></tbody></table></div>
+      <div class="scroll"><table id="sourcesTable" class="wide-table"><thead><tr><th>閸氬秶袨 / 鐠侯垰绶?/th><th>閻╊喗鐖ｇ悰?/th><th>鐞涘本鏆?/th><th>閻樿埖鈧?/th><th>閹垮秳缍?/th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <section class="panel">
-      <h2>鏁版嵁婧愭祻瑙堬紙Browse Data锛?/h2>
+      <h2>閺佺増宓佸┃鎰セ鐟欏牞绱橞rowse Data閿?/h2>
       <div class="row">
-        <label><span>閫夋嫨婧愬簱</span><select id="browseSource"></select></label>
-        <label><span>妯＄硦鏌ヨ</span><input id="browseQuery" placeholder="鏍囬 / 浣滆€呮ā绯婃悳绱?></label>
+        <label><span>闁瀚ㄥ┃鎰氨</span><select id="browseSource"></select></label>
+        <label><span>濡紕纭﹂弻銉嚄</span><input id="browseQuery" placeholder="閺嶅洭顣?/ 娴ｆ粏鈧懏膩缁﹥鎮崇槐?></label>
       </div>
       <div class="row">
-        <label><span>椤电爜</span><input id="browsePage" type="number" value="1" min="1"></label>
-        <label><span>姣忛〉鏉℃暟</span><input id="browseLimit" type="number" value="30" min="1" max="200"></label>
-        <label style="justify-content: flex-end;"><button id="browseBtn" class="primary" style="width:100%;">鏌ヨ鏁版嵁</button></label>
+        <label><span>妞ょ數鐖?/span><input id="browsePage" type="number" value="1" min="1"></label>
+        <label><span>濮ｅ繘銆夐弶鈩冩殶</span><input id="browseLimit" type="number" value="30" min="1" max="200"></label>
+        <label style="justify-content: flex-end;"><button id="browseBtn" class="primary" style="width:100%;">閺屻儴顕楅弫鐗堝祦</button></label>
       </div>
       <div class="help" id="browseSummary" style="margin-top: 16px;"></div>
       <div class="scroll" style="margin-top: 8px;"><table id="browseTable" class="wide-table"><thead></thead><tbody></tbody></table></div>
     </section>
+  </div>
   </div>
 </main>
 
@@ -424,26 +470,26 @@
   <div class="dialog">
     <div class="row">
       <div>
-        <h2 style="margin: 0;">缂栬緫 `.venera.json` (Sidecar)</h2>
-        <div id="sidecarMeta" class="muted" style="margin-top: 4px;">鏈€夋嫨璁板綍</div>
+        <h2 style="margin: 0;">缂傛牞绶?`.venera.json` (Sidecar)</h2>
+        <div id="sidecarMeta" class="muted" style="margin-top: 4px;">閺堫亪鈧瀚ㄧ拋鏉跨秿</div>
       </div>
       <div class="spacer"></div>
-      <button id="sidecarReloadBtn" class="ghost">閲嶆柊璇诲彇</button>
-      <button id="sidecarTemplateBtn" class="ghost">鐢熸垚妯℃澘</button>
-      <button id="closeSidecarBtn" class="ghost">鉁?鍏抽棴</button>
+      <button id="sidecarReloadBtn" class="ghost">闁插秵鏌婄拠璇插絿</button>
+      <button id="sidecarTemplateBtn" class="ghost">閻㈢喐鍨氬Ο鈩冩緲</button>
+      <button id="closeSidecarBtn" class="ghost">閴?閸忔娊妫?/button>
     </div>
     <div class="summary-grid">
-      <div class="summary-card"><div class="muted">鏂囦欢璺緞</div><div id="sidecarPath" class="mono">-</div></div>
-      <div class="summary-card"><div class="muted">褰撳墠鐘舵€?/div><div id="sidecarState">-</div></div>
-      <div class="summary-card"><div class="muted">瀛樺偍鍚庣</div><div id="sidecarBackend">-</div></div>
+      <div class="summary-card"><div class="muted">閺傚洣娆㈢捄顖氱窞</div><div id="sidecarPath" class="mono">-</div></div>
+      <div class="summary-card"><div class="muted">瑜版挸澧犻悩鑸碘偓?/div><div id="sidecarState">-</div></div>
+      <div class="summary-card"><div class="muted">鐎涙ê鍋嶉崥搴ｎ伂</div><div id="sidecarBackend">-</div></div>
     </div>
-    <label class="checkbox" style="font-size: 14px; font-weight: normal;"><input id="sidecarAutoRescan" type="checkbox" checked> 淇濆瓨鎴栧垹闄ゅ悗锛岃嚜鍔ㄨЕ鍙戣涔﹀簱鐨?Rescan 浠诲姟</label>
-    <textarea id="sidecarEditor" class="mono" spellcheck="false" placeholder="鍦ㄦ澶勭洿鎺ョ紪杈?JSON 鍐呭..."></textarea>
+    <label class="checkbox" style="font-size: 14px; font-weight: normal;"><input id="sidecarAutoRescan" type="checkbox" checked> 娣囨繂鐡ㄩ幋鏍у灩闂勩倕鎮楅敍宀冨殰閸斻劏袝閸欐垼顕氭稊锕€绨遍惃?Rescan 娴犺濮?/label>
+    <textarea id="sidecarEditor" class="mono" spellcheck="false" placeholder="閸︺劍顒濇径鍕纯閹恒儳绱潏?JSON 閸愬懎顔?.."></textarea>
     <div class="row" style="margin-top: 8px;">
-      <button id="sidecarSaveBtn" class="primary">淇濆瓨 Sidecar 鏂囦欢</button>
-      <button id="sidecarDeleteBtn" class="warn">鍒犻櫎鏂囦欢</button>
+      <button id="sidecarSaveBtn" class="primary">娣囨繂鐡?Sidecar 閺傚洣娆?/button>
+      <button id="sidecarDeleteBtn" class="warn">閸掔娀娅庨弬鍥︽</button>
       <div class="spacer"></div>
-      <span id="sidecarSummary" class="muted">绛夊緟鎿嶄綔</span>
+      <span id="sidecarSummary" class="muted">缁涘绶熼幙宥勭稊</span>
     </div>
   </div>
 </div>
@@ -451,8 +497,10 @@
 const state = {
   poll: true,
   theme: 'dark',
+  activeTab: 'bot',
   sources: [],
   ehbotStatus: null,
+  ehbotConfig: null,
   selectedRecords: {},
   lastRecordItems: [],
   sidecar: { locator: null, item: null, info: null },
@@ -469,13 +517,19 @@ applyTheme(preferredTheme());
 
 document.getElementById('saveTokenBtn').addEventListener('click', () => {
   localStorage.setItem('venera_admin_token', tokenInput.value.trim());
-  setStatus('閰嶇疆宸蹭繚瀛?, 'ok');
+  setStatus('闁板秶鐤嗗韫箽鐎?, 'ok');
 });
 document.getElementById('triggerEnrichBtn').addEventListener('click', triggerEnrich);
 document.getElementById('refreshSourcesBtn').addEventListener('click', refreshSources);
 document.getElementById('refreshJobsBtn').addEventListener('click', refreshJobs);
 document.getElementById('runEHBotPullBtn').addEventListener('click', runEHBotPullOnce);
 document.getElementById('refreshEHBotBtn').addEventListener('click', async () => { await Promise.all([refreshEHBotStatus(), refreshEHBotJobs()]); });
+document.getElementById('loadEHBotConfigBtn').addEventListener('click', loadEHBotConfig);
+document.getElementById('saveEHBotConfigBtn').addEventListener('click', saveEHBotConfig);
+document.getElementById('ehbotConfigClearPullToken').addEventListener('change', syncEHBotTokenInputs);
+document.querySelectorAll('.tab-btn').forEach((button) => {
+  button.addEventListener('click', () => setActiveTab(button.dataset.tab));
+});
 document.getElementById('queryRecordsBtn').addEventListener('click', () => refreshRecords(true));
 document.getElementById('cleanupDryRunBtn').addEventListener('click', () => runCleanup(true));
 document.getElementById('cleanupExecuteBtn').addEventListener('click', () => runCleanup(false));
@@ -521,11 +575,11 @@ function applyTheme(theme) {
   state.theme = theme;
   document.body.dataset.theme = theme;
   localStorage.setItem('venera_admin_theme', theme);
-  themeToggleBtn.textContent = theme === 'dark' ? '鍒囨崲鍒版祬鑹? : '鍒囨崲鍒版繁鑹?;
+  themeToggleBtn.textContent = theme === 'dark' ? '閸掑洦宕查崚鐗堢ガ閼? : '閸掑洦宕查崚鐗堢箒閼?;
 }
 
 function updatePollButton() {
-  togglePollBtn.textContent = state.poll ? '鏆傚仠鑷姩鍒锋柊' : '鎭㈠鑷姩鍒锋柊';
+  togglePollBtn.textContent = state.poll ? '閺嗗倸浠犻懛顏勫З閸掗攱鏌? : '閹垹顦查懛顏勫З閸掗攱鏌?;
 }
 
 function currentMaintenanceLibrary() {
@@ -556,7 +610,7 @@ async function fetchJSON(url, options = {}) {
 }
 
 function setStatus(message, kind = '') {
-  statusBox.textContent = message || '绯荤粺宸插氨缁紝绛夊緟鎿嶄綔';
+  statusBox.textContent = message || '缁崵绮哄鎻掓皑缂侇亷绱濈粵澶婄窡閹垮秳缍?;
   statusBox.className = `status${kind ? ` ${kind}` : ''}`;
 }
 
@@ -574,10 +628,10 @@ function pill(text, kind = '') {
 }
 
 function actionLabel(action) {
-  if (action === 'lock') return '閿佸畾';
-  if (action === 'unlock') return '瑙ｉ攣';
-  if (action === 'reset') return '閲嶇疆鐘舵€?;
-  if (action === 'enrich') return '閲嶆柊琛ュ叏';
+  if (action === 'lock') return '闁夸礁鐣?;
+  if (action === 'unlock') return '鐟欙綁鏀?;
+  if (action === 'reset') return '闁插秶鐤嗛悩鑸碘偓?;
+  if (action === 'enrich') return '闁插秵鏌婄悰銉ュ弿';
   return action;
 }
 
@@ -630,7 +684,7 @@ function clearRecordSelection() {
 function syncRecordSelectionUI() {
   const selectedKeys = Object.keys(state.selectedRecords);
   const count = selectedKeys.length;
-  document.getElementById('recordSelectionSummary').textContent = count === 0 ? '鏈€夋嫨璁板綍' : `宸查€夋嫨 ${count} 鏉¤褰昤;
+  document.getElementById('recordSelectionSummary').textContent = count === 0 ? '閺堫亪鈧瀚ㄧ拋鏉跨秿' : `瀹告煡鈧瀚?${count} 閺壜ゎ唶瑜版槫;
   document.getElementById('applyBatchActionBtn').disabled = count === 0 || !document.getElementById('recordBatchAction').value;
   document.getElementById('clearSelectedRecordsBtn').disabled = count === 0;
 
@@ -647,16 +701,16 @@ function syncRecordSelectionUI() {
 
 function renderState(value) {
   const labelMap = {
-    empty: '绌虹櫧',
-    ready: '灏辩华',
-    stale: '闇€鍒锋柊',
-    error: '閿欒',
-    missing: '缂哄け',
-    locked: '宸查攣瀹?,
-    done: '瀹屾垚',
-    failed: '澶辫触',
-    running: '杩涜涓?,
-    queued: '鎺掗槦涓?,
+    empty: '缁岃櫣娅?,
+    ready: '鐏忚京鍗?,
+    stale: '闂団偓閸掗攱鏌?,
+    error: '闁挎瑨顕?,
+    missing: '缂傚搫銇?,
+    locked: '瀹告煡鏀ｇ€?,
+    done: '鐎瑰本鍨?,
+    failed: '婢惰精瑙?,
+    running: '鏉╂稖顢戞稉?,
+    queued: '閹烘帡妲︽稉?,
   };
   const kind = value === 'done' || value === 'ready'
     ? 'ok'
@@ -685,7 +739,7 @@ function formatJobProgress(job) {
   if (job.updated || job.updated === 0) parts.push(`updated ${job.updated || 0}`);
   if (job.skipped || job.skipped === 0) parts.push(`skipped ${job.skipped || 0}`);
   if (job.unmatched || job.unmatched === 0) parts.push(`unmatched ${job.unmatched || 0}`);
-  return parts.join(' 路 ') || '-';
+  return parts.join(' 璺?') || '-';
 }
 function formatDateTime(value) {
   if (!value) return '-';
@@ -701,7 +755,106 @@ function formatEHBotProgress(job) {
   parts.push(`claimed ${job.claimed || 0}`);
   parts.push(`imported ${job.imported || 0}`);
   parts.push(`failed ${job.failed || 0}`);
-  return parts.join(' · ');
+  return parts.join(' 路 ');
+}
+
+function loadPreferredTab() {
+  const stored = localStorage.getItem('venera_admin_tab');
+  return stored === 'metadata' ? 'metadata' : 'bot';
+}
+
+function setActiveTab(tab) {
+  state.activeTab = tab === 'metadata' ? 'metadata' : 'bot';
+  document.getElementById('botTabBtn').classList.toggle('active', state.activeTab === 'bot');
+  document.getElementById('metadataTabBtn').classList.toggle('active', state.activeTab === 'metadata');
+  document.getElementById('botTabPanel').classList.toggle('active', state.activeTab === 'bot');
+  document.getElementById('metadataTabPanel').classList.toggle('active', state.activeTab === 'metadata');
+  localStorage.setItem('venera_admin_tab', state.activeTab);
+}
+
+function syncEHBotTokenInputs() {
+  const clear = document.getElementById('ehbotConfigClearPullToken').checked;
+  const input = document.getElementById('ehbotConfigPullToken');
+  input.disabled = clear;
+  if (clear) input.value = '';
+}
+
+function renderEHBotLibraryOptions(libraries, selected) {
+  const select = document.getElementById('ehbotConfigTargetLibraryID');
+  const items = Array.isArray(libraries) ? libraries : [];
+  let hasSelected = false;
+  const options = ['<option value="">Select target library</option>'];
+  for (const item of items) {
+    if (item.id === selected) hasSelected = true;
+    options.push(`<option value="${htmlEscape(item.id || '')}">${htmlEscape(item.name || item.id || '')} (${htmlEscape(item.kind || '-')})</option>`);
+  }
+  if (selected && !hasSelected) {
+    options.push(`<option value="${htmlEscape(selected)}">${htmlEscape(selected)}</option>`);
+  }
+  select.innerHTML = options.join('');
+  select.value = selected || '';
+}
+
+function populateEHBotConfigForm(data) {
+  state.ehbotConfig = data || null;
+  renderEHBotLibraryOptions(data?.libraries || [], data?.target_library_id || '');
+  document.getElementById('ehbotConfigEnabled').checked = Boolean(data?.enabled);
+  document.getElementById('ehbotConfigBaseURL').value = data?.base_url || '';
+  document.getElementById('ehbotConfigPullToken').value = '';
+  document.getElementById('ehbotConfigClearPullToken').checked = false;
+  document.getElementById('ehbotConfigConsumerID').value = data?.consumer_id || '';
+  document.getElementById('ehbotConfigTargetID').value = data?.target_id || '';
+  document.getElementById('ehbotConfigTargetSubdir').value = data?.target_subdir || '';
+  document.getElementById('ehbotConfigPollIntervalSeconds').value = data?.poll_interval_seconds || 60;
+  document.getElementById('ehbotConfigLeaseSeconds').value = data?.lease_seconds || 1800;
+  document.getElementById('ehbotConfigDownloadTimeoutSeconds').value = data?.download_timeout_seconds || 1800;
+  document.getElementById('ehbotConfigAutoRescan').checked = Boolean(data?.auto_rescan);
+  document.getElementById('ehbotConfigMaxJobsPerPoll').value = data?.max_jobs_per_poll || 1;
+  document.getElementById('ehbotConfigPath').textContent = data?.config_path || '-';
+  document.getElementById('ehbotConfigWritableState').innerHTML = data?.writable ? pill('Writable', 'ok') : pill('Read Only', 'warn');
+  document.getElementById('ehbotPullTokenState').innerHTML = data?.pull_token_configured ? pill('Token Configured', 'ok') : pill('Token Empty', 'warn');
+  document.getElementById('ehbotConfigSaveSummary').textContent = data?.rewrite_warning || 'Leave pull token blank to keep the current secret. Enable clear token to remove it.';
+  document.getElementById('saveEHBotConfigBtn').disabled = !data?.writable;
+  syncEHBotTokenInputs();
+}
+
+async function loadEHBotConfig() {
+  try {
+    const data = await fetchJSON('/api/v1/admin/ehbot/config');
+    populateEHBotConfigForm(data);
+  } catch (error) {
+    document.getElementById('ehbotConfigSaveSummary').textContent = error.message;
+    document.getElementById('ehbotConfigWritableState').innerHTML = pill('Load Failed', 'err');
+    document.getElementById('saveEHBotConfigBtn').disabled = true;
+    setStatus(`EH Bot config failed: ${error.message}`, 'err');
+  }
+}
+
+async function saveEHBotConfig() {
+  const payload = {
+    enabled: document.getElementById('ehbotConfigEnabled').checked,
+    base_url: document.getElementById('ehbotConfigBaseURL').value.trim(),
+    pull_token: document.getElementById('ehbotConfigPullToken').value.trim(),
+    clear_pull_token: document.getElementById('ehbotConfigClearPullToken').checked,
+    consumer_id: document.getElementById('ehbotConfigConsumerID').value.trim(),
+    target_id: document.getElementById('ehbotConfigTargetID').value.trim(),
+    target_library_id: document.getElementById('ehbotConfigTargetLibraryID').value,
+    target_subdir: document.getElementById('ehbotConfigTargetSubdir').value.trim(),
+    poll_interval_seconds: Number(document.getElementById('ehbotConfigPollIntervalSeconds').value || 0),
+    lease_seconds: Number(document.getElementById('ehbotConfigLeaseSeconds').value || 0),
+    download_timeout_seconds: Number(document.getElementById('ehbotConfigDownloadTimeoutSeconds').value || 0),
+    auto_rescan: document.getElementById('ehbotConfigAutoRescan').checked,
+    max_jobs_per_poll: Number(document.getElementById('ehbotConfigMaxJobsPerPoll').value || 0),
+  };
+  try {
+    const data = await fetchJSON('/api/v1/admin/ehbot/config', { method: 'PUT', body: JSON.stringify(payload) });
+    populateEHBotConfigForm(data);
+    await Promise.all([refreshEHBotStatus(), refreshEHBotJobs()]);
+    setStatus('EH Bot config saved', 'ok');
+  } catch (error) {
+    document.getElementById('ehbotConfigSaveSummary').textContent = error.message;
+    setStatus(`EH Bot config save failed: ${error.message}`, 'err');
+  }
 }
 
 async function runEHBotPullOnce() {
@@ -726,7 +879,7 @@ async function refreshEHBotStatus() {
           ? pill('Auto Poll Enabled', 'ok')
           : pill('Manual Only', 'warn');
     document.getElementById('ehbotRunState').innerHTML = mode;
-    document.getElementById('ehbotTarget').innerHTML = `<div>${htmlEscape(data.target_library_id || '-')}</div><div class="muted mono">${htmlEscape(data.target_subdir || '/')} ${data.target_id ? `· ${htmlEscape(data.target_id)}` : ''}</div>`;
+    document.getElementById('ehbotTarget').innerHTML = `<div>${htmlEscape(data.target_library_id || '-')}</div><div class="muted mono">${htmlEscape(data.target_subdir || '/')} ${data.target_id ? `路 ${htmlEscape(data.target_id)}` : ''}</div>`;
     const lastPoll = formatDateTime(data.last_poll_at);
     const lastSuccess = formatDateTime(data.last_success_at);
     document.getElementById('ehbotLastActivity').innerHTML = `<div>${htmlEscape(lastPoll)}</div><div class="muted">${htmlEscape(lastSuccess)}</div>`;
@@ -744,7 +897,7 @@ async function refreshEHBotStatus() {
     ];
     if (data.config_error) summary.push(`config_error=${data.config_error}`);
     if (data.last_imported_path) summary.push(`last_imported=${data.last_imported_path}`);
-    document.getElementById('ehbotConfigSummary').innerHTML = `<span class="mono">${htmlEscape(summary.join(' · '))}</span>`;
+    document.getElementById('ehbotConfigSummary').innerHTML = `<span class="mono">${htmlEscape(summary.join(' 路 '))}</span>`;
     document.getElementById('runEHBotPullBtn').disabled = !data.configured;
   } catch (error) {
     document.getElementById('ehbotRunState').innerHTML = pill('Load Failed', 'err');
@@ -782,7 +935,7 @@ async function triggerEnrich() {
       workers: Number(document.getElementById('enrichWorkers').value || 3),
     };
     const data = await fetchJSON('/api/v1/admin/metadata/enrich', { method: 'POST', body: JSON.stringify(payload) });
-    setStatus(`宸叉彁浜よˉ鍏ㄤ换鍔★細${data.job_id || '-'}`, 'ok');
+    setStatus(`瀹稿弶褰佹禍銈埶夐崗銊ゆ崲閸斺槄绱?{data.job_id || '-'}`, 'ok');
     await refreshJobs();
   } catch (error) {
     setStatus(error.message, 'err');
@@ -802,7 +955,7 @@ async function refreshJobs() {
       <td class="muted">${htmlEscape(formatJobSources(job))}</td>
       <td class="mono">${htmlEscape(formatJobProgress(job))}</td>
       <td class="mono" style="color: var(--err);">${htmlEscape(job.error || '')}</td>
-    </tr>`).join('') || '<tr><td colspan="7" class="muted" style="text-align: center; padding: 32px;">褰撳墠娌℃湁杩愯涓殑浠诲姟</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="7" class="muted" style="text-align: center; padding: 32px;">瑜版挸澧犲▽鈩冩箒鏉╂劘顢戞稉顓犳畱娴犺濮?/td></tr>';
   } catch (error) {
     setStatus(error.message, 'err');
   }
@@ -821,7 +974,7 @@ async function refreshRecords(resetPage = false) {
       search: document.getElementById('recordSearch').value.trim(),
     });
     const data = await fetchJSON(`/api/v1/admin/metadata/records?${params.toString()}`);
-    document.getElementById('recordSummary').textContent = `鍏?${data.total} 鏉¤褰?路 绗?${data.page} 椤?路 姣忛〉 ${data.page_size} 鏉;
+    document.getElementById('recordSummary').textContent = `閸?${data.total} 閺壜ゎ唶瑜?璺?缁?${data.page} 妞?璺?濮ｅ繘銆?${data.page_size} 閺夘摝;
     state.lastRecordItems = data.items || [];
     const tbody = document.querySelector('#recordsTable tbody');
     tbody.innerHTML = state.lastRecordItems.map((item) => {
@@ -830,19 +983,19 @@ async function refreshRecords(resetPage = false) {
       return `<tr>
         <td><input type="checkbox" data-record-key="${htmlEscape(key)}" onchange='toggleRecordSelection("${encodedLocator}", this.checked)'></td>
         <td>${renderState(item.state)}</td>
-        <td><div style="font-weight: 500;">${htmlEscape(item.title || item.title_jpn || '(鏈尮閰嶅埌鏍囬)')}</div><div class="muted mono">${htmlEscape(item.subtitle || '')}</div></td>
+        <td><div style="font-weight: 500;">${htmlEscape(item.title || item.title_jpn || '(閺堫亜灏柊宥呭煂閺嶅洭顣?')}</div><div class="muted mono">${htmlEscape(item.subtitle || '')}</div></td>
         <td><div class="mono">${htmlEscape(item.root_ref || '')}</div><div class="muted mono">${htmlEscape(item.folder_path || '')}</div></td>
         <td><div>${htmlEscape(item.source || '')}</div><div class="muted mono">${htmlEscape(item.source_id || '')}</div></td>
         <td class="mono">${item.confidence == null ? '-' : htmlEscape(item.confidence)}</td>
-        <td>${item.manual_locked ? pill('宸查攣瀹?, 'warn') : pill('-', '')}</td>
+        <td>${item.manual_locked ? pill('瀹告煡鏀ｇ€?, 'warn') : pill('-', '')}</td>
         <td><div class="actions" style="justify-content: flex-end;">
           <button class="ghost" onclick='openSidecarEditor("${encodedLocator}")'>Sidecar</button>
-          <button class="ghost" onclick='recordAction("${item.manual_locked ? 'unlock' : 'lock'}", "${encodedLocator}")'>${item.manual_locked ? '瑙ｉ攣' : '閿佸畾'}</button>
-          <button class="ghost" onclick='recordAction("reset", "${encodedLocator}")'>閲嶇疆</button>
-          <button class="ghost" style="color: var(--primary);" onclick='recordAction("enrich", "${encodedLocator}")'>琛ュ叏</button>
+          <button class="ghost" onclick='recordAction("${item.manual_locked ? 'unlock' : 'lock'}", "${encodedLocator}")'>${item.manual_locked ? '鐟欙綁鏀? : '闁夸礁鐣?}</button>
+          <button class="ghost" onclick='recordAction("reset", "${encodedLocator}")'>闁插秶鐤?/button>
+          <button class="ghost" style="color: var(--primary);" onclick='recordAction("enrich", "${encodedLocator}")'>鐞涖儱鍙?/button>
         </div></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="8" class="muted" style="text-align: center; padding: 32px;">鏆傛棤绗﹀悎鏉′欢鐨勮褰?/td></tr>';
+    }).join('') || '<tr><td colspan="8" class="muted" style="text-align: center; padding: 32px;">閺嗗倹妫ょ粭锕€鎮庨弶鈥叉閻ㄥ嫯顔囪ぐ?/td></tr>';
     syncRecordSelectionUI();
   } catch (error) {
     setStatus(error.message, 'err');
@@ -858,22 +1011,22 @@ function cleanupPayload(dryRun) {
 }
 
 function renderCleanupSummary(result, dryRun, payload) {
-  const scope = payload.library_id || '鍏ㄩ儴涔﹀簱';
+  const scope = payload.library_id || '閸忋劑鍎存稊锕€绨?;
   const olderThan = Number(payload.older_than_days || 0);
-  const prefix = dryRun ? 'Dry run 缁撴灉' : '娓呯悊缁撴灉';
-  document.getElementById('cleanupSummary').innerHTML = `<strong>${htmlEscape(prefix)}锛?/strong> 鑼冨洿 [${htmlEscape(scope)}] 路 淇濈暀 ${htmlEscape(olderThan)} 澶?路 鍖归厤鍒?<span style="color:var(--warn)">${htmlEscape(result.matched || 0)}</span> 鏉?路 鍒犻櫎 <span style="color:var(--ok)">${htmlEscape(result.deleted || 0)}</span> 鏉;
+  const prefix = dryRun ? 'Dry run 缂佹挻鐏? : '濞撳懐鎮婄紒鎾寸亯';
+  document.getElementById('cleanupSummary').innerHTML = `<strong>${htmlEscape(prefix)}閿?/strong> 閼煎啫娲?[${htmlEscape(scope)}] 璺?娣囨繄鏆€ ${htmlEscape(olderThan)} 婢?璺?閸栧綊鍘ら崚?<span style="color:var(--warn)">${htmlEscape(result.matched || 0)}</span> 閺?璺?閸掔娀娅?<span style="color:var(--ok)">${htmlEscape(result.deleted || 0)}</span> 閺夘摝;
 }
 
 async function runCleanup(dryRun) {
   try {
-    if (!dryRun && !window.confirm('纭鐗╃悊鍒犻櫎鏁版嵁搴撲腑 missing 鐨勮褰曞悧锛?寤鸿鍏堟墽琛?Dry Run)')) return;
+    if (!dryRun && !window.confirm('绾喛顓婚悧鈺冩倞閸掔娀娅庨弫鐗堝祦鎼存挷鑵?missing 閻ㄥ嫯顔囪ぐ鏇炴偋閿?瀵ら缚顔呴崗鍫熷⒔鐞?Dry Run)')) return;
     const payload = cleanupPayload(dryRun);
     const data = await fetchJSON('/api/v1/admin/metadata/cleanup', { method: 'POST', body: JSON.stringify(payload) });
     renderCleanupSummary(data, dryRun, payload);
     if (dryRun) {
-      setStatus(`娴嬭瘯娓呯悊瀹屾垚锛氬叡鍖归厤鍒?${data.matched || 0} 鏉?missing 鏁版嵁`, 'ok');
+      setStatus(`濞村鐦〒鍛倞鐎瑰本鍨氶敍姘彙閸栧綊鍘ら崚?${data.matched || 0} 閺?missing 閺佺増宓乣, 'ok');
     } else {
-      setStatus(`娓呯悊瀹屾垚锛氭垚鍔熷垹闄?${data.deleted || 0}/${data.matched || 0} 鏉¤褰昤, 'ok');
+      setStatus(`濞撳懐鎮婄€瑰本鍨氶敍姘灇閸旂喎鍨归梽?${data.deleted || 0}/${data.matched || 0} 閺壜ゎ唶瑜版槫, 'ok');
       clearRecordSelection();
     }
     await refreshRecords(false);
@@ -929,11 +1082,11 @@ async function rescanSelectedLibrary() {
   try {
     const libraryID = currentMaintenanceLibrary();
     if (!libraryID) {
-      setStatus('璇峰厛鍦?涔﹀簱 (Library)"杈撳叆妗嗕腑濉啓涔﹀簱 ID', 'err');
+      setStatus('鐠囧嘲鍘涢崷?娑旓箑绨?(Library)"鏉堟挸鍙嗗鍡曡厬婵夘偄鍟撴稊锕€绨?ID', 'err');
       return;
     }
     const data = await triggerRescanRequest(libraryID);
-    setStatus(`宸叉彁浜よ涔﹀簱 Rescan 浠诲姟锛?{data.job_id}`, 'ok');
+    setStatus(`瀹稿弶褰佹禍銈堫嚉娑旓箑绨?Rescan 娴犺濮熼敍?{data.job_id}`, 'ok');
   } catch (error) {
     setStatus(error.message, 'err');
   }
@@ -941,9 +1094,9 @@ async function rescanSelectedLibrary() {
 
 async function rescanAllLibraries() {
   try {
-    if (!window.confirm('纭瀵圭郴缁熷叏閮ㄤ功搴撹Е鍙戞壂鎻忎换鍔″悧锛熺郴缁熷紑閿€鍙兘杈冨ぇ銆?)) return;
+    if (!window.confirm('绾喛顓荤€靛湱閮寸紒鐔峰弿闁劋鍔熸惔鎾剐曢崣鎴炲閹诲繋鎹㈤崝鈥虫偋閿涚喓閮寸紒鐔风磻闁库偓閸欘垵鍏樻潏鍐ㄣ亣閵?)) return;
     const data = await triggerRescanRequest('');
-    setStatus(`宸叉彁浜ゅ叏灞€鎵弿浠诲姟锛?{data.job_id}`, 'ok');
+    setStatus(`瀹稿弶褰佹禍銈呭弿鐏炩偓閹殿偅寮挎禒璇插閿?{data.job_id}`, 'ok');
   } catch (error) {
     setStatus(error.message, 'err');
   }
@@ -959,12 +1112,12 @@ async function openSidecarEditor(encodedLocator) {
   state.sidecar.locator = locator;
   state.sidecar.item = recordByLocator(locator);
   state.sidecar.info = null;
-  document.getElementById('sidecarMeta').textContent = `涔﹀簱: ${locator.library_id || '-'} 路 绫诲瀷: ${locator.root_type || '-'} 路 寮曠敤: ${locator.root_ref || '-'}`;
-  document.getElementById('sidecarPath').textContent = '鍔犺浇涓?..';
-  document.getElementById('sidecarState').innerHTML = pill('鍔犺浇涓?, 'warn');
+  document.getElementById('sidecarMeta').textContent = `娑旓箑绨? ${locator.library_id || '-'} 璺?缁鐎? ${locator.root_type || '-'} 璺?瀵洜鏁? ${locator.root_ref || '-'}`;
+  document.getElementById('sidecarPath').textContent = '閸旂姾娴囨稉?..';
+  document.getElementById('sidecarState').innerHTML = pill('閸旂姾娴囨稉?, 'warn');
   document.getElementById('sidecarBackend').textContent = '-';
   document.getElementById('sidecarEditor').value = '';
-  document.getElementById('sidecarSummary').textContent = '姝ｅ湪鍚戞湇鍔″櫒璇锋眰鏂囦欢鐘舵€?..';
+  document.getElementById('sidecarSummary').textContent = '濮濓絽婀崥鎴炴箛閸斺€虫珤鐠囬攱鐪伴弬鍥︽閻樿埖鈧?..';
   sidecarModal.classList.remove('hidden');
   sidecarModal.setAttribute('aria-hidden', 'false');
   await loadSidecar();
@@ -979,24 +1132,24 @@ async function loadSidecar() {
     state.sidecar.info = data;
     document.getElementById('sidecarPath').textContent = data.display_path || data.sidecar_ref || '-';
     document.getElementById('sidecarState').innerHTML = data.exists
-      ? pill(data.writable ? '宸插瓨鍦?/ 鍙啓' : '宸插瓨鍦?/ 鍙', data.writable ? 'ok' : 'warn')
-      : pill(data.writable ? '缂哄け / 鍙啓' : '缂哄け / 鍙', data.writable ? 'warn' : 'err');
-    document.getElementById('sidecarBackend').textContent = `${data.backend_kind || '-'}${data.writable ? '' : ' (鍙椾繚鎶?'}`;
+      ? pill(data.writable ? '瀹告彃鐡ㄩ崷?/ 閸欘垰鍟? : '瀹告彃鐡ㄩ崷?/ 閸欘亣顕?, data.writable ? 'ok' : 'warn')
+      : pill(data.writable ? '缂傚搫銇?/ 閸欘垰鍟? : '缂傚搫銇?/ 閸欘亣顕?, data.writable ? 'warn' : 'err');
+    document.getElementById('sidecarBackend').textContent = `${data.backend_kind || '-'}${data.writable ? '' : ' (閸欐ぞ绻氶幎?'}`;
     document.getElementById('sidecarEditor').value = data.exists
       ? formatSidecarContent(data.content, buildSidecarTemplate(state.sidecar.item))
       : buildSidecarTemplate(state.sidecar.item);
     document.getElementById('sidecarSaveBtn').disabled = !data.writable;
     document.getElementById('sidecarDeleteBtn').disabled = !data.writable || !data.exists;
-    document.getElementById('sidecarSummary').textContent = data.exists ? '鏂囦欢璇诲彇鎴愬姛銆? : '鏈湴鏆傛棤 Sidecar 鏂囦欢锛屾偍鍙互鐩存帴缂栬緫骞朵繚瀛樹互鍒涘缓銆?;
+    document.getElementById('sidecarSummary').textContent = data.exists ? '閺傚洣娆㈢拠璇插絿閹存劕濮涢妴? : '閺堫剙婀撮弳鍌涙￥ Sidecar 閺傚洣娆㈤敍灞惧亶閸欘垯浜掗惄瀛樺复缂傛牞绶獮鏈电箽鐎涙ü浜掗崚娑樼紦閵?;
   } catch (error) {
     document.getElementById('sidecarSummary').textContent = error.message;
-    setStatus(`璇诲彇澶辫触: ${error.message}`, 'err');
+    setStatus(`鐠囪褰囨径杈Е: ${error.message}`, 'err');
   }
 }
 
 function applySidecarTemplate() {
   document.getElementById('sidecarEditor').value = buildSidecarTemplate(state.sidecar.item);
-  document.getElementById('sidecarSummary').textContent = '宸茶嚜鍔ㄧ敓鎴愭ā鏉跨粨鏋勩€?;
+  document.getElementById('sidecarSummary').textContent = '瀹歌尪鍤滈崝銊ф晸閹存劖膩閺夎法绮ㄩ弸鍕┾偓?;
 }
 
 async function saveSidecar() {
@@ -1007,17 +1160,17 @@ async function saveSidecar() {
     JSON.parse(content);
     await fetchJSON('/api/v1/admin/metadata/sidecar', { method: 'PUT', body: JSON.stringify({ locator, content }) });
     await loadSidecar();
-    document.getElementById('sidecarSummary').textContent = '淇濆瓨鎴愬姛銆?;
+    document.getElementById('sidecarSummary').textContent = '娣囨繂鐡ㄩ幋鎰閵?;
     if (document.getElementById('sidecarAutoRescan').checked) {
       const data = await triggerRescanRequest(locator.library_id || '');
-      setStatus(`Sidecar 宸蹭繚瀛樺苟瑙﹀彂閲嶆壂浠诲姟: ${data.job_id}`, 'ok');
+      setStatus(`Sidecar 瀹歌弓绻氱€涙ê鑻熺憴锕€褰傞柌宥嗗娴犺濮? ${data.job_id}`, 'ok');
     } else {
-      setStatus('Sidecar 鏂囦欢宸叉垚鍔熶繚瀛樺埌鏈湴', 'ok');
+      setStatus('Sidecar 閺傚洣娆㈠鍙夊灇閸旂喍绻氱€涙ê鍩岄張顒€婀?, 'ok');
     }
     await refreshRecords(false);
   } catch (error) {
-    document.getElementById('sidecarSummary').textContent = `JSON 鏍煎紡閿欒鎴栦繚瀛樺け璐? ${error.message}`;
-    setStatus('鏂囦欢淇濆瓨澶辫触锛岃妫€鏌ユ牸寮?, 'err');
+    document.getElementById('sidecarSummary').textContent = `JSON 閺嶇厧绱￠柨娆掝嚖閹存牔绻氱€涙ê銇戠拹? ${error.message}`;
+    setStatus('閺傚洣娆㈡穱婵嗙摠婢惰精瑙﹂敍宀冾嚞濡偓閺屻儲鐗稿?, 'err');
   }
 }
 
@@ -1025,20 +1178,20 @@ async function deleteSidecar() {
   try {
     const locator = state.sidecar.locator;
     if (!locator) return;
-    if (!window.confirm('鍗遍櫓鎿嶄綔锛氱‘瀹氳褰诲簳鍒犻櫎璇?Sidecar 閰嶇疆鏂囦欢鍚楋紵')) return;
+    if (!window.confirm('閸楅亶娅撻幙宥勭稊閿涙氨鈥樼€规俺顩﹁ぐ璇茬俺閸掔娀娅庣拠?Sidecar 闁板秶鐤嗛弬鍥︽閸氭绱?)) return;
     await fetchJSON('/api/v1/admin/metadata/sidecar', { method: 'DELETE', body: JSON.stringify({ locator }) });
     await loadSidecar();
-    document.getElementById('sidecarSummary').textContent = '鏂囦欢宸插垹闄ゃ€?;
+    document.getElementById('sidecarSummary').textContent = '閺傚洣娆㈠鎻掑灩闂勩們鈧?;
     if (document.getElementById('sidecarAutoRescan').checked) {
       const data = await triggerRescanRequest(locator.library_id || '');
-      setStatus(`Sidecar 宸茬Щ闄ゅ苟瑙﹀彂閲嶆壂浠诲姟: ${data.job_id}`, 'ok');
+      setStatus(`Sidecar 瀹歌尙些闂勩倕鑻熺憴锕€褰傞柌宥嗗娴犺濮? ${data.job_id}`, 'ok');
     } else {
-      setStatus('Sidecar 鏂囦欢宸茶鍒犻櫎', 'ok');
+      setStatus('Sidecar 閺傚洣娆㈠鑼额潶閸掔娀娅?, 'ok');
     }
     await refreshRecords(false);
   } catch (error) {
     document.getElementById('sidecarSummary').textContent = error.message;
-    setStatus(`鍒犻櫎澶辫触: ${error.message}`, 'err');
+    setStatus(`閸掔娀娅庢径杈Е: ${error.message}`, 'err');
   }
 }
 
@@ -1053,17 +1206,17 @@ async function recordAction(action, encodedLocator) {
     };
     const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
     if (Array.isArray(data.jobs) && data.jobs.length > 0) {
-      setStatus(`鍗曟潯璁板綍 [${actionLabel(action)}]锛氬垎閰嶄簡 ${data.jobs.length} 涓换鍔￠槦鍒梎, 'ok');
+      setStatus(`閸楁洘娼拋鏉跨秿 [${actionLabel(action)}]閿涙艾鍨庨柊宥勭啊 ${data.jobs.length} 娑擃亙鎹㈤崝锟犳Е閸掓, 'ok');
       await refreshJobs();
     } else if (data.job?.job_id) {
-      setStatus(`琛ュ叏浠诲姟宸叉姇閫掞細${data.job.job_id}`, 'ok');
+      setStatus(`鐞涖儱鍙忔禒璇插瀹稿弶濮囬柅鎺炵窗${data.job.job_id}`, 'ok');
       await refreshJobs();
     } else {
-      setStatus(`璁板綍 [${actionLabel(action)}] 鎿嶄綔鎵ц鎴愬姛`, 'ok');
+      setStatus(`鐠佹澘缍?[${actionLabel(action)}] 閹垮秳缍旈幍褑顢戦幋鎰`, 'ok');
     }
     await refreshRecords(false);
   } catch (error) {
-    setStatus(`鎿嶄綔澶辫触: ${error.message}`, 'err');
+    setStatus(`閹垮秳缍旀径杈Е: ${error.message}`, 'err');
   }
 }
 
@@ -1071,12 +1224,12 @@ async function applyBatchRecordAction() {
   try {
     const action = document.getElementById('recordBatchAction').value;
     if (!action) {
-      setStatus('鎿嶄綔鍙栨秷锛氳鍏堝湪涓嬫媺妗嗛€夋嫨鎵归噺鍔ㄤ綔绫诲瀷', 'warn');
+      setStatus('閹垮秳缍旈崣鏍ㄧХ閿涙俺顕崗鍫濇躬娑撳濯哄鍡涒偓澶嬪閹靛綊鍣洪崝銊ょ稊缁鐎?, 'warn');
       return;
     }
     const locators = Object.values(state.selectedRecords);
     if (locators.length === 0) {
-      setStatus('鎿嶄綔鍙栨秷锛氬綋鍓嶆湭鍕鹃€変换浣曡褰?, 'warn');
+      setStatus('閹垮秳缍旈崣鏍ㄧХ閿涙艾缍嬮崜宥嗘弓閸曢箖鈧鎹㈡担鏇☆唶瑜?, 'warn');
       return;
     }
     const payload = {
@@ -1088,15 +1241,15 @@ async function applyBatchRecordAction() {
     };
     const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
     if (Array.isArray(data.jobs) && data.jobs.length > 0) {
-      setStatus(`鎵归噺瑙﹀彂浠诲姟 [${actionLabel(action)}] 鎴愬姛锛氭媶鍒嗕负 ${data.jobs.length} 涓槦鍒梎, 'ok');
+      setStatus(`閹靛綊鍣虹憴锕€褰傛禒璇插 [${actionLabel(action)}] 閹存劕濮涢敍姘閸掑棔璐?${data.jobs.length} 娑擃亪妲﹂崚姊? 'ok');
       await refreshJobs();
     } else {
-      setStatus(`鎵归噺鎿嶄綔鎵ц瀹屾垚锛氬鐞嗕簡 ${data.processed || locators.length} 鏉℃暟鎹甡, 'ok');
+      setStatus(`閹靛綊鍣洪幙宥勭稊閹笛嗩攽鐎瑰本鍨氶敍姘槱閻炲棔绨?${data.processed || locators.length} 閺夆剝鏆熼幑鐢? 'ok');
     }
     clearRecordSelection();
     await refreshRecords(false);
   } catch (error) {
-    setStatus(`鎵归噺澶勭悊涓柇: ${error.message}`, 'err');
+    setStatus(`閹靛綊鍣烘径鍕倞娑擃厽鏌? ${error.message}`, 'err');
   }
 }
 
@@ -1106,18 +1259,18 @@ async function refreshSources() {
     const prevBrowse = document.getElementById('browseSource').value;
     const data = await fetchJSON('/api/v1/admin/metadata/sources');
     state.sources = data.items || [];
-    document.getElementById('sourceDirLabel').innerHTML = `<span class="mono">鏁版嵁婧愮洰褰曪細${htmlEscape(data.directory || '鏈厤缃?)}</span>`;
+    document.getElementById('sourceDirLabel').innerHTML = `<span class="mono">閺佺増宓佸┃鎰窗瑜版洩绱?{htmlEscape(data.directory || '閺堫亪鍘ょ純?)}</span>`;
     renderSourceSelectors(prevEnrich, prevBrowse);
     const tbody = document.querySelector('#sourcesTable tbody');
     tbody.innerHTML = state.sources.map((source) => `<tr>
       <td><div style="font-weight: 500;">${htmlEscape(source.name)}</div><div class="muted mono">${htmlEscape(source.relative_path || '')}</div></td>
       <td class="mono">${htmlEscape(source.chosen_table || '')}</td>
       <td class="mono">${htmlEscape(source.row_count ?? '-')}</td>
-      <td>${source.error ? pill(source.error, 'err') : pill('灏辩华', 'ok')}</td>
-      <td><button class="ghost" ${source.error ? 'disabled' : ''} onclick='pickSource(${JSON.stringify(source.id)})' style="color: var(--primary);">鍘绘煡璇?/button></td>
-    </tr>`).join('') || '<tr><td colspan="5" class="muted" style="text-align: center; padding: 32px;">鐩綍涓虹┖銆傝灏嗗閮?sqlite 鏁版嵁搴撳瓨鏀捐嚦 `data/externaldb` 鐩綍銆?/td></tr>';
+      <td>${source.error ? pill(source.error, 'err') : pill('鐏忚京鍗?, 'ok')}</td>
+      <td><button class="ghost" ${source.error ? 'disabled' : ''} onclick='pickSource(${JSON.stringify(source.id)})' style="color: var(--primary);">閸樼粯鐓＄拠?/button></td>
+    </tr>`).join('') || '<tr><td colspan="5" class="muted" style="text-align: center; padding: 32px;">閻╊喖缍嶆稉铏光敄閵嗗倽顕亸鍡楊樆闁?sqlite 閺佺増宓佹惔鎾崇摠閺€鎹愬殾 `data/externaldb` 閻╊喖缍嶉妴?/td></tr>';
   } catch (error) {
-    setStatus(`鍔犺浇鏁版嵁婧愬け璐? ${error.message}`, 'err');
+    setStatus(`閸旂姾娴囬弫鐗堝祦濠ф劕銇戠拹? ${error.message}`, 'err');
   }
 }
 
@@ -1128,8 +1281,8 @@ function renderSourceSelectors(prevEnrich = '', prevBrowse = '') {
     .filter((item) => !item.error)
     .map((item) => `<option value="${htmlEscape(item.id)}">${htmlEscape(item.name)}</option>`)
     .join('');
-  enrichSource.innerHTML = `<option value="">鑷姩閫夋嫨鍙敤鏁版嵁婧?/option>${options}`;
-  browseSourceSelect.innerHTML = options || '<option value="">鏆傛棤鍙敤鏁版嵁婧?/option>';
+  enrichSource.innerHTML = `<option value="">閼奉亜濮╅柅澶嬪閸欘垳鏁ら弫鐗堝祦濠?/option>${options}`;
+  browseSourceSelect.innerHTML = options || '<option value="">閺嗗倹妫ら崣顖滄暏閺佺増宓佸┃?/option>';
   if (prevEnrich && Array.from(enrichSource.options).some((option) => option.value === prevEnrich)) {
     enrichSource.value = prevEnrich;
   }
@@ -1148,7 +1301,7 @@ async function browseSource() {
   try {
     const sourceId = document.getElementById('browseSource').value;
     if (!sourceId) {
-      setStatus('鏌ヨ澶辫触锛氭湭閫夋嫨鎴栨棤鍙敤鏁版嵁婧?, 'warn');
+      setStatus('閺屻儴顕楁径杈Е閿涙碍婀柅澶嬪閹存牗妫ら崣顖滄暏閺佺増宓佸┃?, 'warn');
       return;
     }
     const params = new URLSearchParams({
@@ -1158,22 +1311,24 @@ async function browseSource() {
     });
     const data = await fetchJSON(`/api/v1/admin/metadata/sources/${encodeURIComponent(sourceId)}/records?${params.toString()}`);
     const browse = data.browse || {};
-    document.getElementById('browseSummary').innerHTML = `<strong>${htmlEscape(data.source?.name || '-')}</strong> 路 鏁版嵁琛細<span class="mono">${htmlEscape(browse.table || '-')}</span> 路 鍛戒腑锛?{htmlEscape(browse.total || 0)} 鏉;
+    document.getElementById('browseSummary').innerHTML = `<strong>${htmlEscape(data.source?.name || '-')}</strong> 璺?閺佺増宓佺悰顭掔窗<span class="mono">${htmlEscape(browse.table || '-')}</span> 璺?閸涙垝鑵戦敍?{htmlEscape(browse.total || 0)} 閺夘摝;
     const head = document.querySelector('#browseTable thead');
     const body = document.querySelector('#browseTable tbody');
     const columns = browse.columns || [];
     head.innerHTML = `<tr>${columns.map((col) => `<th>${htmlEscape(col)}</th>`).join('')}</tr>`;
-    body.innerHTML = (browse.items || []).map((item) => `<tr>${columns.map((col) => `<td class="mono">${htmlEscape(item[col] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(columns.length, 1)}" class="muted" style="text-align: center; padding: 32px;">鏆傛棤鍖归厤鏌ヨ缁撴灉</td></tr>`;
+    body.innerHTML = (browse.items || []).map((item) => `<tr>${columns.map((col) => `<td class="mono">${htmlEscape(item[col] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(columns.length, 1)}" class="muted" style="text-align: center; padding: 32px;">閺嗗倹妫ら崠褰掑帳閺屻儴顕楃紒鎾寸亯</td></tr>`;
   } catch (error) {
-    setStatus(`鏁版嵁鏌ヨ寮傚父: ${error.message}`, 'err');
+    setStatus(`閺佺増宓侀弻銉嚄瀵倸鐖? ${error.message}`, 'err');
   }
 }
 
 async function boot() {
   updatePollButton();
+  setActiveTab(loadPreferredTab());
+  syncEHBotTokenInputs();
   syncRecordSelectionUI();
-  await Promise.all([refreshEHBotStatus(), refreshEHBotJobs(), refreshSources(), refreshJobs(), refreshRecords(false)]);
-  setStatus('鎺у埗闈㈡澘鍒濆鍖栧畬鎴?, 'ok');
+  await Promise.all([loadEHBotConfig(), refreshEHBotStatus(), refreshEHBotJobs(), refreshSources(), refreshJobs(), refreshRecords(false)]);
+  setStatus('閹貉冨煑闂堛垺婢橀崚婵嗩潗閸栨牕鐣幋?, 'ok');
 }
 
 setInterval(() => {
@@ -1188,7 +1343,7 @@ setInterval(() => {
   refreshRecords(false);
 }, 8000);
 
-boot().catch((error) => setStatus(`绯荤粺鍚姩澶辫触: ${error.message}`, 'err'));
+boot().catch((error) => setStatus(`缁崵绮洪崥顖氬З婢惰精瑙? ${error.message}`, 'err'));
 </script>
 </body>
 </html>
