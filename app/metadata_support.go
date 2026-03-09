@@ -230,7 +230,26 @@ func sampleArchiveEntries(items []archivepkg.ArchiveEntry) []archivepkg.ArchiveE
 	return out
 }
 
-func metadataInputForDir(lib configpkg.LibraryConfig, rel string, title string, images []backendpkg.Entry) metadatapkg.ScanInput {
+func scannedMetadataForStore(meta ParsedMetadata) metadatapkg.ScannedMetadata {
+	title := ""
+	switch {
+	case meta.hasExplicitTitle && strings.TrimSpace(meta.Title) != "":
+		title = strings.TrimSpace(meta.Title)
+	case meta.hasExplicitSeries && strings.TrimSpace(meta.Series) != "":
+		title = strings.TrimSpace(meta.Series)
+	}
+	return metadatapkg.ScannedMetadata{
+		Title:       title,
+		Subtitle:    strings.TrimSpace(meta.Subtitle),
+		Description: strings.TrimSpace(meta.Description),
+		Artists:     shared.UniqueStrings(append([]string(nil), meta.Authors...)),
+		Tags:        shared.UniqueStrings(append([]string(nil), meta.Tags...)),
+		Language:    strings.TrimSpace(meta.Language),
+		SourceURL:   strings.TrimSpace(meta.SourceURL),
+	}
+}
+
+func metadataInputForDir(lib configpkg.LibraryConfig, rel string, meta ParsedMetadata, title string, images []backendpkg.Entry) metadatapkg.ScanInput {
 	return metadatapkg.ScanInput{
 		Locator:            metadatapkg.Locator{LibraryID: lib.ID, RootType: "dir", RootRef: shared.CleanRel(rel)},
 		FolderPath:         metadataFolderPath(lib, rel),
@@ -239,7 +258,7 @@ func metadataInputForDir(lib configpkg.LibraryConfig, rel string, title string, 
 	}
 }
 
-func metadataInputForArchive(ctx context.Context, a *App, lib configpkg.LibraryConfig, backend backendpkg.Backend, rel string, title string) metadatapkg.ScanInput {
+func metadataInputForArchive(ctx context.Context, a *App, lib configpkg.LibraryConfig, backend backendpkg.Backend, rel string, meta ParsedMetadata, title string) metadatapkg.ScanInput {
 	return metadatapkg.ScanInput{
 		Locator:            metadatapkg.Locator{LibraryID: lib.ID, RootType: "archive", RootRef: shared.CleanRel(rel)},
 		FolderPath:         metadataFolderPath(lib, rel),
@@ -248,7 +267,7 @@ func metadataInputForArchive(ctx context.Context, a *App, lib configpkg.LibraryC
 	}
 }
 
-func metadataInputForSeries(lib configpkg.LibraryConfig, rel string, title string, candidates []chapterCandidate) metadatapkg.ScanInput {
+func metadataInputForSeries(lib configpkg.LibraryConfig, rel string, meta ParsedMetadata, title string, candidates []chapterCandidate) metadatapkg.ScanInput {
 	return metadatapkg.ScanInput{
 		Locator:            metadatapkg.Locator{LibraryID: lib.ID, RootType: "series", RootRef: shared.CleanRel(rel)},
 		FolderPath:         metadataFolderPath(lib, rel),

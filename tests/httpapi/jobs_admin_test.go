@@ -33,8 +33,18 @@ func TestAdminJobsEndpointIncludesTrackedOperations(t *testing.T) {
 		"dry_run":         true,
 	})
 
-	history := testkit.GetJSON(t, srv.URL+"/api/v1/admin/jobs?limit=20", cfg.Server.Token)
-	items := history["data"].(map[string]any)["items"].([]any)
+	history := testkit.GetJSON(t, srv.URL+"/api/v1/admin/jobs?page=1&limit=20", cfg.Server.Token)
+	data := history["data"].(map[string]any)
+	if data["page"] != float64(1) {
+		t.Fatalf("expected page=1, got %#v", data)
+	}
+	if data["page_size"] != float64(20) {
+		t.Fatalf("expected page_size=20, got %#v", data)
+	}
+	if data["total"].(float64) < 2 {
+		t.Fatalf("expected total >= 2, got %#v", data)
+	}
+	items := data["items"].([]any)
 	if len(items) < 2 {
 		t.Fatalf("expected at least two tracked job history items, got %#v", items)
 	}

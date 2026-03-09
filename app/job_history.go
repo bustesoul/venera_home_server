@@ -18,6 +18,13 @@ func (a *App) JobHistory(ctx context.Context, query metadatapkg.JobQuery) ([]met
 	return a.metadataStore.ListJobs(ctx, query)
 }
 
+func (a *App) JobHistoryPage(ctx context.Context, query metadatapkg.JobQuery) (metadatapkg.JobListResult, error) {
+	if a.metadataStore == nil {
+		return metadatapkg.JobListResult{Limit: query.Limit, Offset: query.Offset}, nil
+	}
+	return a.metadataStore.ListJobsPage(ctx, query)
+}
+
 func normalizeJobTrigger(value string, fallback string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value != "" {

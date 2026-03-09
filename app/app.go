@@ -526,7 +526,7 @@ func (a *App) buildSeriesComicFromCandidates(ctx context.Context, lib configpkg.
 		return nil, errors.New("empty series")
 	}
 	title := resolveComicTitle(meta, shared.BaseNameTitle(rel))
-	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForSeries(lib, rel, title, candidates))
+	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForSeries(lib, rel, meta, title, candidates))
 	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, title), "series")
 	comic.ID = shared.SHAID(lib.ID, "series", rel, groupKey)
 	applyMetadata(comic, meta)
@@ -586,7 +586,7 @@ func (a *App) buildArchiveSeriesComic(ctx context.Context, lib configpkg.Library
 	if err != nil || len(groups) < 2 {
 		return nil, err
 	}
-	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForArchive(ctx, a, lib, backend, rel, fallbackTitle))
+	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForArchive(ctx, a, lib, backend, rel, meta, fallbackTitle))
 	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, fallbackTitle), "archive")
 	applyMetadata(comic, meta)
 	chapters := make([]*Chapter, 0, len(groups))
@@ -610,7 +610,7 @@ func (a *App) buildArchiveSeriesComic(ctx context.Context, lib configpkg.Library
 
 func (a *App) buildDirComic(ctx context.Context, lib configpkg.LibraryConfig, backend backendpkg.Backend, rel string, images []backendpkg.Entry) (*Comic, error) {
 	meta, _ := a.loadMetadataForDir(ctx, backend, rel, shared.BaseNameTitle(rel))
-	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForDir(lib, rel, resolveComicTitle(meta, shared.BaseNameTitle(rel)), images))
+	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForDir(lib, rel, meta, resolveComicTitle(meta, shared.BaseNameTitle(rel)), images))
 	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, shared.BaseNameTitle(rel)), "dir")
 	applyMetadata(comic, meta)
 	chapter := &Chapter{
@@ -639,7 +639,7 @@ func (a *App) buildArchiveComic(ctx context.Context, lib configpkg.LibraryConfig
 	if comic, err := a.buildArchiveSeriesComic(ctx, lib, backend, rel, fallbackTitle, meta); err == nil && comic != nil {
 		return comic, nil
 	}
-	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForArchive(ctx, a, lib, backend, rel, fallbackTitle))
+	meta = a.mergeMetadataFromStore(ctx, meta, metadataInputForArchive(ctx, a, lib, backend, rel, meta, fallbackTitle))
 	comic := a.buildBaseComic(lib, rel, resolveComicTitle(meta, fallbackTitle), "archive")
 	applyMetadata(comic, meta)
 	chapter := &Chapter{

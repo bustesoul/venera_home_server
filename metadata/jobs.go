@@ -34,6 +34,14 @@ type JobQuery struct {
 	Status    string
 	LibraryID string
 	Limit     int
+	Offset    int
+}
+
+type JobListResult struct {
+	Items  []JobRecord `json:"items"`
+	Total  int         `json:"total"`
+	Limit  int         `json:"limit"`
+	Offset int         `json:"offset"`
 }
 
 func (s *Store) UpsertJob(ctx context.Context, item JobRecord) error {
@@ -107,8 +115,16 @@ ON CONFLICT(job_id) DO UPDATE SET
 }
 
 func (s *Store) ListJobs(ctx context.Context, query JobQuery) ([]JobRecord, error) {
+	result, err := s.ListJobsPage(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (s *Store) ListJobsPage(ctx context.Context, query JobQuery) (JobListResult, error) {
 	if s == nil || s.db == nil {
-		return nil, nil
+		return JobListResult{Limit: query.Limit, Offset: query.Offset}, nil
 	}
 	where, args := buildJobFilter(query)
 	limit := query.Limit
@@ -118,6 +134,15 @@ func (s *Store) ListJobs(ctx context.Context, query JobQuery) ([]JobRecord, erro
 	if limit > 500 {
 		limit = 500
 	}
+	offset := query.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	countStmt := `SELECT COUNT(*) FROM job_history WHERE ` + strings.Join(where, ` AND `)
+	var total int
+	if err := s.db.QueryRowContext(ctx, countStmt, args...).Scan(&total); err != nil {
+		return JobListResult{}, err
+	}
 	rows, err := s.db.QueryContext(ctx, `
 SELECT job_id, kind, trigger, status, summary, library_id, path, target_id,
 	   remote_job_id, error, requested_at, started_at, finished_at, updated_at,
@@ -125,23 +150,23 @@ SELECT job_id, kind, trigger, status, summary, library_id, path, target_id,
 FROM job_history
 WHERE `+strings.Join(where, ` AND `)+`
 ORDER BY updated_at DESC, job_id DESC
-LIMIT ?`, append(args, limit)...)
+LIMIT ? OFFSET ?`, append(append([]any{}, args...), limit, offset)...)
 	if err != nil {
-		return nil, err
+		return JobListResult{}, err
 	}
 	defer rows.Close()
 	out := make([]JobRecord, 0)
 	for rows.Next() {
 		item, err := scanJob(rows)
 		if err != nil {
-			return nil, err
+			return JobListResult{}, err
 		}
 		out = append(out, item)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return JobListResult{}, err
 	}
-	return out, nil
+	return JobListResult{Items: out, Total: total, Limit: limit, Offset: offset}, nil
 }
 
 func buildJobFilter(query JobQuery) ([]string, []any) {

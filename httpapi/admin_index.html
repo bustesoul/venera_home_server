@@ -490,6 +490,17 @@
         <label><span>触发方式</span><select id="jobHistoryTrigger"><option value="">全部</option><option value="manual">manual</option><option value="auto">auto</option><option value="rescan">rescan</option><option value="refresh">refresh</option><option value="enrich">enrich</option><option value="record_action">record_action</option><option value="startup">startup</option></select></label>
         <label><span>状态</span><select id="jobHistoryStatus"><option value="">全部</option><option value="queued">queued</option><option value="running">running</option><option value="done">done</option><option value="failed">failed</option><option value="ready">ready</option><option value="accepted">accepted</option></select></label>
         <label><span>书库</span><input id="jobHistoryLibrary" type="text" placeholder="如 local-main"></label>
+        <label><span>页码</span><input id="jobHistoryPage" type="number" value="1" min="1"></label>
+        <label><span>每页条数</span><input id="jobHistoryLimit" type="number" value="100" min="1" max="200"></label>
+      </div>
+      <div class="row" style="margin-top: 16px;">
+        <label class="checkbox" style="min-width: 260px; flex: 0 0 auto;">
+          <input id="jobHistoryAggregate" type="checkbox" checked>
+          <span>聚合同类同状态相邻记录</span>
+        </label>
+        <div id="jobHistorySummary" class="help" style="margin-bottom: 0; flex: 1;">-</div>
+        <button id="jobHistoryPrevBtn" class="ghost">上一页</button>
+        <button id="jobHistoryNextBtn" class="ghost">下一页</button>
       </div>
       <div class="scroll" style="margin-top: 16px;">
         <table id="jobHistoryTable">
@@ -566,7 +577,22 @@ document.getElementById('loadEHBotConfigBtn').addEventListener('click', loadEHBo
 document.getElementById('saveEHBotConfigBtn').addEventListener('click', saveEHBotConfig);
 document.getElementById('ehbotConfigClearPullToken').addEventListener('change', syncEHBotTokenInputs);
 document.getElementById('createEHBotJobBtn').addEventListener('click', createEHBotJob);
-document.getElementById('refreshJobHistoryBtn').addEventListener('click', refreshJobHistory);
+document.getElementById('refreshJobHistoryBtn').addEventListener('click', () => refreshJobHistory(true));
+document.getElementById('jobHistoryPrevBtn').addEventListener('click', () => refreshJobHistory(false, -1));
+document.getElementById('jobHistoryNextBtn').addEventListener('click', () => refreshJobHistory(false, 1));
+document.getElementById('jobHistoryLimit').addEventListener('change', () => refreshJobHistory(true));
+document.getElementById('jobHistoryAggregate').addEventListener('change', () => refreshJobHistory(false));
+document.getElementById('jobHistoryTrigger').addEventListener('change', () => refreshJobHistory(true));
+document.getElementById('jobHistoryStatus').addEventListener('change', () => refreshJobHistory(true));
+document.getElementById('jobHistoryPage').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') refreshJobHistory(false);
+});
+document.getElementById('jobHistoryKind').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') refreshJobHistory(true);
+});
+document.getElementById('jobHistoryLibrary').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') refreshJobHistory(true);
+});
 document.querySelectorAll('.tab-btn').forEach((button) => {
   button.addEventListener('click', () => setActiveTab(button.dataset.tab));
 });
@@ -987,36 +1013,106 @@ async function refreshEHBotJobs() {
   }
 }
 
-async function refreshJobHistory() {
+function jobHistoryPageValue() {
+  const page = Number(document.getElementById('jobHistoryPage').value || 1);
+  if (!Number.isFinite(page) || page <= 0) return 1;
+  return Math.floor(page);
+}
+
+function jobHistoryLimitValue() {
+  const limit = Number(document.getElementById('jobHistoryLimit').value || 100);
+  if (!Number.isFinite(limit) || limit <= 0) return 100;
+  return Math.min(200, Math.floor(limit));
+}
+
+function aggregateJobHistoryItems(items) {
+  const groups = [];
+  for (const job of Array.isArray(items) ? items : []) {
+    const last = groups[groups.length - 1];
+    if (last && last.kind === (job.kind || '') && last.status === (job.status || '')) {
+      last.items.push(job);
+      continue;
+    }
+    groups.push({ kind: job.kind || '', status: job.status || '', items: [job] });
+  }
+  return groups.map((group) => {
+    const latest = group.items[0] || {};
+    const earliest = group.items[group.items.length - 1] || latest;
+    return {
+      ...latest,
+      _group_count: group.items.length,
+      _group_first_job_id: earliest.job_id || '',
+      _group_first_updated_at: earliest.updated_at || earliest.requested_at || '',
+      _group_last_job_id: latest.job_id || '',
+      _group_last_updated_at: latest.updated_at || latest.requested_at || '',
+      _group_error_count: group.items.filter((item) => item && item.error).length,
+    };
+  });
+}
+
+async function refreshJobHistory(resetPage = false, delta = 0) {
   try {
+    if (resetPage) document.getElementById('jobHistoryPage').value = '1';
+    let page = jobHistoryPageValue();
+    if (delta) {
+      page = Math.max(1, page + delta);
+      document.getElementById('jobHistoryPage').value = String(page);
+    }
+    const limit = jobHistoryLimitValue();
+    document.getElementById('jobHistoryLimit').value = String(limit);
     const params = new URLSearchParams({
       kind: document.getElementById('jobHistoryKind').value.trim(),
       trigger: document.getElementById('jobHistoryTrigger').value,
       status: document.getElementById('jobHistoryStatus').value,
       library_id: document.getElementById('jobHistoryLibrary').value.trim(),
-      limit: '100',
+      page: String(page),
+      limit: String(limit),
     });
     const data = await fetchJSON(`/api/v1/admin/jobs?${params.toString()}`);
-    const items = data.items || [];
+    const rawItems = data.items || [];
+    const aggregate = document.getElementById('jobHistoryAggregate').checked;
+    const items = aggregate ? aggregateJobHistoryItems(rawItems) : rawItems;
     const tbody = document.querySelector('#jobHistoryTable tbody');
+    const currentPage = Number(data.page || page || 1);
+    const total = Number(data.total || 0);
+    const offset = Number(data.offset || 0);
+    const pageSize = Number(data.page_size || limit || 100);
+    document.getElementById('jobHistoryPage').value = String(currentPage);
+    document.getElementById('jobHistorySummary').textContent = `共 ${total} 条记录 / 第 ${currentPage} 页 / 每页 ${pageSize} 条 / 本页原始 ${rawItems.length} 条 / 当前显示 ${items.length} 行${aggregate ? '（已聚合）' : ''}`;
+    document.getElementById('jobHistoryPrevBtn').disabled = currentPage <= 1;
+    document.getElementById('jobHistoryNextBtn').disabled = offset + rawItems.length >= total;
     tbody.innerHTML = items.map((job) => {
       const target = [job.library_id || '', job.target_id || '', job.remote_job_id || ''].filter(Boolean).join(' / ');
-      const times = [formatDateTime(job.requested_at), formatDateTime(job.updated_at)].filter((value) => value && value !== '-');
+      const groupCount = Number(job._group_count || 1);
+      const idExtra = groupCount > 1
+        ? `<div style="margin-top: 4px;">${pill('×' + groupCount, 'warn')}</div><div class="muted mono">最早 ${htmlEscape(job._group_first_job_id || '')}</div>`
+        : '';
+      const timePrimary = formatDateTime(job.updated_at || job.requested_at);
+      const timeExtra = groupCount > 1
+        ? `<div class="muted mono">起始 ${htmlEscape(formatDateTime(job._group_first_updated_at || job.requested_at))}</div>`
+        : '';
+      const summaryCell = groupCount > 1
+        ? `<div>${htmlEscape(job.summary || '-')}</div><div class="muted">相邻 ${groupCount} 条相同类型且相同状态记录已折叠</div>`
+        : htmlEscape(job.summary || '-');
+      const errorCell = (job.error || groupCount > 1)
+        ? `<div class="mono" style="color: var(--err);">${htmlEscape(job.error || '')}</div>${groupCount > 1 && (job._group_error_count || 0) > 0 ? `<div class="muted">聚合内含 ${htmlEscape(job._group_error_count || 0)} 条错误记录</div>` : ''}`
+        : '-';
       return `<tr>
-        <td class="mono" style="font-weight: 500;">${htmlEscape(job.job_id || '')}</td>
+        <td class="mono" style="font-weight: 500;">${htmlEscape(job.job_id || '')}${idExtra}</td>
         <td>${pill(job.kind || '-')}</td>
         <td>${pill(job.trigger || '-', job.trigger === 'manual' ? 'warn' : job.trigger ? 'ok' : '')}</td>
         <td>${renderState(job.status)}</td>
         <td><div class="mono">${htmlEscape(target || '-')}</div><div class="muted mono">${htmlEscape(job.path || '')}</div></td>
-        <td class="mono">${htmlEscape(times.join(' / ') || '-')}</td>
-        <td>${htmlEscape(job.summary || '-')}</td>
-        <td class="mono" style="color: var(--err);">${htmlEscape(job.error || '')}</td>
+        <td class="mono"><div>${htmlEscape(timePrimary || '-')}</div>${timeExtra}</td>
+        <td>${summaryCell}</td>
+        <td>${errorCell}</td>
       </tr>`;
     }).join('') || '<tr><td colspan="8" class="muted" style="text-align: center; padding: 32px;">暂无 Job 历史记录。</td></tr>';
   } catch (error) {
     setStatus(`Job 历史加载失败：${error.message}`, 'err');
   }
 }
+
 async function triggerEnrich() {
   try {
     const payload = {

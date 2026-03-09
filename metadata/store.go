@@ -31,6 +31,16 @@ type Hint struct {
 	Keywords       []string `json:"keywords,omitempty"`
 }
 
+type ScannedMetadata struct {
+	Title       string   `json:"title,omitempty"`
+	Subtitle    string   `json:"subtitle,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Artists     []string `json:"artists,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Language    string   `json:"language,omitempty"`
+	SourceURL   string   `json:"source_url,omitempty"`
+}
+
 type Record struct {
 	ID                 int64      `json:"id"`
 	LibraryID          string     `json:"library_id"`
@@ -85,11 +95,24 @@ func (r Record) IsEmptyMetadata() bool {
 		strings.TrimSpace(r.ExtraJSON) == ""
 }
 
+func (r Record) hasManagedRemoteMetadata() bool {
+	return strings.TrimSpace(r.Source) != "" ||
+		strings.TrimSpace(r.SourceID) != "" ||
+		strings.TrimSpace(r.SourceToken) != "" ||
+		strings.TrimSpace(r.MatchKind) != "" ||
+		r.HasConfidence ||
+		strings.TrimSpace(r.CoverSourceURL) != "" ||
+		strings.TrimSpace(r.CoverBlobRelpath) != "" ||
+		r.FetchedAt != nil ||
+		r.StaleAfter != nil
+}
+
 type ScanInput struct {
 	Locator            Locator
 	FolderPath         string
 	ContentFingerprint string
 	Hint               Hint
+	Local              ScannedMetadata
 }
 
 type Update struct {
@@ -281,29 +304,42 @@ func (s *Store) UpsertScanned(ctx context.Context, input ScanInput, seenAt time.
 	if err != nil {
 		return nil, err
 	}
+	scannedArtistsJSON, err := encodeJSON(input.Local.Artists)
+	if err != nil {
+		return nil, err
+	}
+	scannedTagsJSON, err := encodeJSON(input.Local.Tags)
+	if err != nil {
+		return nil, err
+	}
 
 	existing, err := s.getByLocatorTx(ctx, tx, input.Locator)
 	if err != nil {
 		return nil, err
 	}
 	if existing != nil {
-		_, err = tx.ExecContext(ctx, `
-UPDATE manga_metadata
-SET folder_path = ?, content_fingerprint = ?, hint_json = ?, last_seen_at = ?, missing_since = NULL
-WHERE id = ?
-`, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), formatTime(seenAt), existing.ID)
+		titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, err := resolveScannedMetadataValues(existing, input.Local, scannedArtistsJSON, scannedTagsJSON)
 		if err != nil {
 			return nil, err
 		}
-		existing.FolderPath = input.FolderPath
-		existing.ContentFingerprint = input.ContentFingerprint
-		existing.Hint = input.Hint
-		existing.LastSeenAt = ptrTime(seenAt)
-		existing.MissingSince = nil
+		_, err = tx.ExecContext(ctx, `
+UPDATE manga_metadata
+SET folder_path = ?, content_fingerprint = ?, hint_json = ?,
+    title = ?, subtitle = ?, description = ?, artists_json = ?, tags_json = ?, language = ?, source_url = ?,
+    last_seen_at = ?, missing_since = NULL
+WHERE id = ?
+`, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, formatTime(seenAt), existing.ID)
+		if err != nil {
+			return nil, err
+		}
+		updated, err := s.getByIDTx(ctx, tx, existing.ID)
+		if err != nil {
+			return nil, err
+		}
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
-		return existing, nil
+		return updated, nil
 	}
 
 	rebound, err := s.findRebindCandidateTx(ctx, tx, input.Locator.LibraryID, input.ContentFingerprint, seenAt)
@@ -311,32 +347,36 @@ WHERE id = ?
 		return nil, err
 	}
 	if rebound != nil {
-		_, err = tx.ExecContext(ctx, `
-UPDATE manga_metadata
-SET root_type = ?, root_ref = ?, folder_path = ?, content_fingerprint = ?, hint_json = ?, last_seen_at = ?, missing_since = NULL
-WHERE id = ?
-`, input.Locator.RootType, input.Locator.RootRef, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), formatTime(seenAt), rebound.ID)
+		titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, err := resolveScannedMetadataValues(rebound, input.Local, scannedArtistsJSON, scannedTagsJSON)
 		if err != nil {
 			return nil, err
 		}
-		rebound.RootType = input.Locator.RootType
-		rebound.RootRef = input.Locator.RootRef
-		rebound.FolderPath = input.FolderPath
-		rebound.ContentFingerprint = input.ContentFingerprint
-		rebound.Hint = input.Hint
-		rebound.LastSeenAt = ptrTime(seenAt)
-		rebound.MissingSince = nil
+		_, err = tx.ExecContext(ctx, `
+UPDATE manga_metadata
+SET root_type = ?, root_ref = ?, folder_path = ?, content_fingerprint = ?, hint_json = ?,
+    title = ?, subtitle = ?, description = ?, artists_json = ?, tags_json = ?, language = ?, source_url = ?,
+    last_seen_at = ?, missing_since = NULL
+WHERE id = ?
+`, input.Locator.RootType, input.Locator.RootRef, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, formatTime(seenAt), rebound.ID)
+		if err != nil {
+			return nil, err
+		}
+		updated, err := s.getByIDTx(ctx, tx, rebound.ID)
+		if err != nil {
+			return nil, err
+		}
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
-		return rebound, nil
+		return updated, nil
 	}
 
 	result, err := tx.ExecContext(ctx, `
 INSERT INTO manga_metadata(
-    library_id, root_type, root_ref, folder_path, content_fingerprint, hint_json, last_seen_at
-) VALUES(?, ?, ?, ?, ?, ?, ?)
-`, input.Locator.LibraryID, input.Locator.RootType, input.Locator.RootRef, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), formatTime(seenAt))
+    library_id, root_type, root_ref, folder_path, content_fingerprint, hint_json,
+    title, subtitle, description, artists_json, tags_json, language, source_url, last_seen_at
+) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, input.Locator.LibraryID, input.Locator.RootType, input.Locator.RootRef, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), nullIfEmpty(input.Local.Title), nullIfEmpty(input.Local.Subtitle), nullIfEmpty(input.Local.Description), nullIfEmpty(scannedArtistsJSON), nullIfEmpty(scannedTagsJSON), nullIfEmpty(input.Local.Language), nullIfEmpty(input.Local.SourceURL), formatTime(seenAt))
 	if err != nil {
 		return nil, err
 	}
@@ -839,6 +879,51 @@ func scanRecord(scanner rowScanner) (Record, error) {
 	return rec, nil
 }
 
+func resolveScannedMetadataValues(existing *Record, local ScannedMetadata, scannedArtistsJSON string, scannedTagsJSON string) (any, any, any, any, any, any, any, error) {
+	if existing == nil {
+		return nullIfEmpty(local.Title), nullIfEmpty(local.Subtitle), nullIfEmpty(local.Description), nullIfEmpty(scannedArtistsJSON), nullIfEmpty(scannedTagsJSON), nullIfEmpty(local.Language), nullIfEmpty(local.SourceURL), nil
+	}
+	if !existing.hasManagedRemoteMetadata() {
+		return nullIfEmpty(local.Title), nullIfEmpty(local.Subtitle), nullIfEmpty(local.Description), nullIfEmpty(scannedArtistsJSON), nullIfEmpty(scannedTagsJSON), nullIfEmpty(local.Language), nullIfEmpty(local.SourceURL), nil
+	}
+	existingArtistsJSON, err := encodeJSON(existing.Artists)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, err
+	}
+	existingTagsJSON, err := encodeJSON(existing.Tags)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, err
+	}
+	titleValue := nullIfEmpty(existing.Title)
+	if strings.TrimSpace(existing.Title) == "" {
+		titleValue = nullIfEmpty(local.Title)
+	}
+	subtitleValue := nullIfEmpty(existing.Subtitle)
+	if strings.TrimSpace(existing.Subtitle) == "" {
+		subtitleValue = nullIfEmpty(local.Subtitle)
+	}
+	descriptionValue := nullIfEmpty(existing.Description)
+	if strings.TrimSpace(existing.Description) == "" {
+		descriptionValue = nullIfEmpty(local.Description)
+	}
+	artistsValue := nullIfEmpty(existingArtistsJSON)
+	if len(existing.Artists) == 0 {
+		artistsValue = nullIfEmpty(scannedArtistsJSON)
+	}
+	tagsValue := nullIfEmpty(existingTagsJSON)
+	if len(existing.Tags) == 0 {
+		tagsValue = nullIfEmpty(scannedTagsJSON)
+	}
+	languageValue := nullIfEmpty(existing.Language)
+	if strings.TrimSpace(existing.Language) == "" {
+		languageValue = nullIfEmpty(local.Language)
+	}
+	sourceURLValue := nullIfEmpty(existing.SourceURL)
+	if strings.TrimSpace(existing.SourceURL) == "" {
+		sourceURLValue = nullIfEmpty(local.SourceURL)
+	}
+	return titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, nil
+}
 func emptyStateWhere() string {
 	return `COALESCE(title, '') = '' AND COALESCE(title_jpn, '') = '' AND COALESCE(subtitle, '') = '' AND ` +
 		`COALESCE(description, '') = '' AND COALESCE(artists_json, '') = '' AND COALESCE(tags_json, '') = '' AND ` +
