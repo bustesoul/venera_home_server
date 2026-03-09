@@ -554,6 +554,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminJobsResponse'
+  /admin/ehbot/status:
+    get:
+      tags: [admin]
+      summary: Get current EH Bot runtime status
+      operationId: getAdminEHBotStatus
+      responses:
+        '200':
+          description: EH Bot runtime status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EHBotStatusResponse'
+  /admin/ehbot/config:
+    get:
+      tags: [admin]
+      summary: Load current EH Bot configuration
+      operationId: getAdminEHBotConfig
+      responses:
+        '200':
+          description: EH Bot configuration view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EHBotConfigResponse'
+    put:
+      tags: [admin]
+      summary: Update EH Bot configuration and restart the service
+      operationId: updateAdminEHBotConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EHBotConfigUpdate'
+      responses:
+        '200':
+          description: Updated EH Bot configuration view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EHBotConfigResponse'
+  /admin/ehbot/jobs:
+    get:
+      tags: [admin]
+      summary: List current EH Bot pull jobs
+      operationId: getAdminEHBotJobs
+      responses:
+        '200':
+          description: EH Bot pull job list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EHBotJobsResponse'
   /admin/ehbot/jobs/create:
     post:
       tags: [admin]
@@ -572,6 +625,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EHBotCreateResponse'
+  /admin/ehbot/pull/run-once:
+    post:
+      tags: [admin]
+      summary: Trigger a single EH Bot pull cycle manually
+      operationId: runAdminEHBotPullOnce
+      responses:
+        '200':
+          description: Pull job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EHBotPullRunOnceResponse'
   /media/{token}:
     get:
       tags: [media]
@@ -1644,3 +1709,207 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/EHBotCreateResult'
+    EHBotStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        configured:
+          type: boolean
+        config_error:
+          type: string
+        base_url:
+          type: string
+        consumer_id:
+          type: string
+        target_id:
+          type: string
+        target_library_id:
+          type: string
+        target_library_name:
+          type: string
+        target_library_kind:
+          type: string
+        target_subdir:
+          type: string
+        poll_interval_seconds:
+          type: integer
+        lease_seconds:
+          type: integer
+        download_timeout_seconds:
+          type: integer
+        auto_rescan:
+          type: boolean
+        max_jobs_per_poll:
+          type: integer
+        running:
+          type: boolean
+        queue_depth:
+          type: integer
+        current_job_id:
+          type: string
+        last_poll_at:
+          type: string
+          format: date-time
+        last_success_at:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+        last_remote_job_id:
+          type: string
+        last_imported_path:
+          type: string
+    EHBotStatusResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/EHBotStatus'
+    EHBotPullJob:
+      type: object
+      required: [job_id, status, requested_at]
+      properties:
+        job_id:
+          type: string
+        trigger:
+          type: string
+        status:
+          type: string
+        library_id:
+          type: string
+        listed:
+          type: integer
+        eligible:
+          type: integer
+        claimed:
+          type: integer
+        imported:
+          type: integer
+        completed:
+          type: integer
+        failed:
+          type: integer
+        last_step:
+          type: string
+        remote_job_id:
+          type: string
+        remote_title:
+          type: string
+        remote_target_id:
+          type: string
+        artifact_filename:
+          type: string
+        imported_path:
+          type: string
+        error:
+          type: string
+        requested_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+    EHBotJobsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EHBotPullJob'
+            count:
+              type: integer
+    EHBotPullRunOnceResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/EHBotPullJob'
+    EHBotLibraryOption:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+    EHBotConfigView:
+      type: object
+      properties:
+        writable:
+          type: boolean
+        config_path:
+          type: string
+        rewrite_warning:
+          type: string
+        pull_token_configured:
+          type: boolean
+        enabled:
+          type: boolean
+        base_url:
+          type: string
+        consumer_id:
+          type: string
+        target_id:
+          type: string
+        target_library_id:
+          type: string
+        target_subdir:
+          type: string
+        poll_interval_seconds:
+          type: integer
+        lease_seconds:
+          type: integer
+        download_timeout_seconds:
+          type: integer
+        auto_rescan:
+          type: boolean
+        max_jobs_per_poll:
+          type: integer
+        libraries:
+          type: array
+          items:
+            $ref: '#/components/schemas/EHBotLibraryOption'
+    EHBotConfigUpdate:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        base_url:
+          type: string
+        pull_token:
+          type: string
+        clear_pull_token:
+          type: boolean
+        consumer_id:
+          type: string
+        target_id:
+          type: string
+        target_library_id:
+          type: string
+        target_subdir:
+          type: string
+        poll_interval_seconds:
+          type: integer
+        lease_seconds:
+          type: integer
+        download_timeout_seconds:
+          type: integer
+        auto_rescan:
+          type: boolean
+        max_jobs_per_poll:
+          type: integer
+    EHBotConfigResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/EHBotConfigView'
