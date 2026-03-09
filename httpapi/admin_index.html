@@ -1169,10 +1169,20 @@ async function refreshRecords(resetPage = false) {
     tbody.innerHTML = state.lastRecordItems.map((item) => {
       const encodedLocator = encodeLocator(item.locator || {});
       const key = locatorKey(item.locator || {});
+      const artists = Array.isArray(item.artists) ? item.artists.filter(Boolean) : [];
+      const tags = Array.isArray(item.tags) ? item.tags.filter(Boolean) : [];
+      const artistsText = artists.join(', ');
+      const tagsPreview = tags.slice(0, 8).join(', ');
+      const tagsText = tags.length > 8 ? `${tagsPreview} ...` : tagsPreview;
+      const metaLines = [
+        artistsText ? `<div class="muted">Authors: ${htmlEscape(artistsText)}</div>` : '',
+        item.language ? `<div class="muted">Language: ${htmlEscape(item.language)}</div>` : '',
+        tagsText ? `<div class="muted">Tags: ${htmlEscape(tagsText)}</div>` : '',
+      ].join('');
       return `<tr>
         <td><input type="checkbox" data-record-key="${htmlEscape(key)}" onchange='toggleRecordSelection("${encodedLocator}", this.checked)'></td>
         <td>${renderState(item.state)}</td>
-        <td><div style="font-weight: 500;">${htmlEscape(item.title || item.title_jpn || '(未匹配到标题)')}</div><div class="muted mono">${htmlEscape(item.subtitle || '')}</div></td>
+        <td><div style="font-weight: 500;">${htmlEscape(item.title || item.title_jpn || '(未匹配到标题)')}</div><div class="muted mono">${htmlEscape(item.subtitle || '')}</div>${metaLines}</td>
         <td><div class="mono">${htmlEscape(item.root_ref || '')}</div><div class="muted mono">${htmlEscape(item.folder_path || '')}</div></td>
         <td><div>${htmlEscape(item.source || '')}</div><div class="muted mono">${htmlEscape(item.source_id || '')}</div></td>
         <td class="mono">${item.confidence == null ? '-' : htmlEscape(item.confidence)}</td>

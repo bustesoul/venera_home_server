@@ -42,39 +42,40 @@ type ScannedMetadata struct {
 }
 
 type Record struct {
-	ID                 int64      `json:"id"`
-	LibraryID          string     `json:"library_id"`
-	RootType           string     `json:"root_type"`
-	RootRef            string     `json:"root_ref"`
-	FolderPath         string     `json:"folder_path"`
-	ContentFingerprint string     `json:"content_fingerprint,omitempty"`
-	Title              string     `json:"title,omitempty"`
-	TitleJPN           string     `json:"title_jpn,omitempty"`
-	Subtitle           string     `json:"subtitle,omitempty"`
-	Description        string     `json:"description,omitempty"`
-	Artists            []string   `json:"artists,omitempty"`
-	Tags               []string   `json:"tags,omitempty"`
-	Language           string     `json:"language,omitempty"`
-	Rating             float64    `json:"rating,omitempty"`
-	HasRating          bool       `json:"-"`
-	Category           string     `json:"category,omitempty"`
-	Source             string     `json:"source,omitempty"`
-	SourceID           string     `json:"source_id,omitempty"`
-	SourceToken        string     `json:"source_token,omitempty"`
-	SourceURL          string     `json:"source_url,omitempty"`
-	MatchKind          string     `json:"match_kind,omitempty"`
-	Confidence         float64    `json:"confidence,omitempty"`
-	HasConfidence      bool       `json:"-"`
-	ManualLocked       bool       `json:"manual_locked,omitempty"`
-	CoverSourceURL     string     `json:"cover_source_url,omitempty"`
-	CoverBlobRelpath   string     `json:"cover_blob_relpath,omitempty"`
-	Hint               Hint       `json:"hint,omitempty"`
-	ExtraJSON          string     `json:"extra_json,omitempty"`
-	LastError          string     `json:"last_error,omitempty"`
-	FetchedAt          *time.Time `json:"fetched_at,omitempty"`
-	StaleAfter         *time.Time `json:"stale_after,omitempty"`
-	LastSeenAt         *time.Time `json:"last_seen_at,omitempty"`
-	MissingSince       *time.Time `json:"missing_since,omitempty"`
+	ID                 int64           `json:"id"`
+	LibraryID          string          `json:"library_id"`
+	RootType           string          `json:"root_type"`
+	RootRef            string          `json:"root_ref"`
+	FolderPath         string          `json:"folder_path"`
+	ContentFingerprint string          `json:"content_fingerprint,omitempty"`
+	Title              string          `json:"title,omitempty"`
+	TitleJPN           string          `json:"title_jpn,omitempty"`
+	Subtitle           string          `json:"subtitle,omitempty"`
+	Description        string          `json:"description,omitempty"`
+	Artists            []string        `json:"artists,omitempty"`
+	Tags               []string        `json:"tags,omitempty"`
+	Language           string          `json:"language,omitempty"`
+	Rating             float64         `json:"rating,omitempty"`
+	HasRating          bool            `json:"-"`
+	Category           string          `json:"category,omitempty"`
+	Source             string          `json:"source,omitempty"`
+	SourceID           string          `json:"source_id,omitempty"`
+	SourceToken        string          `json:"source_token,omitempty"`
+	SourceURL          string          `json:"source_url,omitempty"`
+	MatchKind          string          `json:"match_kind,omitempty"`
+	Confidence         float64         `json:"confidence,omitempty"`
+	HasConfidence      bool            `json:"-"`
+	ManualLocked       bool            `json:"manual_locked,omitempty"`
+	CoverSourceURL     string          `json:"cover_source_url,omitempty"`
+	CoverBlobRelpath   string          `json:"cover_blob_relpath,omitempty"`
+	Hint               Hint            `json:"hint,omitempty"`
+	Scanned            ScannedMetadata `json:"scanned,omitempty"`
+	ExtraJSON          string          `json:"extra_json,omitempty"`
+	LastError          string          `json:"last_error,omitempty"`
+	FetchedAt          *time.Time      `json:"fetched_at,omitempty"`
+	StaleAfter         *time.Time      `json:"stale_after,omitempty"`
+	LastSeenAt         *time.Time      `json:"last_seen_at,omitempty"`
+	MissingSince       *time.Time      `json:"missing_since,omitempty"`
 }
 
 func (r Record) IsEmptyMetadata() bool {
@@ -96,15 +97,69 @@ func (r Record) IsEmptyMetadata() bool {
 }
 
 func (r Record) hasManagedRemoteMetadata() bool {
-	return strings.TrimSpace(r.Source) != "" ||
+	return strings.TrimSpace(r.Title) != "" ||
+		strings.TrimSpace(r.TitleJPN) != "" ||
+		strings.TrimSpace(r.Subtitle) != "" ||
+		strings.TrimSpace(r.Description) != "" ||
+		len(r.Artists) > 0 ||
+		len(r.Tags) > 0 ||
+		strings.TrimSpace(r.Language) != "" ||
+		r.HasRating ||
+		strings.TrimSpace(r.Category) != "" ||
+		strings.TrimSpace(r.Source) != "" ||
 		strings.TrimSpace(r.SourceID) != "" ||
 		strings.TrimSpace(r.SourceToken) != "" ||
+		strings.TrimSpace(r.SourceURL) != "" ||
 		strings.TrimSpace(r.MatchKind) != "" ||
 		r.HasConfidence ||
 		strings.TrimSpace(r.CoverSourceURL) != "" ||
 		strings.TrimSpace(r.CoverBlobRelpath) != "" ||
+		strings.TrimSpace(r.ExtraJSON) != "" ||
 		r.FetchedAt != nil ||
 		r.StaleAfter != nil
+}
+
+func (r Record) EffectiveTitle() string {
+	return firstPresent(r.Title, r.Scanned.Title)
+}
+
+func (r Record) EffectiveSubtitle() string {
+	return firstPresent(r.Subtitle, r.Scanned.Subtitle)
+}
+
+func (r Record) EffectiveDescription() string {
+	return firstPresent(r.Description, r.Scanned.Description)
+}
+
+func (r Record) EffectiveArtists() []string {
+	if len(r.Artists) > 0 {
+		return append([]string(nil), r.Artists...)
+	}
+	return append([]string(nil), r.Scanned.Artists...)
+}
+
+func (r Record) EffectiveTags() []string {
+	if len(r.Tags) > 0 {
+		return append([]string(nil), r.Tags...)
+	}
+	return append([]string(nil), r.Scanned.Tags...)
+}
+
+func (r Record) EffectiveLanguage() string {
+	return firstPresent(r.Language, r.Scanned.Language)
+}
+
+func (r Record) EffectiveSourceURL() string {
+	return firstPresent(r.SourceURL, r.Scanned.SourceURL)
+}
+
+func firstPresent(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 type ScanInput struct {
@@ -283,6 +338,23 @@ CREATE INDEX IF NOT EXISTS idx_job_history_status ON job_history(status);
 CREATE INDEX IF NOT EXISTS idx_job_history_updated_at ON job_history(updated_at DESC, job_id DESC);
 `
 	_, err := db.Exec(schema)
+	if err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "manga_metadata", "scanned_metadata_json", "TEXT"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ensureColumn(db *sql.DB, table string, column string, definition string) error {
+	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return nil
+	}
 	return err
 }
 
@@ -304,11 +376,7 @@ func (s *Store) UpsertScanned(ctx context.Context, input ScanInput, seenAt time.
 	if err != nil {
 		return nil, err
 	}
-	scannedArtistsJSON, err := encodeJSON(input.Local.Artists)
-	if err != nil {
-		return nil, err
-	}
-	scannedTagsJSON, err := encodeJSON(input.Local.Tags)
+	scannedJSON, err := encodeJSON(input.Local)
 	if err != nil {
 		return nil, err
 	}
@@ -318,17 +386,12 @@ func (s *Store) UpsertScanned(ctx context.Context, input ScanInput, seenAt time.
 		return nil, err
 	}
 	if existing != nil {
-		titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, err := resolveScannedMetadataValues(existing, input.Local, scannedArtistsJSON, scannedTagsJSON)
-		if err != nil {
-			return nil, err
-		}
 		_, err = tx.ExecContext(ctx, `
 UPDATE manga_metadata
-SET folder_path = ?, content_fingerprint = ?, hint_json = ?,
-    title = ?, subtitle = ?, description = ?, artists_json = ?, tags_json = ?, language = ?, source_url = ?,
+SET folder_path = ?, content_fingerprint = ?, hint_json = ?, scanned_metadata_json = ?,
     last_seen_at = ?, missing_since = NULL
 WHERE id = ?
-`, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, formatTime(seenAt), existing.ID)
+`, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), nullIfEmpty(scannedJSON), formatTime(seenAt), existing.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -347,17 +410,12 @@ WHERE id = ?
 		return nil, err
 	}
 	if rebound != nil {
-		titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, err := resolveScannedMetadataValues(rebound, input.Local, scannedArtistsJSON, scannedTagsJSON)
-		if err != nil {
-			return nil, err
-		}
 		_, err = tx.ExecContext(ctx, `
 UPDATE manga_metadata
-SET root_type = ?, root_ref = ?, folder_path = ?, content_fingerprint = ?, hint_json = ?,
-    title = ?, subtitle = ?, description = ?, artists_json = ?, tags_json = ?, language = ?, source_url = ?,
+SET root_type = ?, root_ref = ?, folder_path = ?, content_fingerprint = ?, hint_json = ?, scanned_metadata_json = ?,
     last_seen_at = ?, missing_since = NULL
 WHERE id = ?
-`, input.Locator.RootType, input.Locator.RootRef, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, formatTime(seenAt), rebound.ID)
+`, input.Locator.RootType, input.Locator.RootRef, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), nullIfEmpty(scannedJSON), formatTime(seenAt), rebound.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -374,9 +432,9 @@ WHERE id = ?
 	result, err := tx.ExecContext(ctx, `
 INSERT INTO manga_metadata(
     library_id, root_type, root_ref, folder_path, content_fingerprint, hint_json,
-    title, subtitle, description, artists_json, tags_json, language, source_url, last_seen_at
-) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, input.Locator.LibraryID, input.Locator.RootType, input.Locator.RootRef, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), nullIfEmpty(input.Local.Title), nullIfEmpty(input.Local.Subtitle), nullIfEmpty(input.Local.Description), nullIfEmpty(scannedArtistsJSON), nullIfEmpty(scannedTagsJSON), nullIfEmpty(input.Local.Language), nullIfEmpty(input.Local.SourceURL), formatTime(seenAt))
+    scanned_metadata_json, last_seen_at
+) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+`, input.Locator.LibraryID, input.Locator.RootType, input.Locator.RootRef, input.FolderPath, nullIfEmpty(input.ContentFingerprint), nullIfEmpty(hintJSON), nullIfEmpty(scannedJSON), formatTime(seenAt))
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +451,6 @@ INSERT INTO manga_metadata(
 	}
 	return created, nil
 }
-
 func (s *Store) FinalizeLibraryScan(ctx context.Context, libraryID string, seenAt time.Time) error {
 	if s == nil || s.db == nil || strings.TrimSpace(libraryID) == "" {
 		return nil
@@ -557,7 +614,7 @@ SELECT id, library_id, root_type, root_ref, folder_path, content_fingerprint,
        title, title_jpn, subtitle, description, artists_json, tags_json,
        language, rating, category, source, source_id, source_token, source_url,
        match_kind, confidence, manual_locked, cover_source_url, cover_blob_relpath,
-       hint_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
+       hint_json, scanned_metadata_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
 FROM manga_metadata
 WHERE ` + strings.Join(where, ` AND `) + `
 ORDER BY COALESCE(last_seen_at, '') DESC, id DESC
@@ -595,8 +652,8 @@ func buildListRecordsFilter(query ListQuery) ([]string, []any) {
 	}
 	if search := strings.TrimSpace(query.Search); search != "" {
 		pattern := "%" + search + "%"
-		where = append(where, `(root_ref LIKE ? OR folder_path LIKE ? OR COALESCE(title, '') LIKE ? OR COALESCE(title_jpn, '') LIKE ? OR COALESCE(subtitle, '') LIKE ? OR COALESCE(description, '') LIKE ? OR COALESCE(artists_json, '') LIKE ? OR COALESCE(tags_json, '') LIKE ? OR COALESCE(category, '') LIKE ? OR COALESCE(source, '') LIKE ? OR COALESCE(source_id, '') LIKE ? OR COALESCE(last_error, '') LIKE ?)`)
-		for i := 0; i < 12; i++ {
+		where = append(where, `(root_ref LIKE ? OR folder_path LIKE ? OR COALESCE(title, '') LIKE ? OR COALESCE(title_jpn, '') LIKE ? OR COALESCE(subtitle, '') LIKE ? OR COALESCE(description, '') LIKE ? OR COALESCE(artists_json, '') LIKE ? OR COALESCE(tags_json, '') LIKE ? OR COALESCE(category, '') LIKE ? OR COALESCE(source, '') LIKE ? OR COALESCE(source_id, '') LIKE ? OR COALESCE(last_error, '') LIKE ? OR COALESCE(scanned_metadata_json, '') LIKE ?)`)
+		for i := 0; i < 13; i++ {
 			args = append(args, pattern)
 		}
 	}
@@ -698,7 +755,7 @@ SELECT id, library_id, root_type, root_ref, folder_path, content_fingerprint,
        title, title_jpn, subtitle, description, artists_json, tags_json,
        language, rating, category, source, source_id, source_token, source_url,
        match_kind, confidence, manual_locked, cover_source_url, cover_blob_relpath,
-       hint_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
+       hint_json, scanned_metadata_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
 FROM manga_metadata
 WHERE library_id = ? AND root_type = ? AND root_ref = ?
 `, locator.LibraryID, locator.RootType, locator.RootRef)
@@ -721,7 +778,7 @@ SELECT id, library_id, root_type, root_ref, folder_path, content_fingerprint,
        title, title_jpn, subtitle, description, artists_json, tags_json,
        language, rating, category, source, source_id, source_token, source_url,
        match_kind, confidence, manual_locked, cover_source_url, cover_blob_relpath,
-       hint_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
+       hint_json, scanned_metadata_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
 FROM manga_metadata
 WHERE library_id = ? AND root_type = ? AND root_ref = ?
 `, locator.LibraryID, locator.RootType, locator.RootRef)
@@ -741,7 +798,7 @@ SELECT id, library_id, root_type, root_ref, folder_path, content_fingerprint,
        title, title_jpn, subtitle, description, artists_json, tags_json,
        language, rating, category, source, source_id, source_token, source_url,
        match_kind, confidence, manual_locked, cover_source_url, cover_blob_relpath,
-       hint_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
+       hint_json, scanned_metadata_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
 FROM manga_metadata
 WHERE id = ?
 `, id)
@@ -762,7 +819,7 @@ SELECT id, library_id, root_type, root_ref, folder_path, content_fingerprint,
        title, title_jpn, subtitle, description, artists_json, tags_json,
        language, rating, category, source, source_id, source_token, source_url,
        match_kind, confidence, manual_locked, cover_source_url, cover_blob_relpath,
-       hint_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
+       hint_json, scanned_metadata_json, extra_json, last_error, fetched_at, stale_after, last_seen_at, missing_since
 FROM manga_metadata
 WHERE library_id = ? AND content_fingerprint = ? AND last_seen_at < ?
 `, libraryID, fingerprint, formatTime(seenAt))
@@ -796,6 +853,7 @@ func scanRecord(scanner rowScanner) (Record, error) {
 	var artistsJSON sql.NullString
 	var tagsJSON sql.NullString
 	var hintJSON sql.NullString
+	var scannedMetadataJSON sql.NullString
 	var extraJSON sql.NullString
 	var title sql.NullString
 	var titleJPN sql.NullString
@@ -829,7 +887,7 @@ func scanRecord(scanner rowScanner) (Record, error) {
 		&title, &titleJPN, &subtitle, &description, &artistsJSON, &tagsJSON,
 		&language, &rating, &category, &source, &sourceID, &sourceToken, &sourceURL,
 		&matchKind, &confidence, &manualLocked, &coverSourceURL, &coverBlobRelpath,
-		&hintJSON, &extraJSON, &lastError, &fetchedAt, &staleAfter, &lastSeenAt, &missingSince,
+		&hintJSON, &scannedMetadataJSON, &extraJSON, &lastError, &fetchedAt, &staleAfter, &lastSeenAt, &missingSince,
 	)
 	if err != nil {
 		return Record{}, err
@@ -871,6 +929,9 @@ func scanRecord(scanner rowScanner) (Record, error) {
 	}
 	if strings.TrimSpace(hintJSON.String) != "" {
 		_ = json.Unmarshal([]byte(hintJSON.String), &rec.Hint)
+	}
+	if strings.TrimSpace(scannedMetadataJSON.String) != "" {
+		_ = json.Unmarshal([]byte(scannedMetadataJSON.String), &rec.Scanned)
 	}
 	rec.FetchedAt = parseTimePtr(fetchedAt.String)
 	rec.StaleAfter = parseTimePtr(staleAfter.String)

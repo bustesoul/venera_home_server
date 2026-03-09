@@ -8,6 +8,7 @@ import (
 
 	apppkg "venera_home_server/app"
 	configpkg "venera_home_server/config"
+	metadatapkg "venera_home_server/metadata"
 	"venera_home_server/tests/testkit"
 )
 
@@ -127,6 +128,22 @@ Downloaded from E-Hentai Galleries by the Hentai@Home Downloader <3`
 	if strings.Contains(comic.Description, "Downloaded from E-Hentai Galleries") {
 		t.Fatalf("footer should be trimmed from description: %q", comic.Description)
 	}
+	records, err := application.MetadataRecords(context.Background(), metadatapkg.ListQuery{LibraryID: "local-main", Limit: 10})
+	if err != nil {
+		t.Fatalf("MetadataRecords: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 metadata record, got %d", len(records))
+	}
+	if records[0].Scanned.Title != "Example Gallery Title" {
+		t.Fatalf("unexpected scanned title: %q", records[0].Scanned.Title)
+	}
+	if records[0].Scanned.Language != "zh" {
+		t.Fatalf("unexpected scanned language: %q", records[0].Scanned.Language)
+	}
+	if !containsString(records[0].Scanned.Tags, "language:chinese") || !containsString(records[0].Scanned.Tags, "female:yuri") {
+		t.Fatalf("unexpected scanned tags: %#v", records[0].Scanned.Tags)
+	}
 }
 
 func TestDirectoryGalleryInfoMetadata(t *testing.T) {
@@ -158,6 +175,22 @@ Directory description`))
 	}
 	if !strings.Contains(comic.Description, "Directory description") {
 		t.Fatalf("unexpected description: %q", comic.Description)
+	}
+	records, err := application.MetadataRecords(context.Background(), metadatapkg.ListQuery{LibraryID: "local-main", Limit: 10})
+	if err != nil {
+		t.Fatalf("MetadataRecords: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 metadata record, got %d", len(records))
+	}
+	if records[0].Scanned.Title != "Directory Title" {
+		t.Fatalf("unexpected scanned title: %q", records[0].Scanned.Title)
+	}
+	if records[0].Scanned.Language != "ja" {
+		t.Fatalf("unexpected scanned language: %q", records[0].Scanned.Language)
+	}
+	if !containsString(records[0].Scanned.Tags, "language:japanese") || !containsString(records[0].Scanned.Tags, "female:yuri") {
+		t.Fatalf("unexpected scanned tags: %#v", records[0].Scanned.Tags)
 	}
 }
 

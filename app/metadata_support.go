@@ -54,25 +54,31 @@ func mergeStoredMetadata(base ParsedMetadata, record *metadatapkg.Record) Parsed
 	}
 	out := base
 	if strings.TrimSpace(out.Title) == "" || !out.hasExplicitTitle {
-		out.Title = firstNonEmpty(record.Title, record.TitleJPN, out.Title)
+		out.Title = firstNonEmpty(record.Title, record.TitleJPN, record.Scanned.Title, out.Title)
 	}
 	if strings.TrimSpace(out.Subtitle) == "" {
-		out.Subtitle = firstNonEmpty(record.Subtitle, out.Subtitle)
+		out.Subtitle = firstNonEmpty(record.EffectiveSubtitle(), out.Subtitle)
 	}
 	if strings.TrimSpace(out.Description) == "" {
-		out.Description = firstNonEmpty(record.Description, out.Description)
+		out.Description = firstNonEmpty(record.EffectiveDescription(), out.Description)
 	}
-	if len(out.Authors) == 0 && len(record.Artists) > 0 {
-		out.Authors = shared.UniqueStrings(append([]string(nil), record.Artists...))
+	if len(out.Authors) == 0 {
+		artists := record.EffectiveArtists()
+		if len(artists) > 0 {
+			out.Authors = shared.UniqueStrings(artists)
+		}
 	}
-	if len(out.Tags) == 0 && len(record.Tags) > 0 {
-		out.Tags = shared.UniqueStrings(append([]string(nil), record.Tags...))
+	if len(out.Tags) == 0 {
+		tags := record.EffectiveTags()
+		if len(tags) > 0 {
+			out.Tags = shared.UniqueStrings(tags)
+		}
 	}
 	if strings.TrimSpace(out.Language) == "" {
-		out.Language = firstNonEmpty(record.Language, out.Language)
+		out.Language = firstNonEmpty(record.EffectiveLanguage(), out.Language)
 	}
 	if strings.TrimSpace(out.SourceURL) == "" {
-		out.SourceURL = firstNonEmpty(record.SourceURL, out.SourceURL)
+		out.SourceURL = firstNonEmpty(record.EffectiveSourceURL(), out.SourceURL)
 	}
 	return out
 }
@@ -255,6 +261,7 @@ func metadataInputForDir(lib configpkg.LibraryConfig, rel string, meta ParsedMet
 		FolderPath:         metadataFolderPath(lib, rel),
 		ContentFingerprint: dirContentFingerprint(images),
 		Hint:               metadataHintForRoot(rel, title),
+		Local:              scannedMetadataForStore(meta),
 	}
 }
 
@@ -264,6 +271,7 @@ func metadataInputForArchive(ctx context.Context, a *App, lib configpkg.LibraryC
 		FolderPath:         metadataFolderPath(lib, rel),
 		ContentFingerprint: a.archiveContentFingerprint(ctx, backend, rel),
 		Hint:               metadataHintForRoot(rel, title),
+		Local:              scannedMetadataForStore(meta),
 	}
 }
 
@@ -273,5 +281,6 @@ func metadataInputForSeries(lib configpkg.LibraryConfig, rel string, meta Parsed
 		FolderPath:         metadataFolderPath(lib, rel),
 		ContentFingerprint: seriesContentFingerprint(candidates),
 		Hint:               metadataHintForRoot(rel, title),
+		Local:              scannedMetadataForStore(meta),
 	}
 }

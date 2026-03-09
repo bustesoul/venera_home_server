@@ -521,7 +521,7 @@ func summarizeLocal(rec metadatapkg.Record) LocalRecordSummary {
 		RootType:    rec.RootType,
 		RootRef:     rec.RootRef,
 		FolderPath:  rec.FolderPath,
-		Title:       rec.Title,
+		Title:       rec.EffectiveTitle(),
 		TitleJPN:    rec.TitleJPN,
 		SourceID:    rec.SourceID,
 		SourceToken: rec.SourceToken,
@@ -659,11 +659,11 @@ func buildLocalSearch(rec metadatapkg.Record) localSearch {
 		GID:        firstNonEmpty(rec.SourceID, rec.Hint.EHGalleryID),
 		Token:      firstNonEmpty(rec.SourceToken, rec.Hint.EHToken),
 		FolderBase: cleanSearchText(baseNameFromAnyPath(firstNonEmpty(rec.FolderPath, rec.RootRef))),
-		Artists:    append([]string{}, rec.Artists...),
-		Tags:       append([]string{}, rec.Tags...),
+		Artists:    append([]string{}, rec.EffectiveArtists()...),
+		Tags:       append([]string{}, rec.EffectiveTags()...),
 		Keywords:   meaningfulValues(rec.Hint.Keywords...),
 	}
-	search.Titles = meaningfulValues(rec.Title, rec.TitleJPN, search.FolderBase)
+	search.Titles = meaningfulValues(rec.EffectiveTitle(), rec.TitleJPN, search.FolderBase)
 	for _, title := range search.Titles {
 		search.Keywords = append(search.Keywords, tokenize(title)...)
 	}
