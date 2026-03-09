@@ -130,6 +130,8 @@ func buildAdminEHBotArtifact(t *testing.T, files map[string][]byte) ([]byte, str
 type adminFakeEHBotServer struct {
 	mu            sync.Mutex
 	claimConsumer string
+	createdInput  string
+	createdTarget string
 	artifact      []byte
 	artifactSHA   string
 }
@@ -140,6 +142,18 @@ func newAdminFakeEHBotServer(artifact []byte, artifactSHA string) *adminFakeEHBo
 
 func (f *adminFakeEHBotServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
+	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/jobs":
+		var payload map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		f.mu.Lock()
+		f.createdInput = stringValueAdmin(payload["input"])
+		f.createdTarget = stringValueAdmin(payload["target_id"])
+		f.mu.Unlock()
+		job := f.jobPayload("queued")
+		if target := strings.TrimSpace(stringValueAdmin(payload["target_id"])); target != "" {
+			job["target_id"] = target
+		}
+		f.writeJSON(w, job)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/pull/jobs":
 		f.writeJSON(w, map[string]any{"items": []map[string]any{f.jobPayload("ready")}, "count": 1})
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/pull/jobs/remote-job/claim":
@@ -311,6 +325,61 @@ func TestEHBotConfigEndpointUpdatesConfigFile(t *testing.T) {
 	}
 	if reloaded.EHBot.PullToken != "" {
 		t.Fatalf("expected empty pull token after clear, got %#v", reloaded.EHBot)
+	}
+}
+
+func TestEHBotAdminCreateRemoteJobEndpoint(t *testing.T) {
+	fake := newAdminFakeEHBotServer(nil, "")
+	botSrv := httptest.NewServer(fake)
+	defer botSrv.Close()
+
+	root := t.TempDir()
+	comicsRoot := filepath.Join(root, "comics")
+	if err := os.MkdirAll(comicsRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll comicsRoot: %v", err)
+	}
+	cfg := newServerTestConfig(comicsRoot, 16)
+	cfg.Server.DataDir = filepath.Join(root, "data")
+	cfg.Server.CacheDir = filepath.Join(root, "cache")
+	cfg.EHBot.Enabled = false
+	cfg.EHBot.BaseURL = botSrv.URL
+	cfg.EHBot.ConsumerID = "home-admin"
+	cfg.EHBot.TargetID = "home-admin"
+	cfg.EHBot.TargetLibraryID = "local-main"
+	cfg.EHBot.TargetSubdir = "EH Inbox"
+
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	created := testkit.PostJSON(t, srv.URL+"/api/v1/admin/ehbot/jobs/create", cfg.Server.Token, map[string]any{
+		"input":     "https://e-hentai.org/g/3828219/b71301f4cc/",
+		"target_id": "manual-target",
+	})
+	data := created["data"].(map[string]any)
+	if data["job_id"] != "remote-job" {
+		t.Fatalf("unexpected remote create response: %#v", data)
+	}
+	if data["target_id"] != "manual-target" {
+		t.Fatalf("unexpected remote target: %#v", data)
+	}
+
+	fake.mu.Lock()
+	createdInput := fake.createdInput
+	createdTarget := fake.createdTarget
+	fake.mu.Unlock()
+	if createdInput != "https://e-hentai.org/g/3828219/b71301f4cc/" || createdTarget != "manual-target" {
+		t.Fatalf("unexpected forwarded create payload: input=%q target=%q", createdInput, createdTarget)
+	}
+
+	history := testkit.GetJSON(t, srv.URL+"/api/v1/admin/jobs?kind=ehbot.create_remote", cfg.Server.Token)
+	items := history["data"].(map[string]any)["items"].([]any)
+	if len(items) == 0 {
+		t.Fatal("expected at least one job history item")
+	}
+	item := items[0].(map[string]any)
+	if item["kind"] != "ehbot.create_remote" || item["remote_job_id"] != "remote-job" {
+		t.Fatalf("unexpected job history item: %#v", item)
 	}
 }
 

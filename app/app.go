@@ -95,7 +95,7 @@ func NewApp(cfg *configpkg.Config) (*App, error) {
 		}
 		app.backends[lib.ID] = backend
 	}
-	if err := app.Rescan(context.Background(), ""); err != nil {
+	if err := app.runStartupMetadataRefresh(context.Background()); err != nil {
 		return nil, err
 	}
 	app.startEHBotService()

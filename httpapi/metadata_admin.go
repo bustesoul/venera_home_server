@@ -32,6 +32,7 @@ func (s *Server) handleMetadataEnrich(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
 		return
 	}
+	payload.Trigger = normalizeRequestValue(payload.Trigger, "enrich")
 	job, err := s.app.StartMetadataEnrichment(r.Context(), payload)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "METADATA_ENRICH_FAILED", err.Error())

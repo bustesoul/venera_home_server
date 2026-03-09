@@ -521,6 +521,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MetadataSidecarResponse'
+  /admin/jobs:
+    get:
+      tags: [admin]
+      summary: List unified admin job history
+      operationId: listAdminJobs
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            type: string
+        - name: trigger
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LibraryId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: Unified job history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminJobsResponse'
+  /admin/ehbot/jobs/create:
+    post:
+      tags: [admin]
+      summary: Create one remote EH Bot download job without Telegram
+      operationId: createAdminEHBotJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EHBotCreateRequest'
+      responses:
+        '200':
+          description: Remote job accepted by EH Bot server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EHBotCreateResponse'
   /media/{token}:
     get:
       tags: [media]
@@ -1503,3 +1554,93 @@ components:
               type: integer
             dry_run:
               type: boolean
+    AdminJobRecord:
+      type: object
+      required: [job_id, kind, status, requested_at, updated_at]
+      properties:
+        job_id:
+          type: string
+        kind:
+          type: string
+        trigger:
+          type: string
+          nullable: true
+        status:
+          type: string
+        summary:
+          type: string
+          nullable: true
+        library_id:
+          type: string
+          nullable: true
+        path:
+          type: string
+          nullable: true
+        target_id:
+          type: string
+          nullable: true
+        remote_job_id:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        requested_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    AdminJobsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [items, count]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminJobRecord'
+            count:
+              type: integer
+    EHBotCreateRequest:
+      type: object
+      required: [input]
+      properties:
+        input:
+          type: string
+        target_id:
+          type: string
+        trigger:
+          type: string
+    EHBotCreateResult:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+        target_id:
+          type: string
+        title:
+          type: string
+        source_url:
+          type: string
+          format: uri
+    EHBotCreateResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/EHBotCreateResult'

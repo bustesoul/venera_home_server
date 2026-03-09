@@ -27,6 +27,7 @@ type MetadataEnrichRequest struct {
 	SourceID     string               `json:"source_id,omitempty"`
 	Workers      int                  `json:"workers,omitempty"`
 	IgnoreLocked bool                 `json:"ignore_locked,omitempty"`
+	Trigger      string               `json:"trigger,omitempty"`
 }
 
 type MetadataSourceSummary struct {
@@ -83,15 +84,17 @@ func (a *App) StartMetadataEnrichment(ctx context.Context, req MetadataEnrichReq
 	}
 	now := time.Now().UTC()
 	job := &MetadataRefreshJob{
-		ID:        shared.SHAID("metadata-enrich", req.LibraryID, path, req.SourceID, req.State, now.Format(time.RFC3339Nano)),
-		Kind:      "enrich",
-		Status:    "queued",
-		LibraryID: req.LibraryID,
-		Path:      path,
-		SourceID:  req.SourceID,
-		State:     req.State,
-		MinScore:  req.MinScore,
-		Workers:   req.Workers,
+		ID:          shared.SHAID("metadata-enrich", req.LibraryID, path, req.SourceID, req.State, now.Format(time.RFC3339Nano)),
+		Kind:        "enrich",
+		Trigger:     normalizeJobTrigger(req.Trigger, "manual"),
+		Status:      "queued",
+		LibraryID:   req.LibraryID,
+		Path:        path,
+		SourceID:    req.SourceID,
+		State:       req.State,
+		MinScore:    req.MinScore,
+		Workers:     req.Workers,
+		RequestedAt: now,
 	}
 	a.metadataJobsMu.Lock()
 	if a.metadataJobs == nil {
@@ -99,6 +102,7 @@ func (a *App) StartMetadataEnrichment(ctx context.Context, req MetadataEnrichReq
 	}
 	a.metadataJobs[job.ID] = job
 	a.metadataJobsMu.Unlock()
+	a.syncMetadataJobHistory(job)
 	go a.runMetadataEnrichmentJob(context.Background(), job, req)
 	return *job, nil
 }
@@ -186,9 +190,28 @@ func (a *App) MetadataRecordAction(ctx context.Context, req MetadataRecordAction
 		}
 		return buildMetadataRecordActionResult(action, locators, records, nil), nil
 	case "reset":
+		now := time.Now().UTC()
+		history := metadatapkg.JobRecord{
+			ID:          shared.SHAID("metadata-reset", fmt.Sprintf("%d", len(locators)), now.Format(time.RFC3339Nano)),
+			Kind:        "metadata.reset",
+			Trigger:     "record_action",
+			Status:      "running",
+			Summary:     fmt.Sprintf("locators=%d", len(locators)),
+			RequestedAt: now,
+			StartedAt:   &now,
+			UpdatedAt:   now,
+			Payload:     rawJobJSON(map[string]any{"locators": locators}),
+		}
+		a.persistJobRecord(history)
 		touchedLibraries := map[string]struct{}{}
 		for _, locator := range locators {
 			if err := a.ResetMetadata(ctx, locator); err != nil {
+				finished := time.Now().UTC()
+				history.Status = "failed"
+				history.Error = err.Error()
+				history.FinishedAt = &finished
+				history.UpdatedAt = finished
+				a.persistJobRecord(history)
 				return MetadataRecordActionResult{}, err
 			}
 			touchedLibraries[locator.LibraryID] = struct{}{}
@@ -200,6 +223,12 @@ func (a *App) MetadataRecordAction(ctx context.Context, req MetadataRecordAction
 		sort.Strings(libraries)
 		for _, libraryID := range libraries {
 			if err := a.Rescan(ctx, libraryID); err != nil {
+				finished := time.Now().UTC()
+				history.Status = "failed"
+				history.Error = err.Error()
+				history.FinishedAt = &finished
+				history.UpdatedAt = finished
+				a.persistJobRecord(history)
 				return MetadataRecordActionResult{}, err
 			}
 		}
@@ -213,6 +242,12 @@ func (a *App) MetadataRecordAction(ctx context.Context, req MetadataRecordAction
 				records = append(records, *record)
 			}
 		}
+		finished := time.Now().UTC()
+		history.Status = "done"
+		history.FinishedAt = &finished
+		history.UpdatedAt = finished
+		history.Result = rawJobJSON(map[string]any{"processed": len(locators), "libraries": libraries})
+		a.persistJobRecord(history)
 		return buildMetadataRecordActionResult(action, locators, records, nil), nil
 	case "enrich":
 		jobs := make([]MetadataRefreshJob, 0, len(locators))
@@ -226,6 +261,7 @@ func (a *App) MetadataRecordAction(ctx context.Context, req MetadataRecordAction
 				SourceID:     req.SourceID,
 				Workers:      req.Workers,
 				IgnoreLocked: true,
+				Trigger:      "record_action",
 			})
 			if err != nil {
 				return MetadataRecordActionResult{}, err
@@ -244,6 +280,7 @@ func (a *App) runMetadataEnrichmentJob(ctx context.Context, job *MetadataRefresh
 	job.Status = "running"
 	job.StartedAt = &started
 	a.metadataJobsMu.Unlock()
+	a.syncMetadataJobHistory(job)
 
 	handles, err := a.openExdbSources(ctx, req.SourceID)
 	if err != nil {
@@ -375,6 +412,7 @@ func (a *App) finishMetadataJob(job *MetadataRefreshJob, err error) {
 	}
 	job.FinishedAt = &finished
 	trimMetadataJobsLocked(a.metadataJobs)
+	a.syncMetadataJobHistory(job)
 }
 
 func (a *App) enrichMetadataRecord(ctx context.Context, handles []exdbSourceHandle, record metadatapkg.Record, req MetadataEnrichRequest) (bool, bool, bool, error) {

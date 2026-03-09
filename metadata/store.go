@@ -236,6 +236,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_manga_metadata_locator ON manga_metadata(l
 CREATE INDEX IF NOT EXISTS idx_manga_metadata_folder_path ON manga_metadata(folder_path);
 CREATE INDEX IF NOT EXISTS idx_manga_metadata_content_fp ON manga_metadata(content_fingerprint);
 CREATE INDEX IF NOT EXISTS idx_manga_metadata_missing_since ON manga_metadata(missing_since);
+
+CREATE TABLE IF NOT EXISTS job_history (
+    job_id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    trigger TEXT,
+    status TEXT NOT NULL,
+    summary TEXT,
+    library_id TEXT,
+    path TEXT,
+    target_id TEXT,
+    remote_job_id TEXT,
+    error TEXT,
+    requested_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    updated_at TEXT NOT NULL,
+    payload_json TEXT,
+    result_json TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_history_kind ON job_history(kind);
+CREATE INDEX IF NOT EXISTS idx_job_history_status ON job_history(status);
+CREATE INDEX IF NOT EXISTS idx_job_history_updated_at ON job_history(updated_at DESC, job_id DESC);
 `
 	_, err := db.Exec(schema)
 	return err
@@ -851,8 +873,10 @@ func escapeLikeValue(value string) string {
 	return replacer.Replace(value)
 }
 
+const stableTimeLayout = "2006-01-02T15:04:05.000000000Z07:00"
+
 func formatTime(value time.Time) string {
-	return value.UTC().Format(time.RFC3339Nano)
+	return value.UTC().Format(stableTimeLayout)
 }
 
 func formatTimePtr(value *time.Time) any {
@@ -871,9 +895,11 @@ func parseTimePtr(raw string) *time.Time {
 	if strings.TrimSpace(raw) == "" {
 		return nil
 	}
-	if value, err := time.Parse(time.RFC3339Nano, raw); err == nil {
-		value = value.UTC()
-		return &value
+	for _, layout := range []string{stableTimeLayout, time.RFC3339Nano, time.RFC3339} {
+		if value, err := time.Parse(layout, raw); err == nil {
+			value = value.UTC()
+			return &value
+		}
 	}
 	return nil
 }

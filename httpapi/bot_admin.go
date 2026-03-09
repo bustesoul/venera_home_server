@@ -47,6 +47,24 @@ func (s *Server) handleEHBotJobs(w http.ResponseWriter, r *http.Request) {
 	writeData(w, map[string]any{"items": items, "count": len(items)})
 }
 
+func (s *Server) handleEHBotCreateJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	var payload apppkg.EHBotCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
+		return
+	}
+	result, err := s.app.CreateEHBotRemoteJob(r.Context(), payload)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "EHBOT_CREATE_JOB_FAILED", err.Error())
+		return
+	}
+	writeData(w, result)
+}
+
 func (s *Server) handleEHBotRunOnce(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")

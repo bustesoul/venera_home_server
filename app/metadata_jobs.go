@@ -14,11 +14,13 @@ type MetadataRefreshRequest struct {
 	LibraryID string `json:"library_id,omitempty"`
 	Path      string `json:"path,omitempty"`
 	Force     bool   `json:"force,omitempty"`
+	Trigger   string `json:"trigger,omitempty"`
 }
 
 type MetadataRefreshJob struct {
 	ID         string     `json:"job_id"`
 	Kind       string     `json:"kind,omitempty"`
+	Trigger    string     `json:"trigger,omitempty"`
 	Status     string     `json:"status"`
 	LibraryID  string     `json:"library_id,omitempty"`
 	Path       string     `json:"path,omitempty"`
@@ -34,6 +36,7 @@ type MetadataRefreshJob struct {
 	Unmatched  int        `json:"unmatched,omitempty"`
 	Skipped    int        `json:"skipped,omitempty"`
 	Sources    []string   `json:"sources,omitempty"`
+	RequestedAt time.Time `json:"requested_at"`
 	StartedAt  *time.Time `json:"started_at,omitempty"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 	Error      string     `json:"error,omitempty"`
@@ -49,12 +52,14 @@ func (a *App) StartMetadataRefresh(ctx context.Context, req MetadataRefreshReque
 	}
 	now := time.Now().UTC()
 	job := &MetadataRefreshJob{
-		ID:        shared.SHAID("metadata-refresh", req.LibraryID, req.Path, now.Format(time.RFC3339Nano)),
-		Kind:      "refresh",
-		Status:    "queued",
-		LibraryID: req.LibraryID,
-		Path:      req.Path,
-		Force:     req.Force,
+		ID:          shared.SHAID("metadata-refresh", req.LibraryID, req.Path, now.Format(time.RFC3339Nano)),
+		Kind:        "refresh",
+		Trigger:     normalizeJobTrigger(req.Trigger, "manual"),
+		Status:      "queued",
+		LibraryID:   req.LibraryID,
+		Path:        req.Path,
+		Force:       req.Force,
+		RequestedAt: now,
 	}
 	a.metadataJobsMu.Lock()
 	if a.metadataJobs == nil {
@@ -62,9 +67,52 @@ func (a *App) StartMetadataRefresh(ctx context.Context, req MetadataRefreshReque
 	}
 	a.metadataJobs[job.ID] = job
 	a.metadataJobsMu.Unlock()
+	a.syncMetadataJobHistory(job)
 
 	go a.runMetadataRefreshJob(context.Background(), job)
 	return *job, nil
+}
+
+func (a *App) runStartupMetadataRefresh(ctx context.Context) error {
+	if a.metadataStore == nil {
+		return a.Rescan(ctx, "")
+	}
+	now := time.Now().UTC()
+	job := &MetadataRefreshJob{
+		ID:          shared.SHAID("metadata-refresh", "startup", now.Format(time.RFC3339Nano)),
+		Kind:        "refresh",
+		Trigger:     "startup",
+		Status:      "queued",
+		RequestedAt: now,
+	}
+	a.metadataJobsMu.Lock()
+	if a.metadataJobs == nil {
+		a.metadataJobs = map[string]*MetadataRefreshJob{}
+	}
+	a.metadataJobs[job.ID] = job
+	a.metadataJobsMu.Unlock()
+	a.syncMetadataJobHistory(job)
+	started := time.Now().UTC()
+	a.metadataJobsMu.Lock()
+	job.Status = "running"
+	job.StartedAt = &started
+	a.metadataJobsMu.Unlock()
+	a.syncMetadataJobHistory(job)
+	err := a.Rescan(ctx, "")
+	finished := time.Now().UTC()
+	a.metadataJobsMu.Lock()
+	if err != nil {
+		job.Status = "failed"
+		job.Error = err.Error()
+	} else {
+		job.Status = "done"
+		job.Processed = len(a.Comics())
+	}
+	job.FinishedAt = &finished
+	trimMetadataJobsLocked(a.metadataJobs)
+	a.metadataJobsMu.Unlock()
+	a.syncMetadataJobHistory(job)
+	return err
 }
 
 func (a *App) runMetadataRefreshJob(ctx context.Context, job *MetadataRefreshJob) {
@@ -73,6 +121,7 @@ func (a *App) runMetadataRefreshJob(ctx context.Context, job *MetadataRefreshJob
 	job.Status = "running"
 	job.StartedAt = &started
 	a.metadataJobsMu.Unlock()
+	a.syncMetadataJobHistory(job)
 
 	err := a.Rescan(ctx, job.LibraryID)
 	finished := time.Now().UTC()
@@ -84,6 +133,7 @@ func (a *App) runMetadataRefreshJob(ctx context.Context, job *MetadataRefreshJob
 		job.Error = err.Error()
 		job.FinishedAt = &finished
 		trimMetadataJobsLocked(a.metadataJobs)
+		a.syncMetadataJobHistory(job)
 		return
 	}
 	if strings.TrimSpace(job.LibraryID) == "" {
@@ -94,6 +144,7 @@ func (a *App) runMetadataRefreshJob(ctx context.Context, job *MetadataRefreshJob
 	job.Status = "done"
 	job.FinishedAt = &finished
 	trimMetadataJobsLocked(a.metadataJobs)
+	a.syncMetadataJobHistory(job)
 }
 
 func trimMetadataJobsLocked(items map[string]*MetadataRefreshJob) {

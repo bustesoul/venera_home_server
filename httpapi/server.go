@@ -94,9 +94,11 @@ func newHTTPServer(app *apppkg.App, logger *log.Logger) http.Handler {
 	mux.HandleFunc("/api/v1/admin/metadata/sources/", srv.auth(srv.handleMetadataSources))
 	mux.HandleFunc("/api/v1/admin/metadata/cleanup", srv.auth(srv.handleMetadataCleanup))
 	mux.HandleFunc("/api/v1/admin/metadata/sidecar", srv.auth(srv.handleMetadataSidecar))
+	mux.HandleFunc("/api/v1/admin/jobs", srv.auth(srv.handleAdminJobs))
 	mux.HandleFunc("/api/v1/admin/ehbot/status", srv.auth(srv.handleEHBotStatus))
 	mux.HandleFunc("/api/v1/admin/ehbot/config", srv.auth(srv.handleEHBotConfig))
 	mux.HandleFunc("/api/v1/admin/ehbot/jobs", srv.auth(srv.handleEHBotJobs))
+	mux.HandleFunc("/api/v1/admin/ehbot/jobs/create", srv.auth(srv.handleEHBotCreateJob))
 	mux.HandleFunc("/api/v1/admin/ehbot/pull/run-once", srv.auth(srv.handleEHBotRunOnce))
 	mux.HandleFunc("/media/", srv.handleMedia)
 	mux.HandleFunc("/", srv.handleIndex)
@@ -539,14 +541,16 @@ func (s *Server) handleRescan(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		LibraryID string `json:"library_id"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&payload)
-	jobID := shared.SHAID("rescan", payload.LibraryID, time.Now().Format(time.RFC3339Nano))
-	go func() {
-		if err := s.app.Rescan(context.Background(), payload.LibraryID); err != nil {
-			s.log.Errorf("rescan failed: %v", err)
-		}
-	}()
-	writeData(w, map[string]any{"job_id": jobID, "status": "queued"})
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
+		return
+	}
+	job, err := s.app.StartMetadataRefresh(r.Context(), apppkg.MetadataRefreshRequest{LibraryID: strings.TrimSpace(payload.LibraryID), Trigger: "rescan"})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "RESCAN_FAILED", err.Error())
+		return
+	}
+	writeData(w, job)
 }
 
 func (s *Server) handleMetadataRefresh(w http.ResponseWriter, r *http.Request) {
@@ -559,6 +563,7 @@ func (s *Server) handleMetadataRefresh(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
 		return
 	}
+	payload.Trigger = normalizeRequestValue(payload.Trigger, "refresh")
 	job, err := s.app.StartMetadataRefresh(r.Context(), payload)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "METADATA_REFRESH_FAILED", err.Error())
@@ -632,7 +637,7 @@ func (s *Server) handleMetadataCleanup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
 		return
 	}
-	result, err := s.app.CleanupMetadata(r.Context(), payload)
+	result, err := s.app.CleanupMetadataTracked(r.Context(), payload, "manual")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "METADATA_CLEANUP_FAILED", err.Error())
 		return
@@ -664,6 +669,14 @@ func formatTimePtrRFC3339(value *time.Time) any {
 		return nil
 	}
 	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func normalizeRequestValue(value string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		return value
+	}
+	return strings.TrimSpace(fallback)
 }
 
 func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
