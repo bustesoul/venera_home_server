@@ -34,13 +34,43 @@ func applyGalleryInfo(meta *ParsedMetadata, raw []byte) {
 	}
 
 	lines := strings.Split(text, "\n")
+
+	// Bare-title detection: if the first non-empty line has no colon, treat it as the title.
+	// A subsequent "Title: xxx" line will override this via hasExplicitTitle.
+	for _, line := range lines {
+		first := strings.TrimSpace(line)
+		if first == "" {
+			continue
+		}
+		if !strings.Contains(first, ":") {
+			meta.Title = first
+		}
+		break
+	}
+
 	comments := make([]string, 0, len(lines))
 	parsedTags := []string{}
 	inComments := false
+	inTagBlock := false
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if !inComments {
+			// Collect multi-line "> group: tag1, tag2" entries after a bare "Tags:" header.
+			if inTagBlock {
+				if strings.HasPrefix(trimmed, ">") {
+					tagLine := strings.TrimSpace(strings.TrimPrefix(trimmed, ">"))
+					if _, val, ok := strings.Cut(tagLine, ":"); ok {
+						tagLine = strings.TrimSpace(val)
+					}
+					parsedTags = append(parsedTags, parseGalleryInfoTags(tagLine)...)
+					continue
+				}
+				inTagBlock = false
+				if len(parsedTags) > 0 {
+					meta.Tags = shared.UniqueStrings(append(meta.Tags, parsedTags...))
+				}
+			}
 			if isGalleryInfoCommentsHeader(trimmed) {
 				inComments = true
 				continue
@@ -60,6 +90,8 @@ func applyGalleryInfo(meta *ParsedMetadata, raw []byte) {
 				parsedTags = parseGalleryInfoTags(value)
 				if len(parsedTags) > 0 {
 					meta.Tags = shared.UniqueStrings(append(meta.Tags, parsedTags...))
+				} else {
+					inTagBlock = true
 				}
 			}
 			continue
@@ -68,6 +100,11 @@ func applyGalleryInfo(meta *ParsedMetadata, raw []byte) {
 			break
 		}
 		comments = append(comments, line)
+	}
+
+	// Flush any remaining tag block at end of file.
+	if inTagBlock && len(parsedTags) > 0 {
+		meta.Tags = shared.UniqueStrings(append(meta.Tags, parsedTags...))
 	}
 
 	description := joinGalleryInfoLines(comments)
@@ -123,10 +160,12 @@ func languageFromGalleryInfoTags(tags []string) string {
 
 func normalizeGalleryInfoLanguageTag(tag string) string {
 	normalized := strings.ToLower(strings.TrimSpace(tag))
-	if !strings.HasPrefix(normalized, "language:") {
-		return ""
+	value := ""
+	if strings.HasPrefix(normalized, "language:") {
+		value = strings.TrimSpace(strings.TrimPrefix(normalized, "language:"))
+	} else {
+		value = normalized
 	}
-	value := strings.TrimSpace(strings.TrimPrefix(normalized, "language:"))
 	if mapped, ok := galleryInfoLanguageMap[value]; ok {
 		return mapped
 	}

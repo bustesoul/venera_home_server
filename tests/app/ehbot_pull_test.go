@@ -96,6 +96,9 @@ func TestEHBotPullImportsArchiveAndRescans(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(comicsRoot, filepath.FromSlash(importedPath))); err != nil {
 		t.Fatalf("expected imported file: %v", err)
 	}
+	if filepath.Base(importedPath) != "Example Gallery Title.zip" {
+		t.Fatalf("unexpected imported filename: %q", importedPath)
+	}
 
 	ids := application.LibraryComicIDs("local-main")
 	if len(ids) != 1 {

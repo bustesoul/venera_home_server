@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	backendpkg "venera_home_server/backend"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -493,10 +494,10 @@ func (a *App) importEHBotArtifact(ctx context.Context, client *ehBotClient, cfg 
 	}
 	defer resp.Body.Close()
 	filename := safeEHBotArtifactFilename(remoteJob.Artifact.Filename)
-	relPath := shared.RelJoin(cfg.TargetSubdir, fmt.Sprintf("ehbot_%s_%s", remoteJob.JobID, filename))
-	absPath := filepath.Join(lib.Root, filepath.FromSlash(relPath))
-	tempPath := absPath + ".part"
-	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+	stageRelPath := shared.RelJoin(cfg.TargetSubdir, fmt.Sprintf("ehbot_%s_%s", remoteJob.JobID, filename))
+	stageAbsPath := filepath.Join(lib.Root, filepath.FromSlash(stageRelPath))
+	tempPath := stageAbsPath + ".part"
+	if err := os.MkdirAll(filepath.Dir(stageAbsPath), 0o755); err != nil {
 		return ehBotImportResult{}, err
 	}
 	_ = os.Remove(tempPath)
@@ -524,12 +525,16 @@ func (a *App) importEHBotArtifact(ctx context.Context, client *ehBotClient, cfg 
 		_ = os.Remove(tempPath)
 		return ehBotImportResult{}, fmt.Errorf("artifact checksum mismatch")
 	}
-	_ = os.Remove(absPath)
-	if err := os.Rename(tempPath, absPath); err != nil {
+	_ = os.Remove(stageAbsPath)
+	if err := os.Rename(tempPath, stageAbsPath); err != nil {
 		_ = os.Remove(tempPath)
 		return ehBotImportResult{}, err
 	}
-	return ehBotImportResult{RelPath: relPath, SHA256: sum}, nil
+	finalRelPath, err := a.finalizeEHBotImportedArtifact(ctx, lib, stageRelPath, filename, remoteJob)
+	if err != nil {
+		return ehBotImportResult{}, err
+	}
+	return ehBotImportResult{RelPath: finalRelPath, SHA256: sum}, nil
 }
 
 func (a *App) updateEHBotJob(id string, update func(*EHBotPullJob)) {
@@ -680,6 +685,86 @@ func safeEHBotArtifactFilename(name string) string {
 		cleaned += ".zip"
 	}
 	return cleaned
+}
+
+func (a *App) finalizeEHBotImportedArtifact(ctx context.Context, lib configpkg.LibraryConfig, stageRelPath string, originalFilename string, remoteJob ehBotRemoteJob) (string, error) {
+	backend := backendpkg.NewLocalBackend(lib.Root)
+	fallbackTitle := firstNonEmpty(strings.TrimSpace(remoteJob.Gallery.Title), shared.BaseNameTitle(originalFilename), shared.BaseNameTitle(stageRelPath))
+	meta, _, err := a.loadMetadataForArchive(ctx, backend, stageRelPath, fallbackTitle)
+	title := fallbackTitle
+	if err == nil {
+		title = firstNonEmpty(strings.TrimSpace(meta.Title), strings.TrimSpace(meta.Series), title)
+	}
+	ext := strings.ToLower(strings.TrimSpace(path.Ext(originalFilename)))
+	if ext == "" {
+		ext = strings.ToLower(strings.TrimSpace(path.Ext(stageRelPath)))
+	}
+	if ext == "" {
+		ext = ".zip"
+	}
+	finalFilename := buildEHBotStoredFilename(title, ext)
+	dirRelPath := path.Dir(stageRelPath)
+	if dirRelPath == "." || dirRelPath == "/" {
+		dirRelPath = ""
+	}
+	finalRelPath, err := nextAvailableEHBotArtifactPath(lib.Root, dirRelPath, finalFilename, stageRelPath)
+	if err != nil {
+		return "", err
+	}
+	if finalRelPath == stageRelPath {
+		return stageRelPath, nil
+	}
+	stageAbsPath := filepath.Join(lib.Root, filepath.FromSlash(stageRelPath))
+	finalAbsPath := filepath.Join(lib.Root, filepath.FromSlash(finalRelPath))
+	if err := os.MkdirAll(filepath.Dir(finalAbsPath), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.Rename(stageAbsPath, finalAbsPath); err != nil {
+		return "", err
+	}
+	return finalRelPath, nil
+}
+
+func buildEHBotStoredFilename(title string, ext string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "Untitled"
+	}
+	ext = strings.TrimSpace(ext)
+	if ext == "" {
+		ext = ".zip"
+	} else if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return safeEHBotArtifactFilename(title + ext)
+}
+
+func nextAvailableEHBotArtifactPath(rootDir string, dirRelPath string, filename string, currentRelPath string) (string, error) {
+	candidateRelPath := shared.RelJoin(dirRelPath, filename)
+	if candidateRelPath == currentRelPath {
+		return candidateRelPath, nil
+	}
+	candidateAbsPath := filepath.Join(rootDir, filepath.FromSlash(candidateRelPath))
+	if _, err := os.Stat(candidateAbsPath); err == nil {
+		ext := path.Ext(filename)
+		base := strings.TrimSuffix(filename, ext)
+		for index := 2; ; index++ {
+			candidateRelPath = shared.RelJoin(dirRelPath, fmt.Sprintf("%s (%d)%s", base, index, ext))
+			if candidateRelPath == currentRelPath {
+				return candidateRelPath, nil
+			}
+			candidateAbsPath = filepath.Join(rootDir, filepath.FromSlash(candidateRelPath))
+			if _, err := os.Stat(candidateAbsPath); os.IsNotExist(err) {
+				return candidateRelPath, nil
+			} else if err != nil {
+				return "", err
+			}
+		}
+	} else if os.IsNotExist(err) {
+		return candidateRelPath, nil
+	} else {
+		return "", err
+	}
 }
 
 func cloneTimePtr(value *time.Time) *time.Time {
