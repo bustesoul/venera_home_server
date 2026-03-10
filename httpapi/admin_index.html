@@ -72,6 +72,7 @@
       border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
+      background: var(--panel);
       background: color-mix(in srgb, var(--panel) 85%, transparent);
       backdrop-filter: blur(12px);
       z-index: 10;
@@ -213,6 +214,11 @@
     .table-toolbar .filters label { min-width: 180px; flex: 1 1 180px; }
     .table-summary { color: var(--text-muted); font-size: 0.85rem; }
     .table-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .toolbar-right { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .table-pagination { display: flex; align-items: center; gap: 8px; }
+    .table-pagination button { padding: 4px 12px; }
+    .table-pagination .page-info { color: var(--text-muted); font-size: 0.85rem; white-space: nowrap; }
+    .scroll.is-loading { opacity: 0.45; pointer-events: none; transition: opacity 0.2s ease; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .pill {
       display: inline-flex;
@@ -436,36 +442,15 @@
       </section>
 
       <section class="panel">
-        <h2>元数据管理（Metadata Records）</h2>
+        <h2>元数据管理</h2>
         <div class="row">
-          <label><span>书库（Library）</span><input id="recordLibrary" placeholder="留空表示全部书库"></label>
-          <label><span>状态（State）</span>
-            <select id="recordState">
-              <option value="">全部状态</option>
-              <option value="empty">empty</option>
-              <option value="ready">ready</option>
-              <option value="stale">stale</option>
-              <option value="error">error</option>
-              <option value="missing">missing</option>
-              <option value="locked">locked</option>
-            </select>
-          </label>
-          <label><span>搜索关键词</span><input id="recordSearch" placeholder="标题 / 路径 / 来源模糊搜索"></label>
-        </div>
-        <div class="row">
-          <label><span>页码</span><input id="recordPage" type="number" value="1" min="1"></label>
-          <label><span>每页条数</span><input id="recordLimit" type="number" value="50" min="1" max="200"></label>
-          <label style="justify-content: flex-end;"><button id="queryRecordsBtn" class="primary" style="width: 100%;">查询记录</button></label>
-        </div>
-        <div class="row" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
           <label><span>missing 保留天数</span><input id="cleanupOlderThanDays" type="number" value="0" min="0"></label>
           <button id="rescanLibraryBtn" class="ghost">重扫当前书库</button>
           <button id="rescanAllBtn" class="ghost">重扫全部</button>
           <button id="cleanupDryRunBtn" class="ghost">测试清理（Dry Run）</button>
           <button id="cleanupExecuteBtn" class="warn">清理失效记录</button>
         </div>
-        <div class="help" id="cleanupSummary" style="margin-top: 12px;">清理仅处理 missing 记录，建议先试运行（Dry Run）；重扫使用上方书库条件。</div>
-        <div class="help" id="recordSummary"></div>
+        <div class="help" id="cleanupSummary" style="margin-top: 12px;">清理仅处理 missing 记录，建议先试运行（Dry Run）；重扫使用"本地元数据记录"中的书库条件。</div>
       </section>
     </div>
 
@@ -502,20 +487,50 @@
       <div class="row" style="margin-bottom: 16px;">
         <h2>本地元数据记录（Local Records）</h2>
         <div class="spacer"></div>
-        <div class="row" style="margin-top: 0;">
-          <span id="recordSelectionSummary" class="muted" style="margin-right: 12px;">未选择记录</span>
-          <select id="recordBatchAction" style="width: auto;">
-            <option value="">请选择批量动作...</option>
-            <option value="lock">锁定（Lock）</option>
-            <option value="unlock">解锁（Unlock）</option>
-            <option value="reset">重置（Reset）</option>
-            <option value="enrich">重新补全（Enrich）</option>
-          </select>
-          <button id="applyBatchActionBtn" class="primary" disabled>应用到已选</button>
-          <button id="clearSelectedRecordsBtn" class="ghost" disabled>清空选择</button>
+        <button id="queryRecordsBtn" class="primary">查询记录</button>
+      </div>
+      <div class="table-toolbar">
+        <div class="filters">
+          <label><span>书库（Library）</span><input id="recordLibrary" placeholder="留空表示全部书库"></label>
+          <label><span>状态（State）</span>
+            <select id="recordState">
+              <option value="">全部状态</option>
+              <option value="empty">empty</option>
+              <option value="ready">ready</option>
+              <option value="stale">stale</option>
+              <option value="error">error</option>
+              <option value="missing">missing</option>
+              <option value="locked">locked</option>
+            </select>
+          </label>
+          <label><span>搜索关键词</span><input id="recordSearch" placeholder="标题 / 路径 / 来源模糊搜索"></label>
+        </div>
+        <div class="toolbar-right">
+          <div id="recordSummary" class="table-summary">-</div>
+          <div id="recordPagination" class="table-pagination"></div>
+          <label><span>每页</span>
+            <select id="recordLimit">
+              <option value="30">30</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </label>
         </div>
       </div>
-      <div class="scroll"><table id="recordsTable"><thead><tr><th style="width: 40px;"><input id="selectAllRecords" type="checkbox" aria-label="选择当前页全部记录"></th><th style="width: 80px;">状态</th><th>标题 / 副标题</th><th>路径 / 文件</th><th>来源信息</th><th style="width: 90px;">置信度</th><th style="width: 80px;">锁定</th><th style="width: 280px; text-align: right;">操作</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-toolbar" style="margin-top: 8px;">
+        <span id="recordSelectionSummary" class="muted">未选择记录</span>
+        <select id="recordBatchAction" style="width: auto;">
+          <option value="">请选择批量动作...</option>
+          <option value="lock">锁定（Lock）</option>
+          <option value="unlock">解锁（Unlock）</option>
+          <option value="reset">重置（Reset）</option>
+          <option value="enrich">重新补全（Enrich）</option>
+        </select>
+        <button id="applyBatchActionBtn" class="primary" disabled>应用到已选</button>
+        <button id="clearSelectedRecordsBtn" class="ghost" disabled>清空选择</button>
+      </div>
+      <div class="scroll" style="margin-top: 12px;"><table id="recordsTable" class="data-table"><thead><tr><th style="width: 40px;"><input id="selectAllRecords" type="checkbox" aria-label="选择当前页全部记录"></th><th style="width: 80px;">状态</th><th>标题 / 副标题</th><th>路径 / 文件</th><th>来源信息</th><th style="width: 90px;">置信度</th><th style="width: 80px;">锁定</th><th style="width: 280px; text-align: right;">操作</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <div class="grid">
@@ -529,17 +544,26 @@
 
       <section class="panel">
         <h2>数据源浏览（Browse Data）</h2>
-        <div class="row">
-          <label><span>选择源库</span><select id="browseSource"></select></label>
-          <label><span>模糊查询</span><input id="browseQuery" placeholder="标题 / 作者模糊搜索"></label>
+        <div class="table-toolbar">
+          <div class="filters">
+            <label><span>选择源库</span><select id="browseSource"></select></label>
+            <label><span>模糊查询</span><input id="browseQuery" placeholder="标题 / 作者模糊搜索"></label>
+          </div>
+          <div class="toolbar-right">
+            <div id="browseSummary" class="table-summary"></div>
+            <div id="browsePagination" class="table-pagination"></div>
+            <label><span>每页</span>
+              <select id="browseLimit">
+                <option value="30" selected>30</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+            </label>
+            <button id="browseBtn" class="primary">查询数据</button>
+          </div>
         </div>
-        <div class="row">
-          <label><span>页码</span><input id="browsePage" type="number" value="1" min="1"></label>
-          <label><span>每页条数</span><input id="browseLimit" type="number" value="30" min="1" max="200"></label>
-          <label style="justify-content: flex-end;"><button id="browseBtn" class="primary" style="width:100%;">查询数据</button></label>
-        </div>
-        <div class="help" id="browseSummary" style="margin-top: 16px;"></div>
-        <div class="scroll" style="margin-top: 8px;"><table id="browseTable" class="wide-table"><thead></thead><tbody></tbody></table></div>
+        <div class="scroll" style="margin-top: 12px;"><table id="browseTable" class="wide-table"><thead></thead><tbody></tbody></table></div>
       </section>
     </div>
   </div>
@@ -554,25 +578,28 @@
         <div class="spacer"></div>
         <button id="refreshJobHistoryBtn" class="ghost">刷新 Job 历史</button>
       </div>
-      <div class="field-grid">
-        <label><span>类型</span><input id="jobHistoryKind" type="text" placeholder="如 metadata.refresh / ehbot.pull"></label>
-        <label><span>触发方式</span><select id="jobHistoryTrigger"><option value="">全部</option><option value="manual">manual</option><option value="auto">auto</option><option value="rescan">rescan</option><option value="refresh">refresh</option><option value="enrich">enrich</option><option value="record_action">record_action</option><option value="startup">startup</option></select></label>
-        <label><span>状态</span><select id="jobHistoryStatus"><option value="">全部</option><option value="queued">queued</option><option value="running">running</option><option value="done">done</option><option value="failed">failed</option><option value="ready">ready</option><option value="accepted">accepted</option></select></label>
-        <label><span>书库</span><input id="jobHistoryLibrary" type="text" placeholder="如 local-main"></label>
-        <label><span>页码</span><input id="jobHistoryPage" type="number" value="1" min="1"></label>
-        <label><span>每页条数</span><input id="jobHistoryLimit" type="number" value="100" min="1" max="200"></label>
-      </div>
-      <div class="table-toolbar" style="margin-top: 16px;">
+      <div class="table-toolbar">
         <div class="filters">
-          <label class="checkbox" style="min-width: 260px; flex: 0 0 auto;">
+          <label><span>类型</span><input id="jobHistoryKind" type="text" placeholder="如 metadata.refresh / ehbot.pull"></label>
+          <label><span>触发方式</span><select id="jobHistoryTrigger"><option value="">全部</option><option value="manual">manual</option><option value="auto">auto</option><option value="rescan">rescan</option><option value="refresh">refresh</option><option value="enrich">enrich</option><option value="record_action">record_action</option><option value="startup">startup</option></select></label>
+          <label><span>状态</span><select id="jobHistoryStatus"><option value="">全部</option><option value="queued">queued</option><option value="running">running</option><option value="done">done</option><option value="failed">failed</option><option value="ready">ready</option><option value="accepted">accepted</option></select></label>
+          <label><span>书库</span><input id="jobHistoryLibrary" type="text" placeholder="如 local-main"></label>
+          <label class="checkbox" style="min-width: 0; align-items: center;">
             <input id="jobHistoryAggregate" type="checkbox" checked>
-            <span>聚合同类同状态相邻记录</span>
+            聚合同类同状态相邻记录
           </label>
         </div>
-        <div class="table-actions">
+        <div class="toolbar-right">
           <div id="jobHistorySummary" class="table-summary">-</div>
-          <button id="jobHistoryPrevBtn" class="ghost">上一页</button>
-          <button id="jobHistoryNextBtn" class="ghost">下一页</button>
+          <div id="jobHistoryPagination" class="table-pagination"></div>
+          <label><span>每页</span>
+            <select id="jobHistoryLimit">
+              <option value="30">30</option>
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="200">200</option>
+            </select>
+          </label>
         </div>
       </div>
       <div class="scroll" style="margin-top: 12px;">
@@ -628,6 +655,9 @@ const state = {
   selectedRecords: {},
   lastRecordItems: [],
   sidecar: { locator: null, item: null, info: null },
+  recordsPage: 1,
+  browsePage: 1,
+  jobHistoryPage: 1,
 };
 
 const tokenInput = document.getElementById('tokenInput');
@@ -659,15 +689,10 @@ document.getElementById('saveEHBotConfigBtn').addEventListener('click', saveEHBo
 document.getElementById('ehbotConfigClearPullToken').addEventListener('change', syncEHBotTokenInputs);
 document.getElementById('createEHBotJobBtn').addEventListener('click', createEHBotJob);
 document.getElementById('refreshJobHistoryBtn').addEventListener('click', () => refreshJobHistory(true));
-document.getElementById('jobHistoryPrevBtn').addEventListener('click', () => refreshJobHistory(false, -1));
-document.getElementById('jobHistoryNextBtn').addEventListener('click', () => refreshJobHistory(false, 1));
 document.getElementById('jobHistoryLimit').addEventListener('change', () => refreshJobHistory(true));
 document.getElementById('jobHistoryAggregate').addEventListener('change', () => refreshJobHistory(false));
 document.getElementById('jobHistoryTrigger').addEventListener('change', () => refreshJobHistory(true));
 document.getElementById('jobHistoryStatus').addEventListener('change', () => refreshJobHistory(true));
-document.getElementById('jobHistoryPage').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') refreshJobHistory(false);
-});
 document.getElementById('jobHistoryKind').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') refreshJobHistory(true);
 });
@@ -682,7 +707,8 @@ document.getElementById('cleanupDryRunBtn').addEventListener('click', () => runC
 document.getElementById('cleanupExecuteBtn').addEventListener('click', () => runCleanup(false));
 document.getElementById('rescanLibraryBtn').addEventListener('click', rescanSelectedLibrary);
 document.getElementById('rescanAllBtn').addEventListener('click', rescanAllLibraries);
-document.getElementById('browseBtn').addEventListener('click', browseSource);
+document.getElementById('browseBtn').addEventListener('click', () => browseSource(true));
+document.getElementById('browseLimit').addEventListener('change', () => browseSource(true));
 document.getElementById('recordBatchAction').addEventListener('change', syncRecordSelectionUI);
 document.getElementById('applyBatchActionBtn').addEventListener('click', applyBatchRecordAction);
 document.getElementById('clearSelectedRecordsBtn').addEventListener('click', clearRecordSelection);
@@ -695,8 +721,9 @@ document.getElementById('closeSidecarBtn').addEventListener('click', closeSideca
 document.getElementById('recordSearch').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') refreshRecords(true);
 });
+document.getElementById('recordLimit').addEventListener('change', () => refreshRecords(true));
 document.getElementById('browseQuery').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') browseSource();
+  if (event.key === 'Enter') browseSource(true);
 });
 togglePollBtn.addEventListener('click', () => {
   state.poll = !state.poll;
@@ -776,6 +803,36 @@ function pill(text, kind = '') {
 
 function renderEmptyRow(colspan, message) {
   return `<tr><td colspan="${colspan}" class="table-empty">${htmlEscape(message)}</td></tr>`;
+}
+
+function renderPagination(containerId, { page, total, pageSize, onPageChange }) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  container.innerHTML = `
+    <button class="ghost" ${currentPage <= 1 ? 'disabled' : ''} data-page="${currentPage - 1}">上一页</button>
+    <span class="page-info">第 ${currentPage} / ${totalPages} 页</span>
+    <button class="ghost" ${currentPage >= totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">下一页</button>
+  `;
+  container.querySelectorAll('button[data-page]').forEach((btn) => {
+    btn.addEventListener('click', () => onPageChange(Number(btn.dataset.page)));
+  });
+}
+
+function setScrollLoading(tableId, loading) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const scroll = table.closest('.scroll');
+  if (scroll) scroll.classList.toggle('is-loading', loading);
+}
+
+function formatTableSummary({ total, filtered, displayed, aggregated }) {
+  const parts = [`共 ${total} 条`];
+  if (filtered != null && filtered !== total) parts.push(`过滤后 ${filtered} 条`);
+  parts.push(`当前显示 ${displayed} 行`);
+  if (aggregated) parts.push('（已聚合）');
+  return parts.join(' / ');
 }
 
 function normalizeQuery(value) {
@@ -1181,6 +1238,7 @@ function renderEHBotJobs() {
 }
 
 async function refreshEHBotJobs() {
+  setScrollLoading('ehbotJobsTable', true);
   try {
     const data = await fetchJSON('/api/v1/admin/ehbot/jobs');
     state.ehbotJobs = data.items || [];
@@ -1188,20 +1246,9 @@ async function refreshEHBotJobs() {
   } catch (error) {
     document.getElementById('ehbotJobsSummary').textContent = '加载失败';
     setStatus(`EH Bot 任务加载失败：${error.message}`, 'err');
+  } finally {
+    setScrollLoading('ehbotJobsTable', false);
   }
-}
-}
-
-function jobHistoryPageValue() {
-  const page = Number(document.getElementById('jobHistoryPage').value || 1);
-  if (!Number.isFinite(page) || page <= 0) return 1;
-  return Math.floor(page);
-}
-
-function jobHistoryLimitValue() {
-  const limit = Number(document.getElementById('jobHistoryLimit').value || 100);
-  if (!Number.isFinite(limit) || limit <= 0) return 100;
-  return Math.min(200, Math.floor(limit));
 }
 
 function aggregateJobHistoryItems(items) {
@@ -1229,16 +1276,12 @@ function aggregateJobHistoryItems(items) {
   });
 }
 
-async function refreshJobHistory(resetPage = false, delta = 0) {
+async function refreshJobHistory(resetPage = false) {
+  setScrollLoading('jobHistoryTable', true);
   try {
-    if (resetPage) document.getElementById('jobHistoryPage').value = '1';
-    let page = jobHistoryPageValue();
-    if (delta) {
-      page = Math.max(1, page + delta);
-      document.getElementById('jobHistoryPage').value = String(page);
-    }
-    const limit = jobHistoryLimitValue();
-    document.getElementById('jobHistoryLimit').value = String(limit);
+    if (resetPage) state.jobHistoryPage = 1;
+    const page = state.jobHistoryPage;
+    const limit = Number(document.getElementById('jobHistoryLimit').value || 100);
     const params = new URLSearchParams({
       kind: document.getElementById('jobHistoryKind').value.trim(),
       trigger: document.getElementById('jobHistoryTrigger').value,
@@ -1251,15 +1294,22 @@ async function refreshJobHistory(resetPage = false, delta = 0) {
     const rawItems = data.items || [];
     const aggregate = document.getElementById('jobHistoryAggregate').checked;
     const items = aggregate ? aggregateJobHistoryItems(rawItems) : rawItems;
-    const tbody = document.querySelector('#jobHistoryTable tbody');
     const currentPage = Number(data.page || page || 1);
     const total = Number(data.total || 0);
-    const offset = Number(data.offset || 0);
     const pageSize = Number(data.page_size || limit || 100);
-    document.getElementById('jobHistoryPage').value = String(currentPage);
-    document.getElementById('jobHistorySummary').textContent = `共 ${total} 条记录 / 第 ${currentPage} 页 / 每页 ${pageSize} 条 / 本页原始 ${rawItems.length} 条 / 当前显示 ${items.length} 行${aggregate ? '（已聚合）' : ''}`;
-    document.getElementById('jobHistoryPrevBtn').disabled = currentPage <= 1;
-    document.getElementById('jobHistoryNextBtn').disabled = offset + rawItems.length >= total;
+    state.jobHistoryPage = currentPage;
+    document.getElementById('jobHistorySummary').textContent = formatTableSummary({
+      total,
+      displayed: items.length,
+      aggregated: aggregate,
+    }) + ` / 本页原始 ${rawItems.length} 条 / 每页 ${pageSize} 条`;
+    renderPagination('jobHistoryPagination', {
+      page: currentPage,
+      total,
+      pageSize,
+      onPageChange: (p) => { state.jobHistoryPage = p; refreshJobHistory(); },
+    });
+    const tbody = document.querySelector('#jobHistoryTable tbody');
     tbody.innerHTML = items.map((job) => {
       const target = [job.library_id || '', job.target_id || '', job.remote_job_id || ''].filter(Boolean).join(' / ');
       const groupCount = Number(job._group_count || 1);
@@ -1304,60 +1354,8 @@ async function refreshJobHistory(resetPage = false, delta = 0) {
     }).join('') || renderEmptyRow(8, '暂无 Job 历史记录。');
   } catch (error) {
     setStatus(`Job 历史加载失败：${error.message}`, 'err');
-  }
-}
-    const limit = jobHistoryLimitValue();
-    document.getElementById('jobHistoryLimit').value = String(limit);
-    const params = new URLSearchParams({
-      kind: document.getElementById('jobHistoryKind').value.trim(),
-      trigger: document.getElementById('jobHistoryTrigger').value,
-      status: document.getElementById('jobHistoryStatus').value,
-      library_id: document.getElementById('jobHistoryLibrary').value.trim(),
-      page: String(page),
-      limit: String(limit),
-    });
-    const data = await fetchJSON(`/api/v1/admin/jobs?${params.toString()}`);
-    const rawItems = data.items || [];
-    const aggregate = document.getElementById('jobHistoryAggregate').checked;
-    const items = aggregate ? aggregateJobHistoryItems(rawItems) : rawItems;
-    const tbody = document.querySelector('#jobHistoryTable tbody');
-    const currentPage = Number(data.page || page || 1);
-    const total = Number(data.total || 0);
-    const offset = Number(data.offset || 0);
-    const pageSize = Number(data.page_size || limit || 100);
-    document.getElementById('jobHistoryPage').value = String(currentPage);
-    document.getElementById('jobHistorySummary').textContent = `共 ${total} 条记录 / 第 ${currentPage} 页 / 每页 ${pageSize} 条 / 本页原始 ${rawItems.length} 条 / 当前显示 ${items.length} 行${aggregate ? '（已聚合）' : ''}`;
-    document.getElementById('jobHistoryPrevBtn').disabled = currentPage <= 1;
-    document.getElementById('jobHistoryNextBtn').disabled = offset + rawItems.length >= total;
-    tbody.innerHTML = items.map((job) => {
-      const target = [job.library_id || '', job.target_id || '', job.remote_job_id || ''].filter(Boolean).join(' / ');
-      const groupCount = Number(job._group_count || 1);
-      const idExtra = groupCount > 1
-        ? `<div style="margin-top: 4px;">${pill('×' + groupCount, 'warn')}</div><div class="muted mono">最早 ${htmlEscape(job._group_first_job_id || '')}</div>`
-        : '';
-      const timePrimary = formatDateTime(job.updated_at || job.requested_at);
-      const timeExtra = groupCount > 1
-        ? `<div class="muted mono">起始 ${htmlEscape(formatDateTime(job._group_first_updated_at || job.requested_at))}</div>`
-        : '';
-      const summaryCell = groupCount > 1
-        ? `<div>${htmlEscape(job.summary || '-')}</div><div class="muted">相邻 ${groupCount} 条相同类型且相同状态记录已折叠</div>`
-        : htmlEscape(job.summary || '-');
-      const errorCell = (job.error || groupCount > 1)
-        ? `<div class="mono" style="color: var(--err);">${htmlEscape(job.error || '')}</div>${groupCount > 1 && (job._group_error_count || 0) > 0 ? `<div class="muted">聚合内含 ${htmlEscape(job._group_error_count || 0)} 条错误记录</div>` : ''}`
-        : '-';
-      return `<tr>
-        <td class="mono" style="font-weight: 500;">${htmlEscape(job.job_id || '')}${idExtra}</td>
-        <td>${pill(job.kind || '-')}</td>
-        <td>${pill(job.trigger || '-', job.trigger === 'manual' ? 'warn' : job.trigger ? 'ok' : '')}</td>
-        <td>${renderState(job.status)}</td>
-        <td><div class="mono">${htmlEscape(target || '-')}</div><div class="muted mono">${htmlEscape(job.path || '')}</div></td>
-        <td class="mono"><div>${htmlEscape(timePrimary || '-')}</div>${timeExtra}</td>
-        <td>${summaryCell}</td>
-        <td>${errorCell}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="8" class="muted" style="text-align: center; padding: 32px;">暂无 Job 历史记录。</td></tr>';
-  } catch (error) {
-    setStatus(`Job 历史加载失败：${error.message}`, 'err');
+  } finally {
+    setScrollLoading('jobHistoryTable', false);
   }
 }
 
@@ -1425,6 +1423,7 @@ function renderJobs() {
 }
 
 async function refreshJobs() {
+  setScrollLoading('jobsTable', true);
   try {
     const data = await fetchJSON('/api/v1/admin/metadata/jobs');
     state.jobs = data.items || [];
@@ -1432,14 +1431,16 @@ async function refreshJobs() {
   } catch (error) {
     document.getElementById('jobsSummary').textContent = '加载失败';
     setStatus(error.message, 'err');
+  } finally {
+    setScrollLoading('jobsTable', false);
   }
-}
 }
 
 async function refreshRecords(resetPage = false) {
+  setScrollLoading('recordsTable', true);
   try {
-    if (resetPage) document.getElementById('recordPage').value = '1';
-    const page = Number(document.getElementById('recordPage').value || 1);
+    if (resetPage) state.recordsPage = 1;
+    const page = state.recordsPage;
     const limit = Number(document.getElementById('recordLimit').value || 50);
     const params = new URLSearchParams({
       page: String(page),
@@ -1449,7 +1450,20 @@ async function refreshRecords(resetPage = false) {
       search: document.getElementById('recordSearch').value.trim(),
     });
     const data = await fetchJSON(`/api/v1/admin/metadata/records?${params.toString()}`);
-    document.getElementById('recordSummary').textContent = `共 ${data.total} 条记录 / 第 ${data.page} 页 / 每页 ${data.page_size} 条`;
+    const total = Number(data.total || 0);
+    const currentPage = Number(data.page || page);
+    const pageSize = Number(data.page_size || limit);
+    state.recordsPage = currentPage;
+    document.getElementById('recordSummary').textContent = formatTableSummary({
+      total,
+      displayed: (data.items || []).length,
+    }) + ` / 每页 ${pageSize} 条`;
+    renderPagination('recordPagination', {
+      page: currentPage,
+      total,
+      pageSize,
+      onPageChange: (p) => { state.recordsPage = p; refreshRecords(); },
+    });
     state.lastRecordItems = data.items || [];
     const tbody = document.querySelector('#recordsTable tbody');
     tbody.innerHTML = state.lastRecordItems.map((item) => {
@@ -1480,10 +1494,12 @@ async function refreshRecords(resetPage = false) {
           <button class="ghost" style="color: var(--primary);" onclick='recordAction("enrich", "${encodedLocator}")'>补全</button>
         </div></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="8" class="muted" style="text-align: center; padding: 32px;">暂无符合条件的记录</td></tr>';
+    }).join('') || renderEmptyRow(8, '暂无符合条件的记录');
     syncRecordSelectionUI();
   } catch (error) {
     setStatus(error.message, 'err');
+  } finally {
+    setScrollLoading('recordsTable', false);
   }
 }
 
@@ -1740,6 +1756,7 @@ async function applyBatchRecordAction() {
 }
 
 async function refreshSources() {
+  setScrollLoading('sourcesTable', true);
   try {
     const prevEnrich = document.getElementById('enrichSource').value;
     const prevBrowse = document.getElementById('browseSource').value;
@@ -1754,9 +1771,11 @@ async function refreshSources() {
       <td class="mono">${htmlEscape(source.row_count ?? '-')}</td>
       <td>${source.error ? pill(source.error, 'err') : pill('就绪', 'ok')}</td>
       <td><button class="ghost" ${source.error ? 'disabled' : ''} onclick='pickSource(${JSON.stringify(source.id)})' style="color: var(--primary);">查看</button></td>
-    </tr>`).join('') || '<tr><td colspan="5" class="muted" style="text-align: center; padding: 32px;">目录为空。请将外部 sqlite 数据库放到 `data/externaldb` 目录。</td></tr>';
+    </tr>`).join('') || renderEmptyRow(5, '目录为空。请将外部 sqlite 数据库放到 data/externaldb 目录。');
   } catch (error) {
     setStatus(`加载数据源失败：${error.message}`, 'err');
+  } finally {
+    setScrollLoading('sourcesTable', false);
   }
 }
 
@@ -1779,32 +1798,45 @@ function renderSourceSelectors(prevEnrich = '', prevBrowse = '') {
 
 function pickSource(id) {
   document.getElementById('browseSource').value = id;
-  browseSource();
+  browseSource(true);
   document.getElementById('browseQuery').focus();
 }
 
-async function browseSource() {
+async function browseSource(resetPage = false) {
+  setScrollLoading('browseTable', true);
   try {
+    if (resetPage) state.browsePage = 1;
     const sourceId = document.getElementById('browseSource').value;
     if (!sourceId) {
       setStatus('查询失败：未选择或无可用数据源', 'warn');
       return;
     }
+    const limit = Number(document.getElementById('browseLimit').value || 30);
     const params = new URLSearchParams({
       q: document.getElementById('browseQuery').value.trim(),
-      page: document.getElementById('browsePage').value || '1',
-      limit: document.getElementById('browseLimit').value || '30',
+      page: String(state.browsePage),
+      limit: String(limit),
     });
     const data = await fetchJSON(`/api/v1/admin/metadata/sources/${encodeURIComponent(sourceId)}/records?${params.toString()}`);
     const browse = data.browse || {};
-    document.getElementById('browseSummary').innerHTML = `<strong>${htmlEscape(data.source?.name || '-')}</strong> / 数据表：<span class="mono">${htmlEscape(browse.table || '-')}</span> / 命中 ${htmlEscape(browse.total || 0)} 条`;
+    const total = Number(browse.total || 0);
+    const displayedCount = (browse.items || []).length;
+    document.getElementById('browseSummary').innerHTML = `<strong>${htmlEscape(data.source?.name || '-')}</strong> / 数据表：<span class="mono">${htmlEscape(browse.table || '-')}</span> / ${formatTableSummary({ total, displayed: displayedCount })}`;
+    renderPagination('browsePagination', {
+      page: state.browsePage,
+      total,
+      pageSize: limit,
+      onPageChange: (p) => { state.browsePage = p; browseSource(); },
+    });
     const head = document.querySelector('#browseTable thead');
     const body = document.querySelector('#browseTable tbody');
     const columns = browse.columns || [];
     head.innerHTML = `<tr>${columns.map((col) => `<th>${htmlEscape(col)}</th>`).join('')}</tr>`;
-    body.innerHTML = (browse.items || []).map((item) => `<tr>${columns.map((col) => `<td class="mono">${htmlEscape(item[col] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(columns.length, 1)}" class="muted" style="text-align: center; padding: 32px;">暂无匹配查询结果</td></tr>`;
+    body.innerHTML = (browse.items || []).map((item) => `<tr>${columns.map((col) => `<td class="mono">${htmlEscape(item[col] ?? '')}</td>`).join('')}</tr>`).join('') || renderEmptyRow(Math.max(columns.length, 1), '暂无匹配查询结果');
   } catch (error) {
     setStatus(`数据查询异常：${error.message}`, 'err');
+  } finally {
+    setScrollLoading('browseTable', false);
   }
 }
 
@@ -1835,6 +1867,7 @@ boot().catch((error) => setStatus(`系统启动失败：${error.message}`, 'err'
 </script>
 </body>
 </html>
+
 
 
 
