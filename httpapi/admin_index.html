@@ -25,6 +25,10 @@
       --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
       --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+      --table-header: #111115;
+      --table-row-alt: #121216;
+      --table-row-hover: #1f1f24;
+      --table-row-active: #20202a;
       --radius-sm: 6px;
       --radius-md: 10px;
       --radius-lg: 16px;
@@ -42,6 +46,10 @@
       --primary-hover: #1d4ed8;
       --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+      --table-header: #f9fafb;
+      --table-row-alt: #f3f4f6;
+      --table-row-hover: #e5e7eb;
+      --table-row-active: #e2e8f0;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -165,12 +173,12 @@
     .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
     table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
-    th, td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    th {
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    thead th {
       position: sticky;
       top: 0;
       z-index: 1;
-      background: var(--panel);
+      background: var(--table-header);
       color: var(--text-muted);
       font-weight: 600;
       font-size: 0.75rem;
@@ -179,10 +187,32 @@
       border-bottom: 2px solid var(--border);
     }
     tbody tr { transition: background-color 0.15s ease; }
-    tbody tr:hover { background-color: var(--panel); }
+    tbody tr:nth-child(even) { background: var(--table-row-alt); }
+    tbody tr:hover { background-color: var(--table-row-hover); }
     tbody tr:last-child td { border-bottom: none; }
     .wide-table th, .wide-table td { white-space: nowrap; }
 
+    .data-table { table-layout: fixed; font-size: 0.9rem; }
+    .data-table td { overflow-wrap: anywhere; }
+    .data-table .cell-stack { display: flex; flex-direction: column; gap: 4px; }
+    .data-table .cell-title { font-weight: 600; }
+    .data-table .cell-sub { color: var(--text-muted); font-size: 0.8rem; }
+    .data-table .cell-error { color: var(--err); }
+    .table-empty { text-align: center; padding: 32px; color: var(--text-muted); }
+    .table-toolbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg);
+    }
+    .table-toolbar .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .table-toolbar .filters label { min-width: 180px; flex: 1 1 180px; }
+    .table-summary { color: var(--text-muted); font-size: 0.85rem; }
+    .table-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .pill {
       display: inline-flex;
@@ -346,8 +376,27 @@
       <div class="summary-card"><div class="muted">Last Activity</div><div id="ehbotLastActivity">-</div></div>
     </div>
     <div class="help" id="ehbotConfigSummary" style="margin-top: 16px;">Waiting for EH Bot status...</div>
-    <div class="scroll" style="margin-top: 16px;">
-      <table id="ehbotJobsTable">
+    <div class="table-toolbar" style="margin-top: 12px;">
+      <div class="filters">
+        <label><span>搜索</span><input id="ehbotJobsSearch" type="text" placeholder="job_id / 标题 / 路径"></label>
+        <label><span>状态</span>
+          <select id="ehbotJobsStatus">
+            <option value="">全部状态</option>
+            <option value="queued">queued</option>
+            <option value="running">running</option>
+            <option value="done">done</option>
+            <option value="failed">failed</option>
+            <option value="accepted">accepted</option>
+          </select>
+        </label>
+        <label class="checkbox" style="min-width: 0; align-items: center;">
+          <input id="ehbotJobsAggregate" type="checkbox" checked> 聚合同状态相邻记录
+        </label>
+      </div>
+      <div id="ehbotJobsSummary" class="table-summary">-</div>
+    </div>
+    <div class="scroll" style="margin-top: 12px;">
+      <table id="ehbotJobsTable" class="data-table">
         <thead>
           <tr><th>Local Job</th><th>Status</th><th>Remote Job</th><th>Target</th><th>Progress</th><th>Imported Path</th><th>Error</th></tr>
         </thead>
@@ -426,7 +475,27 @@
         <div class="spacer"></div>
         <button id="togglePollBtn" class="ghost">暂停自动刷新</button>
       </div>
-      <div class="scroll"><table id="jobsTable"><thead><tr><th>任务 ID</th><th>类型</th><th>状态</th><th>书库</th><th>来源</th><th>进度</th><th>错误日志</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-toolbar">
+        <div class="filters">
+          <label><span>搜索</span><input id="jobsSearch" type="text" placeholder="job_id / 类型 / 书库 / 路径"></label>
+          <label><span>状态</span>
+            <select id="jobsStatus">
+              <option value="">全部状态</option>
+              <option value="queued">queued</option>
+              <option value="running">running</option>
+              <option value="done">done</option>
+              <option value="failed">failed</option>
+              <option value="ready">ready</option>
+              <option value="accepted">accepted</option>
+            </select>
+          </label>
+          <label class="checkbox" style="min-width: 0; align-items: center;">
+            <input id="jobsAggregate" type="checkbox" checked> 聚合同类相邻记录
+          </label>
+        </div>
+        <div id="jobsSummary" class="table-summary">-</div>
+      </div>
+      <div class="scroll" style="margin-top: 12px;"><table id="jobsTable" class="data-table"><thead><tr><th>任务 ID</th><th>类型</th><th>状态</th><th>书库</th><th>来源</th><th>进度</th><th>错误日志</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <section class="panel wide">
@@ -493,17 +562,21 @@
         <label><span>页码</span><input id="jobHistoryPage" type="number" value="1" min="1"></label>
         <label><span>每页条数</span><input id="jobHistoryLimit" type="number" value="100" min="1" max="200"></label>
       </div>
-      <div class="row" style="margin-top: 16px;">
-        <label class="checkbox" style="min-width: 260px; flex: 0 0 auto;">
-          <input id="jobHistoryAggregate" type="checkbox" checked>
-          <span>聚合同类同状态相邻记录</span>
-        </label>
-        <div id="jobHistorySummary" class="help" style="margin-bottom: 0; flex: 1;">-</div>
-        <button id="jobHistoryPrevBtn" class="ghost">上一页</button>
-        <button id="jobHistoryNextBtn" class="ghost">下一页</button>
+      <div class="table-toolbar" style="margin-top: 16px;">
+        <div class="filters">
+          <label class="checkbox" style="min-width: 260px; flex: 0 0 auto;">
+            <input id="jobHistoryAggregate" type="checkbox" checked>
+            <span>聚合同类同状态相邻记录</span>
+          </label>
+        </div>
+        <div class="table-actions">
+          <div id="jobHistorySummary" class="table-summary">-</div>
+          <button id="jobHistoryPrevBtn" class="ghost">上一页</button>
+          <button id="jobHistoryNextBtn" class="ghost">下一页</button>
+        </div>
       </div>
-      <div class="scroll" style="margin-top: 16px;">
-        <table id="jobHistoryTable">
+      <div class="scroll" style="margin-top: 12px;">
+        <table id="jobHistoryTable" class="data-table">
           <thead>
             <tr><th>任务 ID</th><th>类型</th><th>触发</th><th>状态</th><th>书库/目标</th><th>时间</th><th>摘要</th><th>错误</th></tr>
           </thead>
@@ -550,6 +623,8 @@ const state = {
   sources: [],
   ehbotStatus: null,
   ehbotConfig: null,
+  ehbotJobs: [],
+  jobs: [],
   selectedRecords: {},
   lastRecordItems: [],
   sidecar: { locator: null, item: null, info: null },
@@ -571,8 +646,14 @@ document.getElementById('saveTokenBtn').addEventListener('click', () => {
 document.getElementById('triggerEnrichBtn').addEventListener('click', triggerEnrich);
 document.getElementById('refreshSourcesBtn').addEventListener('click', refreshSources);
 document.getElementById('refreshJobsBtn').addEventListener('click', refreshJobs);
+document.getElementById('jobsSearch').addEventListener('input', renderJobs);
+document.getElementById('jobsStatus').addEventListener('change', renderJobs);
+document.getElementById('jobsAggregate').addEventListener('change', renderJobs);
 document.getElementById('runEHBotPullBtn').addEventListener('click', runEHBotPullOnce);
 document.getElementById('refreshEHBotBtn').addEventListener('click', async () => { await Promise.all([refreshEHBotStatus(), refreshEHBotJobs()]); });
+document.getElementById('ehbotJobsSearch').addEventListener('input', renderEHBotJobs);
+document.getElementById('ehbotJobsStatus').addEventListener('change', renderEHBotJobs);
+document.getElementById('ehbotJobsAggregate').addEventListener('change', renderEHBotJobs);
 document.getElementById('loadEHBotConfigBtn').addEventListener('click', loadEHBotConfig);
 document.getElementById('saveEHBotConfigBtn').addEventListener('click', saveEHBotConfig);
 document.getElementById('ehbotConfigClearPullToken').addEventListener('change', syncEHBotTokenInputs);
@@ -693,6 +774,53 @@ function pill(text, kind = '') {
   return `<span class="pill ${kind}">${htmlEscape(text || '-')}</span>`;
 }
 
+function renderEmptyRow(colspan, message) {
+  return `<tr><td colspan="${colspan}" class="table-empty">${htmlEscape(message)}</td></tr>`;
+}
+
+function normalizeQuery(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function buildSearchText(parts) {
+  return parts.filter(Boolean).join(' ').toLowerCase();
+}
+
+function matchesQuery(parts, query) {
+  if (!query) return true;
+  return buildSearchText(parts).includes(query);
+}
+
+function aggregateAdjacentItems(items, keyFn) {
+  const groups = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = keyFn(item || {});
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.items.push(item);
+      continue;
+    }
+    groups.push({ key, items: [item] });
+  }
+  return groups.map((group) => {
+    const latest = group.items[0] || {};
+    const earliest = group.items[group.items.length - 1] || latest;
+    return {
+      ...latest,
+      _group_count: group.items.length,
+      _group_first_job_id: earliest.job_id || '',
+      _group_error_count: group.items.filter((entry) => entry && entry.error).length,
+    };
+  });
+}
+
+function aggregateEHBotItems(items) {
+  return aggregateAdjacentItems(items, (job) => `${job.status || ''}::${job.library_id || ''}::${job.remote_target_id || ''}`);
+}
+
+function aggregateJobsItems(items) {
+  return aggregateAdjacentItems(items, (job) => `${job.kind || ''}::${job.status || ''}::${job.library_id || ''}`);
+}
 function actionLabel(action) {
   if (action === 'lock') return '锁定';
   if (action === 'unlock') return '解锁';
@@ -994,23 +1122,74 @@ async function refreshEHBotStatus() {
   }
 }
 
+function renderEHBotJobs() {
+  const items = Array.isArray(state.ehbotJobs) ? state.ehbotJobs : [];
+  const query = normalizeQuery(document.getElementById('ehbotJobsSearch').value);
+  const status = document.getElementById('ehbotJobsStatus').value;
+  const filtered = items.filter((job) => {
+    if (status && (job.status || '') !== status) return false;
+    if (!matchesQuery([
+      job.job_id,
+      job.remote_job_id,
+      job.remote_title,
+      job.imported_path,
+      job.library_id,
+      job.remote_target_id,
+      job.error,
+      job.trigger,
+    ], query)) return false;
+    return true;
+  });
+  const aggregate = document.getElementById('ehbotJobsAggregate').checked;
+  const displayItems = aggregate ? aggregateEHBotItems(filtered) : filtered;
+  document.getElementById('ehbotJobsSummary').textContent = `共 ${items.length} 条 / 过滤后 ${filtered.length} 条 / 当前显示 ${displayItems.length} 行${aggregate ? '（已聚合）' : ''}`;
+  const tbody = document.querySelector('#ehbotJobsTable tbody');
+  tbody.innerHTML = displayItems.map((job) => {
+    const groupCount = Number(job._group_count || 1);
+    const groupMeta = groupCount > 1
+      ? `<div class="cell-sub">${pill('×' + groupCount, 'warn')} <span class="mono">最早 ${htmlEscape(job._group_first_job_id || '')}</span></div>`
+      : '';
+    const errorCell = (job.error || groupCount > 1)
+      ? `<div class="mono cell-error">${htmlEscape(job.error || '')}</div>${groupCount > 1 && (job._group_error_count || 0) > 0 ? `<div class="cell-sub">聚合内含 ${htmlEscape(job._group_error_count || 0)} 条错误记录</div>` : ''}`
+      : '-';
+    return `<tr>
+      <td class="mono">
+        <div class="cell-stack">
+          <div class="cell-title">${htmlEscape(job.job_id || '')}</div>
+          <div class="cell-sub">${htmlEscape(job.trigger || '-')}</div>
+          ${groupMeta}
+        </div>
+      </td>
+      <td>${renderState(job.status)}</td>
+      <td>
+        <div class="cell-stack">
+          <div class="mono cell-title">${htmlEscape(job.remote_job_id || '-')}</div>
+          <div class="cell-sub">${htmlEscape(job.remote_title || '')}</div>
+        </div>
+      </td>
+      <td>
+        <div class="cell-stack">
+          <div class="mono cell-title">${htmlEscape(job.library_id || '-')}</div>
+          <div class="cell-sub mono">${htmlEscape(job.remote_target_id || '')}</div>
+        </div>
+      </td>
+      <td class="mono">${htmlEscape(formatEHBotProgress(job))}</td>
+      <td class="mono">${htmlEscape(job.imported_path || '-')}</td>
+      <td>${errorCell}</td>
+    </tr>`;
+  }).join('') || renderEmptyRow(7, '暂无 EH Bot 任务。');
+}
+
 async function refreshEHBotJobs() {
   try {
     const data = await fetchJSON('/api/v1/admin/ehbot/jobs');
-    const items = data.items || [];
-    const tbody = document.querySelector('#ehbotJobsTable tbody');
-    tbody.innerHTML = items.map((job) => `<tr>
-      <td class="mono" style="font-weight: 500;">${htmlEscape(job.job_id || '')}<div class="muted">${htmlEscape(job.trigger || '')}</div></td>
-      <td>${renderState(job.status)}</td>
-      <td><div class="mono">${htmlEscape(job.remote_job_id || '-')}</div><div class="muted">${htmlEscape(job.remote_title || '')}</div></td>
-      <td><div class="mono">${htmlEscape(job.library_id || '-')}</div><div class="muted mono">${htmlEscape(job.remote_target_id || '')}</div></td>
-      <td class="mono">${htmlEscape(formatEHBotProgress(job))}</td>
-      <td class="mono">${htmlEscape(job.imported_path || '-')}</td>
-      <td class="mono" style="color: var(--err);">${htmlEscape(job.error || '')}</td>
-    </tr>`).join('') || '<tr><td colspan="7" class="muted" style="text-align: center; padding: 32px;">暂无 EH Bot 任务。</td></tr>';
+    state.ehbotJobs = data.items || [];
+    renderEHBotJobs();
   } catch (error) {
+    document.getElementById('ehbotJobsSummary').textContent = '加载失败';
     setStatus(`EH Bot 任务加载失败：${error.message}`, 'err');
   }
+}
 }
 
 function jobHistoryPageValue() {
@@ -1085,6 +1264,75 @@ async function refreshJobHistory(resetPage = false, delta = 0) {
       const target = [job.library_id || '', job.target_id || '', job.remote_job_id || ''].filter(Boolean).join(' / ');
       const groupCount = Number(job._group_count || 1);
       const idExtra = groupCount > 1
+        ? `<div class="cell-sub">${pill('×' + groupCount, 'warn')} <span class="mono">最早 ${htmlEscape(job._group_first_job_id || '')}</span></div>`
+        : '';
+      const timePrimary = formatDateTime(job.updated_at || job.requested_at);
+      const timeExtra = groupCount > 1
+        ? `<div class="cell-sub mono">起始 ${htmlEscape(formatDateTime(job._group_first_updated_at || job.requested_at))}</div>`
+        : '';
+      const summaryCell = groupCount > 1
+        ? `<div>${htmlEscape(job.summary || '-')}</div><div class="cell-sub">相邻 ${groupCount} 条相同类型且相同状态记录已折叠</div>`
+        : htmlEscape(job.summary || '-');
+      const errorCell = (job.error || groupCount > 1)
+        ? `<div class="mono cell-error">${htmlEscape(job.error || '')}</div>${groupCount > 1 && (job._group_error_count || 0) > 0 ? `<div class="cell-sub">聚合内含 ${htmlEscape(job._group_error_count || 0)} 条错误记录</div>` : ''}`
+        : '-';
+      return `<tr>
+        <td class="mono">
+          <div class="cell-stack">
+            <div class="cell-title">${htmlEscape(job.job_id || '')}</div>
+            ${idExtra}
+          </div>
+        </td>
+        <td>${pill(job.kind || '-')}</td>
+        <td>${pill(job.trigger || '-', job.trigger === 'manual' ? 'warn' : job.trigger ? 'ok' : '')}</td>
+        <td>${renderState(job.status)}</td>
+        <td>
+          <div class="cell-stack">
+            <div class="mono cell-title">${htmlEscape(target || '-')}</div>
+            <div class="cell-sub mono">${htmlEscape(job.path || '')}</div>
+          </div>
+        </td>
+        <td class="mono">
+          <div class="cell-stack">
+            <div class="cell-title">${htmlEscape(timePrimary || '-')}</div>
+            ${timeExtra}
+          </div>
+        </td>
+        <td>${summaryCell}</td>
+        <td>${errorCell}</td>
+      </tr>`;
+    }).join('') || renderEmptyRow(8, '暂无 Job 历史记录。');
+  } catch (error) {
+    setStatus(`Job 历史加载失败：${error.message}`, 'err');
+  }
+}
+    const limit = jobHistoryLimitValue();
+    document.getElementById('jobHistoryLimit').value = String(limit);
+    const params = new URLSearchParams({
+      kind: document.getElementById('jobHistoryKind').value.trim(),
+      trigger: document.getElementById('jobHistoryTrigger').value,
+      status: document.getElementById('jobHistoryStatus').value,
+      library_id: document.getElementById('jobHistoryLibrary').value.trim(),
+      page: String(page),
+      limit: String(limit),
+    });
+    const data = await fetchJSON(`/api/v1/admin/jobs?${params.toString()}`);
+    const rawItems = data.items || [];
+    const aggregate = document.getElementById('jobHistoryAggregate').checked;
+    const items = aggregate ? aggregateJobHistoryItems(rawItems) : rawItems;
+    const tbody = document.querySelector('#jobHistoryTable tbody');
+    const currentPage = Number(data.page || page || 1);
+    const total = Number(data.total || 0);
+    const offset = Number(data.offset || 0);
+    const pageSize = Number(data.page_size || limit || 100);
+    document.getElementById('jobHistoryPage').value = String(currentPage);
+    document.getElementById('jobHistorySummary').textContent = `共 ${total} 条记录 / 第 ${currentPage} 页 / 每页 ${pageSize} 条 / 本页原始 ${rawItems.length} 条 / 当前显示 ${items.length} 行${aggregate ? '（已聚合）' : ''}`;
+    document.getElementById('jobHistoryPrevBtn').disabled = currentPage <= 1;
+    document.getElementById('jobHistoryNextBtn').disabled = offset + rawItems.length >= total;
+    tbody.innerHTML = items.map((job) => {
+      const target = [job.library_id || '', job.target_id || '', job.remote_job_id || ''].filter(Boolean).join(' / ');
+      const groupCount = Number(job._group_count || 1);
+      const idExtra = groupCount > 1
         ? `<div style="margin-top: 4px;">${pill('×' + groupCount, 'warn')}</div><div class="muted mono">最早 ${htmlEscape(job._group_first_job_id || '')}</div>`
         : '';
       const timePrimary = formatDateTime(job.updated_at || job.requested_at);
@@ -1131,23 +1379,61 @@ async function triggerEnrich() {
   }
 }
 
+function renderJobs() {
+  const items = Array.isArray(state.jobs) ? state.jobs : [];
+  const query = normalizeQuery(document.getElementById('jobsSearch').value);
+  const status = document.getElementById('jobsStatus').value;
+  const filtered = items.filter((job) => {
+    if (status && (job.status || '') !== status) return false;
+    if (!matchesQuery([
+      job.job_id,
+      job.kind,
+      job.library_id,
+      job.path,
+      job.error,
+      formatJobSources(job),
+    ], query)) return false;
+    return true;
+  });
+  const aggregate = document.getElementById('jobsAggregate').checked;
+  const displayItems = aggregate ? aggregateJobsItems(filtered) : filtered;
+  document.getElementById('jobsSummary').textContent = `共 ${items.length} 条 / 过滤后 ${filtered.length} 条 / 当前显示 ${displayItems.length} 行${aggregate ? '（已聚合）' : ''}`;
+  const tbody = document.querySelector('#jobsTable tbody');
+  tbody.innerHTML = displayItems.map((job) => {
+    const groupCount = Number(job._group_count || 1);
+    const groupMeta = groupCount > 1
+      ? `<div class="cell-sub">${pill('×' + groupCount, 'warn')} <span class="mono">最早 ${htmlEscape(job._group_first_job_id || '')}</span></div>`
+      : '';
+    const errorCell = (job.error || groupCount > 1)
+      ? `<div class="mono cell-error">${htmlEscape(job.error || '')}</div>${groupCount > 1 && (job._group_error_count || 0) > 0 ? `<div class="cell-sub">聚合内含 ${htmlEscape(job._group_error_count || 0)} 条错误记录</div>` : ''}`
+      : '-';
+    return `<tr>
+      <td class="mono">
+        <div class="cell-stack">
+          <div class="cell-title">${htmlEscape(job.job_id || '')}</div>
+          ${groupMeta}
+        </div>
+      </td>
+      <td>${pill(job.kind || '-')}</td>
+      <td>${renderState(job.status)}</td>
+      <td class="mono">${htmlEscape(job.library_id || '-')}</td>
+      <td class="cell-sub">${htmlEscape(formatJobSources(job))}</td>
+      <td class="mono">${htmlEscape(formatJobProgress(job))}</td>
+      <td>${errorCell}</td>
+    </tr>`;
+  }).join('') || renderEmptyRow(7, '当前没有运行中的任务');
+}
+
 async function refreshJobs() {
   try {
     const data = await fetchJSON('/api/v1/admin/metadata/jobs');
-    const items = data.items || [];
-    const tbody = document.querySelector('#jobsTable tbody');
-    tbody.innerHTML = items.map((job) => `<tr>
-      <td class="mono" style="font-weight: 500;">${htmlEscape(job.job_id || '')}</td>
-      <td>${pill(job.kind || '')}</td>
-      <td>${renderState(job.status)}</td>
-      <td class="mono">${htmlEscape(job.library_id || '')}</td>
-      <td class="muted">${htmlEscape(formatJobSources(job))}</td>
-      <td class="mono">${htmlEscape(formatJobProgress(job))}</td>
-      <td class="mono" style="color: var(--err);">${htmlEscape(job.error || '')}</td>
-    </tr>`).join('') || '<tr><td colspan="7" class="muted" style="text-align: center; padding: 32px;">当前没有运行中的任务</td></tr>';
+    state.jobs = data.items || [];
+    renderJobs();
   } catch (error) {
+    document.getElementById('jobsSummary').textContent = '加载失败';
     setStatus(error.message, 'err');
   }
+}
 }
 
 async function refreshRecords(resetPage = false) {
@@ -1549,3 +1835,20 @@ boot().catch((error) => setStatus(`系统启动失败：${error.message}`, 'err'
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
