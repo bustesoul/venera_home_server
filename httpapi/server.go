@@ -144,26 +144,17 @@ func loggingMiddleware(logger *shared.LevelLogger, next http.Handler) http.Handl
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, adminIndexHTML)
-}
-
-func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
-	libs := s.app.Libraries()
-	libraries := make([]map[string]any, 0, len(libs))
-	for _, lib := range libs {
-		libraries = append(libraries, map[string]any{
-			"id":           lib.ID,
-			"name":         lib.Name,
-			"kind":         lib.Kind,
-			"series_count": len(s.app.LibraryComicIDs(lib.ID)),
-		})
+	if s.app != nil {
+		dataDir := strings.TrimSpace(s.app.Config().Server.DataDir)
+		if dataDir != "" {
+			overridePath := filepath.Join(dataDir, "admin_index.html")
+			if data, err := os.ReadFile(overridePath); err == nil && len(data) > 0 {
+				_, _ = w.Write(data)
+				return
+			}
+		}
 	}
-	writeData(w, map[string]any{
-		"server":       map[string]any{"name": "Venera Home Server", "version": "0.1.0"},
-		"capabilities": map[string]any{"favorites": true, "thumbnails": true, "rescan": true, "metadata_fetch": true},
-		"libraries":    libraries,
-		"defaults":     map[string]any{"sort": "updated_desc", "page_size": 24},
-	})
+	_, _ = io.WriteString(w, adminIndexHTML)
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -1479,3 +1470,5 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 		"error": map[string]any{"code": code, "message": message},
 	})
 }
+
+
