@@ -1340,12 +1340,19 @@ func (s *Server) relatedComics(target *apppkg.Comic) []*apppkg.Comic {
 func (s *Server) toCards(base string, comics []*apppkg.Comic, favoriteMode bool) []map[string]any {
 	out := make([]map[string]any, 0, len(comics))
 	for _, comic := range comics {
+		cardTags := map[string][]string{}
+		if len(comic.Authors) > 0 {
+			cardTags["Author"] = comic.Authors
+		}
+		if len(comic.Tags) > 0 {
+			cardTags["Tag"] = comic.Tags
+		}
 		card := map[string]any{
 			"id":          comic.ID,
 			"title":       comic.Title,
 			"subtitle":    comic.Subtitle,
 			"cover_url":   s.mediaURL(base, shared.SignedPayload{Type: "cover", ComicID: comic.ID}),
-			"tags":        comic.Tags,
+			"tags":        cardTags,
 			"description": comic.Description,
 		}
 		if favoriteMode {

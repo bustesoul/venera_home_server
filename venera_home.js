@@ -4,7 +4,7 @@ class VeneraHome extends ComicSource {
 
     key = "venera_home"
 
-    version = "0.1.9"
+    version = "0.2.0"
 
     minAppVersion = "1.6.0"
 
@@ -419,7 +419,7 @@ class VeneraHome extends ComicSource {
             }
             for (let value of values) {
                 if (value && result.length < 8) {
-                    result.push(value)
+                    result.push(`${key}:${value}`)
                 }
             }
         }

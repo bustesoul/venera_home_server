@@ -240,6 +240,7 @@
       gap: 6px;
       margin-top: 4px;
     }
+    .tag-hidden { display: none !important; }
 
     .table-empty { text-align: center; padding: 48px 32px; color: var(--text-muted); font-size: 0.95rem; }
     .table-toolbar {
@@ -280,8 +281,9 @@
       box-shadow: var(--shadow-sm);
       transition: all 0.2s;
     }
-    .pill.compact { padding: 2px 8px; font-weight: 500; font-size: 0.7rem; box-shadow: none; }
+    .pill.compact { padding: 2px 8px; font-weight: 500; font-size: 0.75rem; box-shadow: none; cursor: pointer; transition: transform 0.1s, background-color 0.2s, border-color 0.2s; }
     .pill.compact:hover { border-color: var(--border-hover); background: var(--bg); }
+    .pill.compact:active { transform: scale(0.95); }
     .pill.ok { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
     .pill.warn { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
     .pill.err { color: var(--err); background: var(--err-bg); border-color: transparent; }
@@ -875,6 +877,35 @@ function pill(text, kind = '') {
 
 function renderEmptyRow(colspan, message) {
   return `<tr><td colspan="${colspan}" class="table-empty">${htmlEscape(message)}</td></tr>`;
+}
+
+function copyToClipboard(text) {
+  if (!text) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      setStatus(`已复制到剪贴板: ${text}`, 'ok');
+    }).catch(err => {
+      setStatus(`复制失败: ${err.message}`, 'err');
+    });
+  } else {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const success = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (success) {
+        setStatus(`已复制到剪贴板: ${text}`, 'ok');
+      } else {
+        setStatus('复制失败: 浏览器阻止了此操作', 'err');
+      }
+    } catch (err) {
+      setStatus(`复制异常: ${err.message}`, 'err');
+    }
+  }
 }
 
 function renderPagination(containerId, { page, total, pageSize, onPageChange }) {
@@ -1544,9 +1575,19 @@ async function refreshRecords(resetPage = false) {
       const artists = Array.isArray(item.artists) ? item.artists.filter(Boolean) : [];
       const tags = Array.isArray(item.tags) ? item.tags.filter(Boolean) : [];
       
-      const artistsElements = artists.map(artist => `<span class="pill compact" style="background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--text-main);">${htmlEscape(artist)}</span>`).join('');
-      const tagElements = tags.map(tag => `<span class="pill compact" style="color: var(--text-muted);">${htmlEscape(tag)}</span>`).join('');
-      const langElement = item.language ? `<span class="pill compact" style="background: var(--bg-hover); color: var(--text-main); font-weight: 600;">${htmlEscape(item.language)}</span>` : '';
+      const artistsElements = artists.map(artist => `<span class="pill compact" style="background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--text-main);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(artist)}</span>`).join('');
+      
+      let tagElements = '';
+      if (tags.length <= 5) {
+        tagElements = tags.map(tag => `<span class="pill compact" style="color: var(--text-muted);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(tag)}</span>`).join('');
+      } else {
+        const visibleTags = tags.slice(0, 5).map(tag => `<span class="pill compact" style="color: var(--text-muted);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(tag)}</span>`).join('');
+        const hiddenTags = tags.slice(5).map(tag => `<span class="pill compact tag-hidden" style="color: var(--text-muted);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(tag)}</span>`).join('');
+        const toggleBtn = `<span class="pill compact" style="cursor: pointer; background: var(--bg-hover); color: var(--text-main); font-weight: 600;" onclick="this.parentElement.querySelectorAll('.tag-hidden').forEach(e => e.classList.remove('tag-hidden')); this.remove(); event.stopPropagation();" title="展开更多标签">+${tags.length - 5}</span>`;
+        tagElements = visibleTags + hiddenTags + toggleBtn;
+      }
+      
+      const langElement = item.language ? `<span class="pill compact" style="background: var(--bg-hover); color: var(--text-main); font-weight: 600;" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(item.language)}</span>` : '';
       
       const metaContainer = (artistsElements || tagElements || langElement) 
         ? `<div class="tags-container">
