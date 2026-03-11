@@ -73,7 +73,6 @@ func newHTTPServer(app *apppkg.App, logger *log.Logger) http.Handler {
 		pageCacheInfoItems: map[string]pageCacheInfoEntry{},
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/bootstrap", srv.auth(srv.handleBootstrap))
 	mux.HandleFunc("/api/v1/home", srv.auth(srv.handleHome))
 	mux.HandleFunc("/api/v1/categories", srv.auth(srv.handleCategories))
 	mux.HandleFunc("/api/v1/comics", srv.auth(srv.handleComics))
