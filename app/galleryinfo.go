@@ -60,10 +60,7 @@ func applyGalleryInfo(meta *ParsedMetadata, raw []byte) {
 			if inTagBlock {
 				if strings.HasPrefix(trimmed, ">") {
 					tagLine := strings.TrimSpace(strings.TrimPrefix(trimmed, ">"))
-					if _, val, ok := strings.Cut(tagLine, ":"); ok {
-						tagLine = strings.TrimSpace(val)
-					}
-					parsedTags = append(parsedTags, parseGalleryInfoTags(tagLine)...)
+					parsedTags = append(parsedTags, parseGalleryInfoTagBlockLine(tagLine)...)
 					continue
 				}
 				inTagBlock = false
@@ -109,7 +106,7 @@ func applyGalleryInfo(meta *ParsedMetadata, raw []byte) {
 
 	description := joinGalleryInfoLines(comments)
 	meta.Description = firstNonEmpty(description, meta.Description)
-	meta.Language = firstNonEmpty(languageFromGalleryInfoTags(parsedTags), meta.Language)
+	meta.Language = firstNonEmpty(languageFromGalleryInfoTags(meta.Tags), meta.Language)
 }
 
 func isGalleryInfoCommentsHeader(line string) bool {
@@ -130,6 +127,31 @@ func parseGalleryInfoTags(value string) []string {
 			continue
 		}
 		out = append(out, part)
+	}
+	return shared.UniqueStrings(out)
+}
+
+func parseGalleryInfoTagBlockLine(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	namespace, rest, ok := strings.Cut(value, ":")
+	if !ok {
+		return parseGalleryInfoTags(value)
+	}
+	namespace = shared.NormalizeTagNamespace(namespace)
+	rest = strings.TrimSpace(rest)
+	if namespace == "" || namespace == "tags" {
+		return parseGalleryInfoTags(rest)
+	}
+	values := parseGalleryInfoTags(rest)
+	out := make([]string, 0, len(values))
+	for _, item := range values {
+		tag := shared.NamespaceTag(namespace, item)
+		if tag != "" {
+			out = append(out, tag)
+		}
 	}
 	return shared.UniqueStrings(out)
 }

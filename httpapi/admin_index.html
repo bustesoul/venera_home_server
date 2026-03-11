@@ -263,7 +263,7 @@
     .table-pagination button { padding: 6px 14px; }
     .table-pagination .page-info { color: var(--text-muted); font-size: 0.85rem; white-space: nowrap; font-weight: 500; }
     .scroll.is-loading { opacity: 0.45; pointer-events: none; transition: opacity 0.2s ease; }
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .actions { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; justify-content: flex-end; }
     
     .pill {
       display: inline-flex;
@@ -604,7 +604,7 @@
         <button id="applyBatchActionBtn" class="primary" disabled>应用到已选</button>
         <button id="clearSelectedRecordsBtn" class="ghost" disabled>清空选择</button>
       </div>
-      <div class="scroll" style="margin-top: 12px;"><table id="recordsTable" class="data-table"><thead><tr><th style="width: 40px;"><input id="selectAllRecords" type="checkbox" aria-label="选择当前页全部记录"></th><th style="width: 80px;">状态</th><th>标题 / 副标题</th><th>路径 / 文件</th><th>来源信息</th><th style="width: 90px;">置信度</th><th style="width: 80px;">锁定</th><th style="width: 280px; text-align: right;">操作</th></tr></thead><tbody></tbody></table></div>
+      <div class="scroll" style="margin-top: 12px;"><table id="recordsTable" class="data-table"><thead><tr><th style="width: 40px;"><input id="selectAllRecords" type="checkbox" aria-label="选择当前页全部记录"></th><th style="width: 80px;">状态</th><th>标题 / TAG</th><th>相对路径 / 绝对路径</th><th>来源信息</th><th style="width: 90px;">置信度</th><th style="width: 280px; text-align: right;">操作</th></tr></thead><tbody></tbody></table></div>
     </section>
 
     <div class="grid">
@@ -1620,15 +1620,14 @@ async function refreshRecords(resetPage = false) {
           </div>
         </td>
         <td class="mono" style="font-weight: 500;">${item.confidence == null ? '-' : htmlEscape(item.confidence)}</td>
-        <td>${item.manual_locked ? pill('已锁定', 'warn') : pill('-', 'compact ghost')}</td>
         <td><div class="actions" style="justify-content: flex-end;">
-          <button class="ghost" onclick='openSidecarEditor("${encodedLocator}")'>Sidecar</button>
+          <button class="ghost" onclick='openSidecarEditor("${encodedLocator}")'>配置</button>
           <button class="ghost" onclick='recordAction("${item.manual_locked ? 'unlock' : 'lock'}", "${encodedLocator}")'>${item.manual_locked ? '解锁' : '锁定'}</button>
           <button class="ghost" onclick='recordAction("reset", "${encodedLocator}")'>重置</button>
           <button class="ghost" style="color: var(--primary);" onclick='recordAction("enrich", "${encodedLocator}")'>补全</button>
         </div></td>
       </tr>`;
-    }).join('') || renderEmptyRow(8, '暂无符合条件的记录');
+    }).join('') || renderEmptyRow(7, '暂无符合条件的记录');
     syncRecordSelectionUI();
   } catch (error) {
     setStatus(error.message, 'err');

@@ -978,6 +978,7 @@ components:
           type: string
         tags:
           type: object
+          description: Namespaced tags are grouped by namespace (for example `artist`, `female`, `language`); plain tags remain under `Tag`.
           additionalProperties:
             type: array
             items:

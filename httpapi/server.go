@@ -308,12 +308,7 @@ func (s *Server) handleComicDetails(w http.ResponseWriter, r *http.Request, comi
 	}
 	relativePath := s.comicRelativePath(comic)
 	localPath := s.comicLocalPath(comic)
-	tags := map[string][]string{
-		"Author":  comic.Authors,
-		"Tag":     comic.Tags,
-		"Library": []string{comic.LibraryName},
-		"Storage": []string{comic.Storage},
-	}
+	tags := buildComicTagGroups(comic, true)
 	recommend := s.relatedComics(comic)
 	writeData(w, map[string]any{
 		"id":            comic.ID,
@@ -1340,13 +1335,7 @@ func (s *Server) relatedComics(target *apppkg.Comic) []*apppkg.Comic {
 func (s *Server) toCards(base string, comics []*apppkg.Comic, favoriteMode bool) []map[string]any {
 	out := make([]map[string]any, 0, len(comics))
 	for _, comic := range comics {
-		cardTags := map[string][]string{}
-		if len(comic.Authors) > 0 {
-			cardTags["Author"] = comic.Authors
-		}
-		if len(comic.Tags) > 0 {
-			cardTags["Tag"] = comic.Tags
-		}
+		cardTags := buildComicTagGroups(comic, false)
 		card := map[string]any{
 			"id":          comic.ID,
 			"title":       comic.Title,
@@ -1361,6 +1350,22 @@ func (s *Server) toCards(base string, comics []*apppkg.Comic, favoriteMode bool)
 		out = append(out, card)
 	}
 	return out
+}
+
+func buildComicTagGroups(comic *apppkg.Comic, includeContext bool) map[string][]string {
+	tags := shared.GroupTagsByNamespace(comic.Tags, "Tag")
+	if len(comic.Authors) > 0 {
+		tags["Author"] = shared.UniqueStrings(append([]string(nil), comic.Authors...))
+	}
+	if includeContext {
+		if strings.TrimSpace(comic.LibraryName) != "" {
+			tags["Library"] = []string{comic.LibraryName}
+		}
+		if strings.TrimSpace(comic.Storage) != "" {
+			tags["Storage"] = []string{comic.Storage}
+		}
+	}
+	return tags
 }
 
 func (s *Server) mediaURL(base string, payload shared.SignedPayload) string {
@@ -1476,5 +1481,4 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 		"error": map[string]any{"code": code, "message": message},
 	})
 }
-
 

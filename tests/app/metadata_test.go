@@ -235,7 +235,7 @@ func TestEHBotDownloaderStyleGalleryInfo(t *testing.T) {
 	if comic.Language != "zh" {
 		t.Fatalf("unexpected language: %q", comic.Language)
 	}
-	if !containsString(comic.Tags, "chinese") || !containsString(comic.Tags, "yuri") || !containsString(comic.Tags, "glasses") || !containsString(comic.Tags, "test") {
+	if !containsString(comic.Tags, "language:chinese") || !containsString(comic.Tags, "female:yuri") || !containsString(comic.Tags, "female:glasses") || !containsString(comic.Tags, "male:test") {
 		t.Fatalf("unexpected tags: %#v", comic.Tags)
 	}
 	if !strings.Contains(comic.Description, "Test comment from uploader") {

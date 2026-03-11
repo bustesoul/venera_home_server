@@ -46,3 +46,59 @@ func TestComicDetailsExposePathFields(t *testing.T) {
 		t.Fatalf("expected relative path to stay out of tags, got %#v", tags["RelativePath"])
 	}
 }
+
+func TestComicDetailsGroupNamespacedTags(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteFile(t, filepath.Join(root, "Tagged Book", "001.jpg"), []byte("img"))
+	testkit.MustWriteFile(t, filepath.Join(root, "Tagged Book", "galleryinfo.txt"), []byte("" +
+		"Title: Tagged Book\n" +
+		"Tags:\n" +
+		"> artist: mizuryu kei\n" +
+		"> female: dark skin, tomboy\n" +
+		"> language: chinese\n"))
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	comics := testkit.GetJSON(t, srv.URL+"/api/v1/comics?page=1&page_size=20", cfg.Server.Token)
+	items := comics["data"].(map[string]any)["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 comic, got %d", len(items))
+	}
+	comicID := items[0].(map[string]any)["id"].(string)
+
+	details := testkit.GetJSON(t, srv.URL+"/api/v1/comics/"+comicID, cfg.Server.Token)
+	data := details["data"].(map[string]any)
+	tags := data["tags"].(map[string]any)
+
+	assertTagGroup := func(group string, want ...string) {
+		raw, ok := tags[group]
+		if !ok {
+			t.Fatalf("expected tag group %q in %#v", group, tags)
+		}
+		values := raw.([]any)
+		if len(values) != len(want) {
+			t.Fatalf("unexpected tag group %q size: got %#v want %#v", group, values, want)
+		}
+		for i, expected := range want {
+			if values[i] != expected {
+				t.Fatalf("unexpected %q[%d]: got %#v want %q", group, i, values[i], expected)
+			}
+		}
+	}
+
+	assertTagGroup("artist", "mizuryu kei")
+	assertTagGroup("female", "dark skin", "tomboy")
+	assertTagGroup("language", "chinese")
+	if _, ok := tags["Tag"]; ok {
+		t.Fatalf("expected all EH-style tags to be grouped, got raw Tag bucket %#v", tags["Tag"])
+	}
+
+	search := testkit.GetJSON(t, srv.URL+"/api/v1/search?q=tag:artist:mizuryu%20kei", cfg.Server.Token)
+	searchItems := search["data"].(map[string]any)["items"].([]any)
+	if len(searchItems) != 1 {
+		t.Fatalf("expected 1 namespaced tag search result, got %d", len(searchItems))
+	}
+}

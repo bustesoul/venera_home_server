@@ -4,7 +4,7 @@ class VeneraHome extends ComicSource {
 
     key = "venera_home"
 
-    version = "0.2.0"
+    version = "0.3.0"
 
     minAppVersion = "1.6.0"
 
@@ -419,11 +419,37 @@ class VeneraHome extends ComicSource {
             }
             for (let value of values) {
                 if (value && result.length < 8) {
-                    result.push(`${key}:${value}`)
+                    if (key === 'Tag' || key === 'Author') {
+                        result.push(value)
+                    } else {
+                        result.push(`${key}:${value}`)
+                    }
                 }
             }
         }
         return result
+    }
+
+    getDetailTagOrder() {
+        return [
+            'Category',
+            'Author',
+            'artist',
+            'group',
+            'cosplayer',
+            'parody',
+            'character',
+            'female',
+            'male',
+            'mixed',
+            'other',
+            'language',
+            'reclass',
+            'uploader',
+            'Tag',
+            'Library',
+            'Storage',
+        ]
     }
 
     mergeDetailTags(data) {
@@ -431,10 +457,34 @@ class VeneraHome extends ComicSource {
         if (data && data.tags && typeof data.tags === 'object') {
             for (let key of Object.keys(data.tags)) {
                 let values = data.tags[key]
-                tags[key] = Array.isArray(values) ? values.filter(value => !!value) : []
+                if (!Array.isArray(values)) {
+                    continue
+                }
+                let cleanValues = values.filter(value => !!value)
+                if (cleanValues.length > 0) {
+                    tags[key] = cleanValues
+                }
             }
         }
-        return tags
+        let order = this.getDetailTagOrder()
+        let rankMap = {}
+        for (let i = 0; i < order.length; i++) {
+            rankMap[order[i]] = i
+        }
+        let keys = Object.keys(tags)
+        keys.sort((left, right) => {
+            let leftRank = Object.prototype.hasOwnProperty.call(rankMap, left) ? rankMap[left] : order.length + 1000
+            let rightRank = Object.prototype.hasOwnProperty.call(rankMap, right) ? rankMap[right] : order.length + 1000
+            if (leftRank !== rightRank) {
+                return leftRank - rightRank
+            }
+            return left.localeCompare(right)
+        })
+        let ordered = {}
+        for (let key of keys) {
+            ordered[key] = tags[key]
+        }
+        return ordered
     }
 
     formatDetailDescription(data) {
@@ -747,9 +797,15 @@ class VeneraHome extends ComicSource {
             if (namespace === 'Author') {
                 return this.makeSearchTarget(`author:${tag}`)
             }
+            if (namespace === 'Tag') {
+                return this.makeSearchTarget(`tag:${tag}`)
+            }
+            if (namespace) {
+                return this.makeSearchTarget(`tag:${namespace}:${tag}`)
+            }
             return this.makeSearchTarget(`tag:${tag}`)
         },
-        enableTagsTranslate: false,
+        enableTagsTranslate: true,
     }
 
     settings = {
@@ -851,6 +907,21 @@ class VeneraHome extends ComicSource {
             'Tags': 'Tags',
             'Authors': 'Authors',
             'Storage': 'Storage',
+            'Tag': 'Tag',
+            'Author': 'Author',
+            'Library': 'Library',
+            'language': 'Language',
+            'artist': 'Artist',
+            'male': 'Male',
+            'female': 'Female',
+            'mixed': 'Mixed',
+            'other': 'Other',
+            'parody': 'Parody',
+            'character': 'Character',
+            'group': 'Group',
+            'cosplayer': 'Cosplayer',
+            'reclass': 'Reclass',
+            'uploader': 'Uploader',
             'Server URL': 'Server URL',
             'Token': 'Token',
             'Default Library ID': 'Default Library ID',
@@ -872,6 +943,21 @@ class VeneraHome extends ComicSource {
             'Tags': '标签',
             'Authors': '作者',
             'Storage': '存储',
+            'Tag': '标签',
+            'Author': '作者',
+            'Library': '书库',
+            'language': '语言',
+            'artist': '画师',
+            'male': '男性',
+            'female': '女性',
+            'mixed': '混合',
+            'other': '其它',
+            'parody': '原作',
+            'character': '角色',
+            'group': '团队',
+            'cosplayer': 'Coser',
+            'reclass': '重新分类',
+            'uploader': '上传者',
             'Server URL': '服务器地址',
             'Token': '令牌',
             'Default Library ID': '默认书库 ID',
@@ -893,6 +979,21 @@ class VeneraHome extends ComicSource {
             'Tags': '標籤',
             'Authors': '作者',
             'Storage': '儲存',
+            'Tag': '標籤',
+            'Author': '作者',
+            'Library': '書庫',
+            'language': '語言',
+            'artist': '畫師',
+            'male': '男性',
+            'female': '女性',
+            'mixed': '混合',
+            'other': '其他',
+            'parody': '原作',
+            'character': '角色',
+            'group': '團隊',
+            'cosplayer': 'Coser',
+            'reclass': '重新分類',
+            'uploader': '上傳者',
             'Server URL': '伺服器位址',
             'Token': '權杖',
             'Default Library ID': '預設書庫 ID',
