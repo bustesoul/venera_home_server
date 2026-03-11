@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"context"
 	"io"
 	"log"
 	"net/http/httptest"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	httpapipkg "venera_home_server/httpapi"
+	metadatapkg "venera_home_server/metadata"
 	"venera_home_server/tests/testkit"
 )
 
@@ -50,11 +52,11 @@ func TestComicDetailsExposePathFields(t *testing.T) {
 func TestComicDetailsGroupNamespacedTags(t *testing.T) {
 	root := t.TempDir()
 	testkit.MustWriteFile(t, filepath.Join(root, "Tagged Book", "001.jpg"), []byte("img"))
-	testkit.MustWriteFile(t, filepath.Join(root, "Tagged Book", "galleryinfo.txt"), []byte("" +
-		"Title: Tagged Book\n" +
-		"Tags:\n" +
-		"> artist: mizuryu kei\n" +
-		"> female: dark skin, tomboy\n" +
+	testkit.MustWriteFile(t, filepath.Join(root, "Tagged Book", "galleryinfo.txt"), []byte(""+
+		"Title: Tagged Book\n"+
+		"Tags:\n"+
+		"> artist: mizuryu kei\n"+
+		"> female: dark skin, tomboy\n"+
 		"> language: chinese\n"))
 
 	cfg := newServerTestConfig(root, 16)
@@ -100,5 +102,48 @@ func TestComicDetailsGroupNamespacedTags(t *testing.T) {
 	searchItems := search["data"].(map[string]any)["items"].([]any)
 	if len(searchItems) != 1 {
 		t.Fatalf("expected 1 namespaced tag search result, got %d", len(searchItems))
+	}
+}
+
+func TestComicDetailsInjectLanguageGroupFromLanguageField(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteFile(t, filepath.Join(root, "Language Book", "001.jpg"), []byte("img"))
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	ids := application.LibraryComicIDs("local-main")
+	if len(ids) != 1 {
+		t.Fatalf("expected 1 comic, got %d", len(ids))
+	}
+	comic := application.ComicByID(ids[0])
+	if comic == nil {
+		t.Fatal("expected comic")
+	}
+	if err := application.UpdateMetadata(context.Background(), metadatapkg.Locator{
+		LibraryID: comic.LibraryID,
+		RootType:  comic.RootType,
+		RootRef:   comic.RootRef,
+	}, metadatapkg.Update{
+		Language: "chinese",
+	}); err != nil {
+		t.Fatalf("UpdateMetadata: %v", err)
+	}
+	if err := application.Rescan(context.Background(), "local-main"); err != nil {
+		t.Fatalf("Rescan: %v", err)
+	}
+
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	details := testkit.GetJSON(t, srv.URL+"/api/v1/comics/"+comic.ID, cfg.Server.Token)
+	data := details["data"].(map[string]any)
+	tags := data["tags"].(map[string]any)
+	raw, ok := tags["language"]
+	if !ok {
+		t.Fatalf("expected language group in %#v", tags)
+	}
+	values := raw.([]any)
+	if len(values) != 1 || values[0] != "chinese" {
+		t.Fatalf("unexpected language group: %#v", values)
 	}
 }

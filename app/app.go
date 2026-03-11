@@ -64,6 +64,10 @@ func NewApp(cfg *configpkg.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := metadataStore.FailUnfinishedJobs(context.Background(), "server restarted before job finished", time.Now().UTC()); err != nil {
+		_ = metadataStore.Close()
+		return nil, err
+	}
 	app := &App{
 		cfg:           cfg,
 		backends:      map[string]backendpkg.Backend{},

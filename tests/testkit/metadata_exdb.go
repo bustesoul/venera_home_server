@@ -15,6 +15,7 @@ type ExDBGalleryRow struct {
 	Title    string
 	TitleJPN string
 	Artist   string
+	Language string
 	Category string
 	Rating   float64
 	Thumb    string
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS gallery (
     title TEXT,
     title_jpn TEXT,
     artist TEXT,
+    language TEXT,
     category TEXT,
     rating REAL,
     thumb TEXT
@@ -46,13 +48,13 @@ DELETE FROM gallery;
 	if err != nil {
 		t.Fatalf("create gallery table: %v", err)
 	}
-	stmt, err := db.Prepare(`INSERT INTO gallery(gid, token, title, title_jpn, artist, category, rating, thumb) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := db.Prepare(`INSERT INTO gallery(gid, token, title, title_jpn, artist, language, category, rating, thumb) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		t.Fatalf("prepare insert: %v", err)
 	}
 	defer stmt.Close()
 	for _, row := range rows {
-		if _, err := stmt.Exec(row.GID, row.Token, row.Title, row.TitleJPN, row.Artist, row.Category, row.Rating, row.Thumb); err != nil {
+		if _, err := stmt.Exec(row.GID, row.Token, row.Title, row.TitleJPN, row.Artist, row.Language, row.Category, row.Rating, row.Thumb); err != nil {
 			t.Fatalf("insert gallery row: %v", err)
 		}
 	}

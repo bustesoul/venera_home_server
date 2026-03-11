@@ -11,6 +11,7 @@ import (
 	apppkg "venera_home_server/app"
 	exdbdryrunpkg "venera_home_server/exdbdryrun"
 	metadatapkg "venera_home_server/metadata"
+	"venera_home_server/shared"
 )
 
 func (s *Server) handleMetadataJobs(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +99,15 @@ func (s *Server) handleMetadataRecordAction(w http.ResponseWriter, r *http.Reque
 }
 
 func metadataRecordMap(record metadatapkg.Record) map[string]any {
+	tags := record.EffectiveTags()
+	filteredTags := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		namespace, _, ok := shared.SplitNamespacedTag(tag)
+		if ok && namespace == "language" {
+			continue
+		}
+		filteredTags = append(filteredTags, tag)
+	}
 	item := map[string]any{
 		"id":                  record.ID,
 		"locator":             map[string]any{"library_id": record.LibraryID, "root_type": record.RootType, "root_ref": record.RootRef},
@@ -111,7 +121,7 @@ func metadataRecordMap(record metadatapkg.Record) map[string]any {
 		"subtitle":            emptyToNil(record.EffectiveSubtitle()),
 		"description":         emptyToNil(record.EffectiveDescription()),
 		"artists":             record.EffectiveArtists(),
-		"tags":                record.EffectiveTags(),
+		"tags":                filteredTags,
 		"language":            emptyToNil(record.EffectiveLanguage()),
 		"category":            emptyToNil(record.Category),
 		"source":              emptyToNil(record.Source),

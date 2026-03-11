@@ -518,13 +518,16 @@
       <section class="panel">
         <h2>元数据管理</h2>
         <div class="row">
+          <label><span>书库（Library）</span><input id="mgmtLibrary" placeholder="例如 local-main"></label>
           <label><span>missing 保留天数</span><input id="cleanupOlderThanDays" type="number" value="0" min="0"></label>
+        </div>
+        <div class="row">
           <button id="rescanLibraryBtn" class="ghost">重扫当前书库</button>
           <button id="rescanAllBtn" class="ghost">重扫全部</button>
           <button id="cleanupDryRunBtn" class="ghost">测试清理（Dry Run）</button>
           <button id="cleanupExecuteBtn" class="warn">清理失效记录</button>
         </div>
-        <div class="help" id="cleanupSummary" style="margin-top: 12px;">清理仅处理 missing 记录，建议先试运行（Dry Run）；重扫使用"本地元数据记录"中的书库条件。</div>
+        <div class="help" id="cleanupSummary" style="margin-top: 12px;">清理仅处理 missing 记录，建议先试运行（Dry Run）；重扫和清理将使用上方指定的书库。</div>
       </section>
     </div>
 
@@ -830,10 +833,6 @@ function updatePollButton() {
   togglePollBtn.textContent = state.poll ? '暂停自动刷新' : '恢复自动刷新';
 }
 
-function currentMaintenanceLibrary() {
-  return document.getElementById('recordLibrary').value.trim();
-}
-
 function authHeaders() {
   const token = tokenInput.value.trim();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -869,6 +868,10 @@ function htmlEscape(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function currentMaintenanceLibrary() {
+  return document.getElementById('mgmtLibrary').value.trim();
 }
 
 function pill(text, kind = '') {

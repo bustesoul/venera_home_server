@@ -24,6 +24,7 @@ func TestMetadataEnrichmentJobAndRecordActions(t *testing.T) {
 			Title:    `[Circle] Match Book 11`,
 			TitleJPN: `[Circle] Match Book 11 [Chinese] [DL]`,
 			Artist:   `["artist one"]`,
+			Language: `["chinese"]`,
 			Category: `Doujinshi`,
 			Rating:   4.72,
 			Thumb:    `https://ehgt.org/example-cover.webp`,
@@ -57,6 +58,19 @@ func TestMetadataEnrichmentJobAndRecordActions(t *testing.T) {
 	if matchedRecord.Source == "" || matchedRecord.SourceID != `2708021` {
 		t.Fatalf("expected matched record to be enriched, got %#v", matchedRecord)
 	}
+	if matchedRecord.Language != "zh" {
+		t.Fatalf("expected matched record language zh, got %#v", matchedRecord)
+	}
+	foundLanguageTag := false
+	for _, tag := range matchedRecord.Tags {
+		if tag == "language:chinese" {
+			foundLanguageTag = true
+			break
+		}
+	}
+	if !foundLanguageTag {
+		t.Fatalf("expected matched record tags to include language:chinese, got %#v", matchedRecord.Tags)
+	}
 	if !matchedRecord.HasConfidence || matchedRecord.MatchKind == "" {
 		t.Fatalf("expected confidence and match kind, got %#v", matchedRecord)
 	}
@@ -67,6 +81,9 @@ func TestMetadataEnrichmentJobAndRecordActions(t *testing.T) {
 	matchedComic := findAppComicByRootRef(t, application, filepath.ToSlash(matchedRel))
 	if matchedComic == nil || matchedComic.Title != `[Circle] Match Book 11 [Chinese] [DL]` {
 		t.Fatalf("expected enriched runtime title, got %#v", matchedComic)
+	}
+	if matchedComic.Language != "zh" {
+		t.Fatalf("expected enriched runtime language zh, got %#v", matchedComic)
 	}
 
 	if _, err := application.MetadataRecordAction(context.Background(), apppkg.MetadataRecordActionRequest{Locator: locatorFromRecord(matchedRecord), Action: `lock`}); err != nil {

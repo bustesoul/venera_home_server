@@ -12,6 +12,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"venera_home_server/shared"
 )
 
 type Locator struct {
@@ -39,6 +40,16 @@ type ScannedMetadata struct {
 	Tags        []string `json:"tags,omitempty"`
 	Language    string   `json:"language,omitempty"`
 	SourceURL   string   `json:"source_url,omitempty"`
+}
+
+func (s ScannedMetadata) IsEmpty() bool {
+	return strings.TrimSpace(s.Title) == "" &&
+		strings.TrimSpace(s.Subtitle) == "" &&
+		strings.TrimSpace(s.Description) == "" &&
+		len(s.Artists) == 0 &&
+		len(s.Tags) == 0 &&
+		strings.TrimSpace(s.Language) == "" &&
+		strings.TrimSpace(s.SourceURL) == ""
 }
 
 type Record struct {
@@ -93,7 +104,8 @@ func (r Record) IsEmptyMetadata() bool {
 		strings.TrimSpace(r.SourceURL) == "" &&
 		strings.TrimSpace(r.CoverSourceURL) == "" &&
 		strings.TrimSpace(r.CoverBlobRelpath) == "" &&
-		strings.TrimSpace(r.ExtraJSON) == ""
+		strings.TrimSpace(r.ExtraJSON) == "" &&
+		r.Scanned.IsEmpty()
 }
 
 func (r Record) hasManagedRemoteMetadata() bool {
@@ -146,7 +158,11 @@ func (r Record) EffectiveTags() []string {
 }
 
 func (r Record) EffectiveLanguage() string {
-	return firstPresent(r.Language, r.Scanned.Language)
+	value := firstPresent(r.Language, r.Scanned.Language)
+	if normalized := shared.NormalizeLanguageCode(value); normalized != "" {
+		return normalized
+	}
+	return value
 }
 
 func (r Record) EffectiveSourceURL() string {
@@ -985,12 +1001,13 @@ func resolveScannedMetadataValues(existing *Record, local ScannedMetadata, scann
 	}
 	return titleValue, subtitleValue, descriptionValue, artistsValue, tagsValue, languageValue, sourceURLValue, nil
 }
+
 func emptyStateWhere() string {
 	return `COALESCE(title, '') = '' AND COALESCE(title_jpn, '') = '' AND COALESCE(subtitle, '') = '' AND ` +
 		`COALESCE(description, '') = '' AND COALESCE(artists_json, '') = '' AND COALESCE(tags_json, '') = '' AND ` +
 		`COALESCE(language, '') = '' AND rating IS NULL AND COALESCE(category, '') = '' AND COALESCE(source, '') = '' AND ` +
 		`COALESCE(source_id, '') = '' AND COALESCE(source_url, '') = '' AND COALESCE(cover_source_url, '') = '' AND ` +
-		`COALESCE(cover_blob_relpath, '') = '' AND COALESCE(extra_json, '') = ''`
+		`COALESCE(cover_blob_relpath, '') = '' AND COALESCE(extra_json, '') = '' AND COALESCE(scanned_metadata_json, '') = ''`
 }
 
 func encodeJSON(v any) (string, error) {

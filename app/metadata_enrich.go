@@ -454,12 +454,20 @@ func matchRecordFromSources(ctx context.Context, handles []exdbSourceHandle, rec
 
 func buildMetadataUpdateFromCandidate(source exdbSourceSummary, candidate exdbdryrunpkg.Candidate) metadatapkg.Update {
 	now := time.Now().UTC()
+	tags := parseExternalStringList(candidate.Tags)
+	language := strings.TrimSpace(candidate.Language)
+	if normalized := shared.NormalizeLanguageCode(language); normalized != "" {
+		language = normalized
+	}
+	if languageTag := shared.NamespaceTag("language", shared.LanguageTagValue(language)); languageTag != "" {
+		tags = shared.UniqueStrings(append(tags, languageTag))
+	}
 	update := metadatapkg.Update{
 		Title:          preferredCandidateTitle(candidate),
 		TitleJPN:       strings.TrimSpace(candidate.TitleJPN),
 		Artists:        parseExternalStringList(candidate.Artists),
-		Tags:           parseExternalStringList(candidate.Tags),
-		Language:       strings.TrimSpace(candidate.Language),
+		Tags:           tags,
+		Language:       language,
 		Category:       strings.TrimSpace(candidate.Category),
 		Source:         "exdb:" + source.Name,
 		SourceID:       firstNonEmpty(strings.TrimSpace(candidate.GID), strings.TrimSpace(candidate.RowID)),

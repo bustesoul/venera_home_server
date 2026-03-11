@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	apppkg "venera_home_server/app"
+	configpkg "venera_home_server/config"
 	metadatapkg "venera_home_server/metadata"
 	"venera_home_server/tests/testkit"
 )
@@ -104,6 +106,74 @@ func TestMetadataStoreRebindsMovedComicByFingerprint(t *testing.T) {
 	}
 	if records[0].MissingSince != nil {
 		t.Fatalf("expected rebound record to be active, got missing_since=%v", records[0].MissingSince)
+	}
+}
+
+func TestStartupMarksUnfinishedJobsFailed(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteFile(t, filepath.Join(root, "Book A", "001.jpg"), []byte("img"))
+
+	cfg := &configpkg.Config{
+		Server:    configpkg.ServerConfig{Listen: "127.0.0.1:0", DataDir: filepath.Join(root, "data"), CacheDir: filepath.Join(root, "cache")},
+		Scan:      configpkg.ScanConfig{Concurrency: 1, ExtractArchives: true},
+		Metadata:  configpkg.MetadataConfig{ReadComicInfo: true, ReadSidecar: true},
+		Libraries: []configpkg.LibraryConfig{{ID: "local-main", Name: "Local", Kind: "local", Root: root, ScanMode: "auto"}},
+	}
+	store, err := metadatapkg.OpenStore(cfg.Server.DataDir, cfg.Metadata.DatabasePath)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	started := time.Now().UTC().Add(-time.Minute)
+	if err := store.UpsertJob(context.Background(), metadatapkg.JobRecord{
+		ID:          "orphan-running-job",
+		Kind:        "metadata.refresh",
+		Trigger:     "startup",
+		Status:      "running",
+		RequestedAt: started,
+		StartedAt:   &started,
+		UpdatedAt:   started,
+	}); err != nil {
+		_ = store.Close()
+		t.Fatalf("UpsertJob: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close store: %v", err)
+	}
+
+	application, err := apppkg.NewApp(cfg)
+	if err != nil {
+		t.Fatalf("NewApp: %v", err)
+	}
+	t.Cleanup(func() { _ = application.Close() })
+
+	jobs, err := application.JobHistory(context.Background(), metadatapkg.JobQuery{Kind: "metadata.refresh", Limit: 20})
+	if err != nil {
+		t.Fatalf("JobHistory: %v", err)
+	}
+	foundOrphan := false
+	foundStartupDone := false
+	for _, job := range jobs {
+		if job.ID == "orphan-running-job" {
+			foundOrphan = true
+			if job.Status != "failed" {
+				t.Fatalf("expected orphan job failed, got %#v", job)
+			}
+			if job.Error != "server restarted before job finished" {
+				t.Fatalf("unexpected orphan job error: %#v", job)
+			}
+			if job.FinishedAt == nil {
+				t.Fatalf("expected orphan job finished_at, got %#v", job)
+			}
+		}
+		if job.Trigger == "startup" && job.Status == "done" {
+			foundStartupDone = true
+		}
+	}
+	if !foundOrphan {
+		t.Fatalf("expected orphan-running-job in history, got %#v", jobs)
+	}
+	if !foundStartupDone {
+		t.Fatalf("expected a completed startup metadata.refresh job, got %#v", jobs)
 	}
 }
 

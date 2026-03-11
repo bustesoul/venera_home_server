@@ -1354,6 +1354,13 @@ func (s *Server) toCards(base string, comics []*apppkg.Comic, favoriteMode bool)
 
 func buildComicTagGroups(comic *apppkg.Comic, includeContext bool) map[string][]string {
 	tags := shared.GroupTagsByNamespace(comic.Tags, "Tag")
+	if len(tags["language"]) == 0 {
+		if value := shared.LanguageTagValue(comic.Language); value != "" {
+			tags["language"] = []string{value}
+		} else if value := strings.TrimSpace(comic.Language); value != "" {
+			tags["language"] = []string{value}
+		}
+	}
 	if len(comic.Authors) > 0 {
 		tags["Author"] = shared.UniqueStrings(append([]string(nil), comic.Authors...))
 	}
@@ -1481,4 +1488,3 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 		"error": map[string]any{"code": code, "message": message},
 	})
 }
-

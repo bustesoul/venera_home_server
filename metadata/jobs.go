@@ -114,6 +114,26 @@ ON CONFLICT(job_id) DO UPDATE SET
 	return err
 }
 
+func (s *Store) FailUnfinishedJobs(ctx context.Context, reason string, finishedAt time.Time) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "job terminated before completion"
+	}
+	finishedAt = finishedAt.UTC()
+	_, err := s.db.ExecContext(ctx, `
+UPDATE job_history
+SET status = 'failed',
+	error = ?,
+	finished_at = ?,
+	updated_at = ?
+WHERE status IN ('queued', 'running')
+`, reason, formatTime(finishedAt), formatTime(finishedAt))
+	return err
+}
+
 func (s *Store) ListJobs(ctx context.Context, query JobQuery) ([]JobRecord, error) {
 	result, err := s.ListJobsPage(ctx, query)
 	if err != nil {

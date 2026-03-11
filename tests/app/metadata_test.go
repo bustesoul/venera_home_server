@@ -192,6 +192,31 @@ Directory description`))
 	if !containsString(records[0].Scanned.Tags, "language:japanese") || !containsString(records[0].Scanned.Tags, "female:yuri") {
 		t.Fatalf("unexpected scanned tags: %#v", records[0].Scanned.Tags)
 	}
+	if records[0].IsEmptyMetadata() {
+		t.Fatalf("galleryinfo-backed record should not be empty: %#v", records[0])
+	}
+	readyRecords, err := application.MetadataRecords(context.Background(), metadatapkg.ListQuery{
+		LibraryID: "local-main",
+		State:     "ready",
+		Limit:     10,
+	})
+	if err != nil {
+		t.Fatalf("MetadataRecords ready: %v", err)
+	}
+	if len(readyRecords) != 1 {
+		t.Fatalf("expected 1 ready metadata record, got %d", len(readyRecords))
+	}
+	emptyRecords, err := application.MetadataRecords(context.Background(), metadatapkg.ListQuery{
+		LibraryID: "local-main",
+		State:     "empty",
+		Limit:     10,
+	})
+	if err != nil {
+		t.Fatalf("MetadataRecords empty: %v", err)
+	}
+	if len(emptyRecords) != 0 {
+		t.Fatalf("expected 0 empty metadata records, got %d", len(emptyRecords))
+	}
 }
 
 // Tests the format produced by ehbot_server's buildInfoText (ehclient/client.go).

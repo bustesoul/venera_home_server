@@ -4,7 +4,7 @@ class VeneraHome extends ComicSource {
 
     key = "venera_home"
 
-    version = "0.3.0"
+    version = "0.4.0"
 
     minAppVersion = "1.6.0"
 
@@ -861,32 +861,88 @@ class VeneraHome extends ComicSource {
             type: "callback",
             buttonText: "Test",
             callback: async () => {
-                let bootstrap = await this.refreshBootstrap()
-                await this.refreshCategories()
-                let libraries = bootstrap.libraries || []
-                UI.showMessage(`${this.translate('Connected')}: ${libraries.length} ${this.translate('libraries')}`)
+                let title = this.translate('Connection Failed')
+                let message = `${this.translate('Server URL')}: ${this.baseUrl || '(empty)'}`
+                try {
+                    let bootstrap = await this.refreshBootstrap()
+                    await this.refreshCategories()
+                    let libraries = Array.isArray(bootstrap.libraries) ? bootstrap.libraries : []
+                    let lines = [
+                        `${this.translate('Server URL')}: ${this.baseUrl}`,
+                        `${this.translate('Connected')}: ${libraries.length} ${this.translate('libraries')}`
+                    ]
+                    if (libraries.length > 0) {
+                        lines.push('')
+                        lines.push(`${this.translate('Libraries')}:`)
+                        for (let i = 0; i < libraries.length; i++) {
+                            let item = libraries[i] || {}
+                            lines.push(`${i + 1}. ${item.name || '(unnamed)'} (${item.id || '-'})`)
+                        }
+                    }
+                    title = this.translate('Connection Success')
+                    message = lines.join('\n')
+                } catch (e) {
+                    let detail = e && e.message ? e.message : `${e}`
+                    message = `${message}\n\n${this.translate('Error')}: ${detail}`
+                }
+                UI.showDialog(
+                    title,
+                    message,
+                    [
+                        {
+                            text: this.translate('OK'),
+                            callback: () => { }
+                        }
+                    ]
+                )
             }
         },
         rescan_library: {
-            title: "Rescan",
+            title: "Library Scan",
             type: "callback",
-            buttonText: "Rescan",
+            buttonText: "Scan",
             callback: async () => {
-                let bootstrap = await this.refreshBootstrap()
-                let libraries = bootstrap.libraries || []
-                let options = ['All Libraries'].concat(libraries.map((item) => `${item.name} (${item.id})`))
-                let selected = await UI.showSelectDialog(this.translate('Select library to rescan'), options, 0)
-                if (selected === null) {
-                    return
+                let title = this.translate('Library Scan Failed')
+                let message = `${this.translate('Server URL')}: ${this.baseUrl || '(empty)'}`
+                try {
+                    let bootstrap = await this.refreshBootstrap()
+                    let libraries = bootstrap.libraries || []
+                    let options = [this.translate('All Libraries')].concat(libraries.map((item) => `${item.name} (${item.id})`))
+                    let selected = await UI.showSelectDialog(this.translate('Select library to scan'), options, 0)
+                    if (selected === null) {
+                        return
+                    }
+                    let payload = {}
+                    let targetLabel = this.translate('All Libraries')
+                    if (selected > 0) {
+                        let target = libraries[selected - 1] || {}
+                        payload.library_id = target.id
+                        targetLabel = `${target.name || '(unnamed)'} (${target.id || '-'})`
+                    }
+                    await this.request('POST', '/admin/rescan', null, payload)
+                    await this.refreshBootstrap()
+                    await this.refreshCategories()
+                    title = this.translate('Library Scan Submitted')
+                    message = [
+                        `${this.translate('Server URL')}: ${this.baseUrl}`,
+                        `${this.translate('Target Library')}: ${targetLabel}`,
+                        '',
+                        this.translate('Library scan requested')
+                    ].join('\n')
+                } catch (e) {
+                    let detail = e && e.message ? e.message : `${e}`
+                    message = `${message}\n\n${this.translate('Error')}: ${detail}`
                 }
-                let payload = {}
-                if (selected > 0) {
-                    payload.library_id = libraries[selected - 1].id
-                }
-                await this.request('POST', '/admin/rescan', null, payload)
-                await this.refreshBootstrap()
-                await this.refreshCategories()
-                UI.showMessage(this.translate('Rescan requested'))
+                UI.showDialog(
+                    title,
+                    message,
+                    [
+                        {
+                            text: this.translate('OK'),
+                            callback: () => { }
+                        }
+                    ]
+                )
             }
         },
         open_server: {
@@ -929,13 +985,22 @@ class VeneraHome extends ComicSource {
             'Page Size': 'Page Size',
             'Image Mode': 'Image Mode',
             'Test Connection': 'Test Connection',
-            'Rescan': 'Rescan',
+            'Library Scan': 'Library Scan',
+            'Scan': 'Scan',
             'Open Server': 'Open Server',
             'Server URL is required': 'Server URL is required',
             'Connected': 'Connected',
+            'Connection Success': 'Connection Success',
+            'Connection Failed': 'Connection Failed',
+            'Library Scan Submitted': 'Library Scan Submitted',
+            'Library Scan Failed': 'Library Scan Failed',
+            'Target Library': 'Target Library',
+            'Error': 'Error',
+            'OK': 'OK',
+            'All Libraries': 'All Libraries',
             'libraries': 'libraries',
-            'Select library to rescan': 'Select library to rescan',
-            'Rescan requested': 'Rescan requested',
+            'Select library to scan': 'Select library to scan',
+            'Library scan requested': 'Library scan requested',
         },
         'zh_CN': {
             'Home': '首页',
@@ -965,13 +1030,22 @@ class VeneraHome extends ComicSource {
             'Page Size': '分页大小',
             'Image Mode': '图片模式',
             'Test Connection': '测试连接',
-            'Rescan': '重新扫描',
+            'Library Scan': '书库扫描',
+            'Scan': '扫描',
             'Open Server': '打开服务器',
             'Server URL is required': '需要先填写服务器地址',
             'Connected': '已连接',
+            'Connection Success': '连接成功',
+            'Connection Failed': '连接失败',
+            'Library Scan Submitted': '书库扫描已提交',
+            'Library Scan Failed': '书库扫描失败',
+            'Target Library': '目标书库',
+            'Error': '错误',
+            'OK': '确定',
+            'All Libraries': '全部书库',
             'libraries': '个书库',
-            'Select library to rescan': '选择要重新扫描的书库',
-            'Rescan requested': '已提交重新扫描请求',
+            'Select library to scan': '选择要扫描的书库',
+            'Library scan requested': '已提交书库扫描请求',
         },
         'zh_TW': {
             'Home': '首頁',
@@ -1001,13 +1075,22 @@ class VeneraHome extends ComicSource {
             'Page Size': '分頁大小',
             'Image Mode': '圖片模式',
             'Test Connection': '測試連線',
-            'Rescan': '重新掃描',
+            'Library Scan': '書庫掃描',
+            'Scan': '掃描',
             'Open Server': '打開伺服器',
             'Server URL is required': '需要先填寫伺服器位址',
             'Connected': '已連線',
+            'Connection Success': '連線成功',
+            'Connection Failed': '連線失敗',
+            'Library Scan Submitted': '書庫掃描已送出',
+            'Library Scan Failed': '書庫掃描失敗',
+            'Target Library': '目標書庫',
+            'Error': '錯誤',
+            'OK': '確定',
+            'All Libraries': '全部書庫',
             'libraries': '個書庫',
-            'Select library to rescan': '選擇要重新掃描的書庫',
-            'Rescan requested': '已送出重新掃描請求',
+            'Select library to scan': '選擇要掃描的書庫',
+            'Library scan requested': '已送出書庫掃描請求',
         },
     }
 }
