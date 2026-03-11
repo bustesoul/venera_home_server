@@ -58,8 +58,21 @@ func TestMetadataEnrichmentJobAndRecordActions(t *testing.T) {
 	if matchedRecord.Source == "" || matchedRecord.SourceID != `2708021` {
 		t.Fatalf("expected matched record to be enriched, got %#v", matchedRecord)
 	}
+	if matchedRecord.Title != `[Circle] Match Book 11` || matchedRecord.TitleJPN != `[Circle] Match Book 11 [Chinese] [DL]` {
+		t.Fatalf("expected bilingual titles to stay split, got %#v", matchedRecord)
+	}
 	if matchedRecord.Language != "zh" {
 		t.Fatalf("expected matched record language zh, got %#v", matchedRecord)
+	}
+	foundArtistTag := false
+	for _, tag := range matchedRecord.Tags {
+		if tag == "artist:artist one" {
+			foundArtistTag = true
+			break
+		}
+	}
+	if !foundArtistTag {
+		t.Fatalf("expected matched record tags to include artist:artist one, got %#v", matchedRecord.Tags)
 	}
 	foundLanguageTag := false
 	for _, tag := range matchedRecord.Tags {
@@ -79,7 +92,7 @@ func TestMetadataEnrichmentJobAndRecordActions(t *testing.T) {
 		t.Fatalf("expected unmatched record to stay empty, got %#v", unmatchedRecord)
 	}
 	matchedComic := findAppComicByRootRef(t, application, filepath.ToSlash(matchedRel))
-	if matchedComic == nil || matchedComic.Title != `[Circle] Match Book 11 [Chinese] [DL]` {
+	if matchedComic == nil || matchedComic.Title != `[Circle] Match Book 11` {
 		t.Fatalf("expected enriched runtime title, got %#v", matchedComic)
 	}
 	if matchedComic.Language != "zh" {

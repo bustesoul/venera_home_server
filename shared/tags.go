@@ -58,3 +58,19 @@ func GroupTagsByNamespace(tags []string, genericKey string) map[string][]string 
 	}
 	return grouped
 }
+
+func TagValuesByNamespace(tags []string, namespace string) []string {
+	namespace = NormalizeTagNamespace(namespace)
+	if namespace == "" {
+		return nil
+	}
+	out := make([]string, 0, len(tags))
+	for _, raw := range tags {
+		tagNamespace, value, ok := SplitNamespacedTag(raw)
+		if !ok || tagNamespace != namespace || strings.TrimSpace(value) == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return UniqueStrings(out)
+}

@@ -73,6 +73,7 @@ func newHTTPServer(app *apppkg.App, logger *log.Logger) http.Handler {
 		pageCacheInfoItems: map[string]pageCacheInfoEntry{},
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/bootstrap", srv.auth(srv.handleBootstrap))
 	mux.HandleFunc("/api/v1/home", srv.auth(srv.handleHome))
 	mux.HandleFunc("/api/v1/categories", srv.auth(srv.handleCategories))
 	mux.HandleFunc("/api/v1/comics", srv.auth(srv.handleComics))
@@ -154,6 +155,42 @@ func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	_, _ = io.WriteString(w, adminIndexHTML)
+}
+
+func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
+	a := s.app
+	libCounts := map[string]int{}
+	for _, comic := range a.Comics() {
+		libCounts[comic.LibraryID]++
+	}
+
+	libraries := make([]map[string]any, 0, len(a.Libraries()))
+	for _, lib := range a.Libraries() {
+		libraries = append(libraries, map[string]any{
+			"id":           lib.ID,
+			"name":         lib.Name,
+			"kind":         lib.Kind,
+			"series_count": libCounts[lib.ID],
+		})
+	}
+
+	writeData(w, map[string]any{
+		"server": map[string]any{
+			"name":    "Venera Home Server",
+			"version": "dev",
+		},
+		"capabilities": map[string]any{
+			"favorites":      true,
+			"thumbnails":     true,
+			"rescan":         true,
+			"metadata_fetch": a.Config().Metadata.AllowRemoteFetch,
+		},
+		"libraries": libraries,
+		"defaults": map[string]any{
+			"sort":      "updated_desc",
+			"page_size": 24,
+		},
+	})
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -1354,15 +1391,17 @@ func (s *Server) toCards(base string, comics []*apppkg.Comic, favoriteMode bool)
 
 func buildComicTagGroups(comic *apppkg.Comic, includeContext bool) map[string][]string {
 	tags := shared.GroupTagsByNamespace(comic.Tags, "Tag")
+	if len(tags["artist"]) > 0 {
+		tags["artist"] = shared.UniqueStrings(append(tags["artist"], comic.Authors...))
+	} else if len(comic.Authors) > 0 {
+		tags["Author"] = shared.UniqueStrings(append([]string(nil), comic.Authors...))
+	}
 	if len(tags["language"]) == 0 {
 		if value := shared.LanguageTagValue(comic.Language); value != "" {
 			tags["language"] = []string{value}
 		} else if value := strings.TrimSpace(comic.Language); value != "" {
 			tags["language"] = []string{value}
 		}
-	}
-	if len(comic.Authors) > 0 {
-		tags["Author"] = shared.UniqueStrings(append([]string(nil), comic.Authors...))
 	}
 	if includeContext {
 		if strings.TrimSpace(comic.LibraryName) != "" {

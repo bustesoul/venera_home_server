@@ -106,6 +106,7 @@ func applyGalleryInfo(meta *ParsedMetadata, raw []byte) {
 
 	description := joinGalleryInfoLines(comments)
 	meta.Description = firstNonEmpty(description, meta.Description)
+	meta.Authors = shared.UniqueStrings(append(meta.Authors, shared.TagValuesByNamespace(meta.Tags, "artist")...))
 	meta.Language = firstNonEmpty(languageFromGalleryInfoTags(meta.Tags), meta.Language)
 }
 

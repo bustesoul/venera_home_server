@@ -454,10 +454,16 @@ func matchRecordFromSources(ctx context.Context, handles []exdbSourceHandle, rec
 
 func buildMetadataUpdateFromCandidate(source exdbSourceSummary, candidate exdbdryrunpkg.Candidate) metadatapkg.Update {
 	now := time.Now().UTC()
+	artists := parseExternalStringList(candidate.Artists)
 	tags := parseExternalStringList(candidate.Tags)
 	language := strings.TrimSpace(candidate.Language)
 	if normalized := shared.NormalizeLanguageCode(language); normalized != "" {
 		language = normalized
+	}
+	for _, artist := range artists {
+		if artistTag := shared.NamespaceTag("artist", artist); artistTag != "" {
+			tags = append(tags, artistTag)
+		}
 	}
 	if languageTag := shared.NamespaceTag("language", shared.LanguageTagValue(language)); languageTag != "" {
 		tags = shared.UniqueStrings(append(tags, languageTag))
@@ -465,8 +471,8 @@ func buildMetadataUpdateFromCandidate(source exdbSourceSummary, candidate exdbdr
 	update := metadatapkg.Update{
 		Title:          preferredCandidateTitle(candidate),
 		TitleJPN:       strings.TrimSpace(candidate.TitleJPN),
-		Artists:        parseExternalStringList(candidate.Artists),
-		Tags:           tags,
+		Artists:        artists,
+		Tags:           shared.UniqueStrings(tags),
 		Language:       language,
 		Category:       strings.TrimSpace(candidate.Category),
 		Source:         "exdb:" + source.Name,
@@ -487,7 +493,7 @@ func buildMetadataUpdateFromCandidate(source exdbSourceSummary, candidate exdbdr
 }
 
 func preferredCandidateTitle(candidate exdbdryrunpkg.Candidate) string {
-	return firstNonEmpty(strings.TrimSpace(candidate.TitleJPN), strings.TrimSpace(candidate.Title))
+	return firstNonEmpty(strings.TrimSpace(candidate.Title), strings.TrimSpace(candidate.TitleJPN))
 }
 
 func preferredCandidateURL(candidate exdbdryrunpkg.Candidate) string {

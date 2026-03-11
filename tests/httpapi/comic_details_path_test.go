@@ -147,3 +147,50 @@ func TestComicDetailsInjectLanguageGroupFromLanguageField(t *testing.T) {
 		t.Fatalf("unexpected language group: %#v", values)
 	}
 }
+
+func TestComicDetailsMergeAuthorsIntoArtistGroup(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteFile(t, filepath.Join(root, "Artist Book", "001.jpg"), []byte("img"))
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	ids := application.LibraryComicIDs("local-main")
+	if len(ids) != 1 {
+		t.Fatalf("expected 1 comic, got %d", len(ids))
+	}
+	comic := application.ComicByID(ids[0])
+	if comic == nil {
+		t.Fatal("expected comic")
+	}
+	if err := application.UpdateMetadata(context.Background(), metadatapkg.Locator{
+		LibraryID: comic.LibraryID,
+		RootType:  comic.RootType,
+		RootRef:   comic.RootRef,
+	}, metadatapkg.Update{
+		Artists: []string{"mizuryu kei"},
+		Tags:    []string{"artist:mizuryu kei", "female:tomboy"},
+	}); err != nil {
+		t.Fatalf("UpdateMetadata: %v", err)
+	}
+	if err := application.Rescan(context.Background(), "local-main"); err != nil {
+		t.Fatalf("Rescan: %v", err)
+	}
+
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	details := testkit.GetJSON(t, srv.URL+"/api/v1/comics/"+comic.ID, cfg.Server.Token)
+	data := details["data"].(map[string]any)
+	tags := data["tags"].(map[string]any)
+	raw, ok := tags["artist"]
+	if !ok {
+		t.Fatalf("expected artist group in %#v", tags)
+	}
+	values := raw.([]any)
+	if len(values) != 1 || values[0] != "mizuryu kei" {
+		t.Fatalf("unexpected artist group: %#v", values)
+	}
+	if _, ok := tags["Author"]; ok {
+		t.Fatalf("expected Author group to be omitted when artist tags exist, got %#v", tags["Author"])
+	}
+}

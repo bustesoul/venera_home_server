@@ -4,7 +4,7 @@ class VeneraHome extends ComicSource {
 
     key = "venera_home"
 
-    version = "0.4.0"
+    version = "0.6.0"
 
     minAppVersion = "1.6.0"
 
@@ -346,7 +346,19 @@ class VeneraHome extends ComicSource {
             }
             throw message
         }
-        let parsed = JSON.parse(res.body)
+        let text = (res.body || '').trim()
+        if (!text) {
+            return null
+        }
+        let parsed = null
+        try {
+            parsed = JSON.parse(text)
+        } catch (_) {
+            if (text.startsWith('<')) {
+                throw 'Server returned HTML instead of JSON'
+            }
+            throw 'Server returned invalid JSON'
+        }
         if (parsed.error) {
             throw parsed.error.message || 'Request failed'
         }
@@ -907,15 +919,15 @@ class VeneraHome extends ComicSource {
                 try {
                     let bootstrap = await this.refreshBootstrap()
                     let libraries = bootstrap.libraries || []
-                    let options = [this.translate('All Libraries')].concat(libraries.map((item) => `${item.name} (${item.id})`))
+                    let options = [this.translate('Select library to scan'), this.translate('All Libraries')].concat(libraries.map((item) => `${item.name} (${item.id})`))
                     let selected = await UI.showSelectDialog(this.translate('Select library to scan'), options, 0)
-                    if (selected === null) {
+                    if (!Number.isInteger(selected) || selected <= 0 || selected >= options.length) {
                         return
                     }
                     let payload = {}
                     let targetLabel = this.translate('All Libraries')
-                    if (selected > 0) {
-                        let target = libraries[selected - 1] || {}
+                    if (selected > 1) {
+                        let target = libraries[selected - 2] || {}
                         payload.library_id = target.id
                         targetLabel = `${target.name || '(unnamed)'} (${target.id || '-'})`
                     }

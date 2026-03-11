@@ -150,7 +150,7 @@ func TestDirectoryGalleryInfoMetadata(t *testing.T) {
 	root := t.TempDir()
 	testkit.MustWriteFile(t, filepath.Join(root, "Comic A", "001.jpg"), []byte("img"))
 	testkit.MustWriteFile(t, filepath.Join(root, "Comic A", "galleryinfo.txt"), []byte(`Title: Directory Title
-Tags: language:japanese, female:yuri
+Tags: language:japanese, female:yuri, artist:mizuryu kei
 
 Uploader's Comments:
 
@@ -169,6 +169,9 @@ Directory description`))
 	}
 	if comic.Language != "ja" {
 		t.Fatalf("unexpected language: %q", comic.Language)
+	}
+	if len(comic.Authors) != 1 || comic.Authors[0] != "mizuryu kei" {
+		t.Fatalf("expected artist tag to populate authors, got %#v", comic.Authors)
 	}
 	if comic.SourceURL != "" {
 		t.Fatalf("galleryinfo comments must not set source url, got %q", comic.SourceURL)
@@ -191,6 +194,9 @@ Directory description`))
 	}
 	if !containsString(records[0].Scanned.Tags, "language:japanese") || !containsString(records[0].Scanned.Tags, "female:yuri") {
 		t.Fatalf("unexpected scanned tags: %#v", records[0].Scanned.Tags)
+	}
+	if len(records[0].Scanned.Artists) != 1 || records[0].Scanned.Artists[0] != "mizuryu kei" {
+		t.Fatalf("expected scanned artists from artist tag, got %#v", records[0].Scanned.Artists)
 	}
 	if records[0].IsEmptyMetadata() {
 		t.Fatalf("galleryinfo-backed record should not be empty: %#v", records[0])

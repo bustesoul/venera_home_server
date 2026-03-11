@@ -1576,9 +1576,20 @@ async function refreshRecords(resetPage = false) {
       const encodedLocator = encodeLocator(item.locator || {});
       const key = locatorKey(item.locator || {});
       const artists = Array.isArray(item.artists) ? item.artists.filter(Boolean) : [];
-      const tags = Array.isArray(item.tags) ? item.tags.filter(Boolean) : [];
+      let tags = Array.isArray(item.tags) ? item.tags.filter(Boolean) : [];
       
-      const artistsElements = artists.map(artist => `<span class="pill compact" style="background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--text-main);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(artist)}</span>`).join('');
+      const artistTags = tags.filter(tag => tag.startsWith('artist:'));
+      tags = tags.filter(tag => !tag.startsWith('artist:'));
+      const languageTags = tags.filter(tag => tag.startsWith('language:'));
+      tags = tags.filter(tag => !tag.startsWith('language:'));
+      
+      const combinedArtists = [...new Set(
+        (artists.length > 0 ? artists : artistTags.map(tag => tag.substring(7)))
+          .map(artist => String(artist || '').trim())
+          .filter(Boolean)
+      )];
+      
+      const artistsElements = combinedArtists.map(artist => `<span class="pill compact" style="background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--text-main);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(artist)}</span>`).join('');
       
       let tagElements = '';
       if (tags.length <= 5) {
@@ -1590,7 +1601,8 @@ async function refreshRecords(resetPage = false) {
         tagElements = visibleTags + hiddenTags + toggleBtn;
       }
       
-      const langElement = item.language ? `<span class="pill compact" style="background: var(--bg-hover); color: var(--text-main); font-weight: 600;" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(item.language)}</span>` : '';
+      const derivedLanguage = item.language || (languageTags.length > 0 ? languageTags[0].substring(9) : '');
+      const langElement = derivedLanguage ? `<span class="pill compact" style="background: color-mix(in srgb, var(--err) 15%, transparent); color: var(--text-main); font-weight: 600;" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(derivedLanguage)}</span>` : '';
       
       const metaContainer = (artistsElements || tagElements || langElement) 
         ? `<div class="tags-container">
