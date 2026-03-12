@@ -167,6 +167,8 @@ func (b *webdavBackend) ReaderAt(ctx context.Context, rel string) (io.ReaderAt, 
 		if err := shared.CopyFile(cacheName, res.Body); err != nil {
 			return nil, nil, 0, err
 		}
+	} else {
+		_ = shared.TouchFile(cacheName)
 	}
 	f, err := os.Open(cacheName)
 	if err != nil {

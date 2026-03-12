@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var imageExts = map[string]bool{
@@ -197,6 +198,15 @@ func CopyFile(dst string, src io.Reader) error {
 	}
 	defer f.Close()
 	_, err = io.Copy(f, src)
+	return err
+}
+
+func TouchFile(path string) error {
+	now := time.Now()
+	err := os.Chtimes(path, now, now)
+	if err == nil || os.IsNotExist(err) {
+		return nil
+	}
 	return err
 }
 

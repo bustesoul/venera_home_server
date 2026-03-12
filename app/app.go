@@ -37,6 +37,7 @@ type App struct {
 	ehBotState     EHBotRuntimeState
 	ehBotQueue     chan *EHBotPullJob
 	ehBotCancel    context.CancelFunc
+	cacheCleanupCancel context.CancelFunc
 }
 
 type comicInfoXML struct {
@@ -103,6 +104,7 @@ func NewApp(cfg *configpkg.Config) (*App, error) {
 		return nil, err
 	}
 	app.startEHBotService()
+	app.startCacheCleanupService()
 	return app, nil
 }
 

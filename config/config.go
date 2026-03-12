@@ -25,6 +25,8 @@ type ServerConfig struct {
 	DataDir       string
 	CacheDir      string
 	MemoryCacheMB int
+	CacheMaxAgeHours int
+	CacheCleanupIntervalMinutes int
 	LogLevel      string
 }
 
@@ -83,6 +85,8 @@ func LoadConfig(path string) (*Config, error) {
 			DataDir:       filepath.Join(filepath.Dir(path), "data"),
 			CacheDir:      filepath.Join(filepath.Dir(path), "cache"),
 			MemoryCacheMB: 512,
+			CacheMaxAgeHours: 168,
+			CacheCleanupIntervalMinutes: 360,
 			LogLevel:      "info",
 		},
 		Scan: ScanConfig{
@@ -219,6 +223,8 @@ func renderConfig(cfg *Config) []byte {
 	writeStringKV(&buf, "data_dir", cfg.Server.DataDir)
 	writeStringKV(&buf, "cache_dir", cfg.Server.CacheDir)
 	writeIntKV(&buf, "memory_cache_mb", cfg.Server.MemoryCacheMB)
+	writeIntKV(&buf, "cache_max_age_hours", cfg.Server.CacheMaxAgeHours)
+	writeIntKV(&buf, "cache_cleanup_interval_minutes", cfg.Server.CacheCleanupIntervalMinutes)
 	writeStringKV(&buf, "log_level", cfg.Server.LogLevel)
 	buf.WriteString("\n")
 
@@ -366,6 +372,10 @@ func assignServer(cfg *ServerConfig, key string, value any) {
 		cfg.CacheDir = asString(value)
 	case "memory_cache_mb":
 		cfg.MemoryCacheMB = asInt(value)
+	case "cache_max_age_hours":
+		cfg.CacheMaxAgeHours = asInt(value)
+	case "cache_cleanup_interval_minutes":
+		cfg.CacheCleanupIntervalMinutes = asInt(value)
 	case "log_level":
 		cfg.LogLevel = asString(value)
 	}

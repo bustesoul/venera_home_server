@@ -77,3 +77,31 @@ func TestServePageFromDiskCacheSchedulesMemoryWarm(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestServePageFromDiskCacheRefreshesFileModTime(t *testing.T) {
+	root := t.TempDir()
+	cachePath := filepath.Join(root, "page.jpg")
+	if err := os.WriteFile(cachePath, []byte("cache"), 0o644); err != nil {
+		t.Fatalf("write cache file: %v", err)
+	}
+	oldTime := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(cachePath, oldTime, oldTime); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+
+	s := httpapipkg.NewForTests(1<<20, log.New(io.Discard, "", 0))
+	info := httpapipkg.ResolvedPageCacheInfo{Key: "disk-touch", Path: cachePath, ContentType: "image/jpeg", ModTime: time.Now()}
+	page := apppkg.PageRef{Name: "page.jpg", SourceRef: "page.jpg"}
+	rec := httptest.NewRecorder()
+
+	if !s.ServePageFromDiskCache(rec, info, page) {
+		t.Fatal("expected disk cache serve to succeed")
+	}
+	stat, err := os.Stat(cachePath)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if !stat.ModTime().After(oldTime) {
+		t.Fatalf("expected cache mtime to be refreshed, old=%v new=%v", oldTime, stat.ModTime())
+	}
+}

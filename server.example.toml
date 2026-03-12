@@ -4,6 +4,8 @@ token = "change-me"
 data_dir = "./data"
 cache_dir = "./cache"
 memory_cache_mb = 512
+cache_max_age_hours = 168
+cache_cleanup_interval_minutes = 360
 log_level = "info"
 
 [scan]

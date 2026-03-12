@@ -29,6 +29,9 @@ func TestLoadConfigExample(t *testing.T) {
 	if cfg.Server.MemoryCacheMB != 512 {
 		t.Fatalf("unexpected memory cache size: %d", cfg.Server.MemoryCacheMB)
 	}
+	if cfg.Server.CacheMaxAgeHours != 168 || cfg.Server.CacheCleanupIntervalMinutes != 360 {
+		t.Fatalf("unexpected cache cleanup config: %#v", cfg.Server)
+	}
 	if !cfg.EHBot.AutoRescan || cfg.EHBot.PollIntervalSeconds != 60 || cfg.EHBot.TargetLibraryID != "local-main" {
 		t.Fatalf("unexpected ehbot config: %#v", cfg.EHBot)
 	}
@@ -78,6 +81,8 @@ func TestSaveConfigRoundTripEscapesWindowsPaths(t *testing.T) {
 			DataDir:       `C:\venera\data`,
 			CacheDir:      `D:\venera\cache`,
 			MemoryCacheMB: 512,
+			CacheMaxAgeHours: 72,
+			CacheCleanupIntervalMinutes: 30,
 			LogLevel:      "info",
 		},
 		Scan: configpkg.ScanConfig{
@@ -136,6 +141,9 @@ func TestSaveConfigRoundTripEscapesWindowsPaths(t *testing.T) {
 	}
 	if loaded.Server.DataDir != cfg.Server.DataDir || loaded.Server.CacheDir != cfg.Server.CacheDir {
 		t.Fatalf("unexpected server paths: %#v", loaded.Server)
+	}
+	if loaded.Server.CacheMaxAgeHours != cfg.Server.CacheMaxAgeHours || loaded.Server.CacheCleanupIntervalMinutes != cfg.Server.CacheCleanupIntervalMinutes {
+		t.Fatalf("unexpected cache cleanup config: %#v", loaded.Server)
 	}
 	if loaded.Metadata.DatabasePath != cfg.Metadata.DatabasePath {
 		t.Fatalf("unexpected metadata path: %q", loaded.Metadata.DatabasePath)

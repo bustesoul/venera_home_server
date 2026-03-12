@@ -949,6 +949,7 @@ func (s *Server) ServePageFromDiskCache(w http.ResponseWriter, info ResolvedPage
 		s.log.Debugf("render cache serve failed: %v", err)
 		return false
 	}
+	_ = shared.TouchFile(info.Path)
 	s.schedulePageMemoryWarm(info, page)
 	s.log.Debugf("render cache hit ref=%s", pageCacheLabel(page))
 	return true

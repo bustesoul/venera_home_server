@@ -25,6 +25,7 @@
 - 收藏夹与多文件夹收藏
 - 带签名的封面 / 页面媒体 URL
 - 归档与远程文件缓存
+- 自动回收 `cache_dir` 下的过期磁盘缓存，避免长期堆积
 - `venera_home.js` 可直接导入 Venera 使用
 
 ### 元数据能力
@@ -65,6 +66,8 @@ listen = "0.0.0.0:34123"
 token = "change-me"
 data_dir = "./data"
 cache_dir = "./cache"
+cache_max_age_hours = 168
+cache_cleanup_interval_minutes = 360
 
 [[libraries]]
 id = "local-main"
@@ -79,6 +82,8 @@ scan_mode = "auto"
 - `scan_mode = "auto"`：尽量把同作品章节归并到一个漫画条目
 - `scan_mode = "flat"`：每个目录或压缩包单独视为一个漫画
 - `data_dir` 下会保存本地 metadata store、缓存与相关状态数据
+- `cache_max_age_hours`：磁盘缓存最长保留时长；到期后后台自动清理，设为 `0` 可关闭
+- `cache_cleanup_interval_minutes`：后台扫描 `cache_dir` 并清理过期缓存的间隔
 
 ### 2. 如果使用 SMB / WebDAV，设置密码环境变量
 

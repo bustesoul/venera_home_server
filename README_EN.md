@@ -25,6 +25,7 @@ It currently covers two main workflows:
 - Favorites with multiple folders
 - Signed media URLs for covers and pages
 - Archive and remote-file caching
+- Automatic cleanup for expired disk cache under `cache_dir`
 - `venera_home.js` can be imported directly into Venera
 
 ### Metadata features
@@ -65,6 +66,8 @@ listen = "0.0.0.0:34123"
 token = "change-me"
 data_dir = "./data"
 cache_dir = "./cache"
+cache_max_age_hours = 168
+cache_cleanup_interval_minutes = 360
 
 [[libraries]]
 id = "local-main"
@@ -79,6 +82,8 @@ Notes:
 - `scan_mode = "auto"` tries to group matching chapters into one comic entry
 - `scan_mode = "flat"` treats each directory or archive as a separate comic
 - `data_dir` stores the local metadata database, cache, and related state
+- `cache_max_age_hours` controls how long disk cache is retained before cleanup; set `0` to disable it
+- `cache_cleanup_interval_minutes` controls how often the background janitor scans `cache_dir`
 
 ### 2. Set SMB / WebDAV passwords if needed
 

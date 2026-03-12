@@ -58,6 +58,7 @@ func materializeArchiveSource(ctx context.Context, backend backendpkg.Backend, r
 	key := shared.SHAID(shared.CleanRel(rel), strconv.FormatInt(size, 10))
 	target := filepath.Join(cacheDir, "archive-source", key+strings.ToLower(path.Ext(rel)))
 	if _, err := os.Stat(target); err == nil {
+		_ = shared.TouchFile(target)
 		return target, key, size, nil
 	}
 	if err := shared.CopyFile(target, io.NewSectionReader(readerAt, 0, size)); err != nil {

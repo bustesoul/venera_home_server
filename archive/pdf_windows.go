@@ -62,6 +62,8 @@ func (a *pdfArchive) Open(ctx context.Context, name string) (io.ReadCloser, erro
 		if err := renderPDFPage(ctx, a.cacheDir, a.sourcePath, outPath, pageIndex); err != nil {
 			return nil, err
 		}
+	} else {
+		_ = shared.TouchFile(outPath)
 	}
 	return os.Open(outPath)
 }
@@ -80,6 +82,7 @@ func inspectPDF(ctx context.Context, cacheDir, sourcePath, infoPath string) (*pd
 	if raw, err := os.ReadFile(infoPath); err == nil {
 		var info pdfInfo
 		if json.Unmarshal(raw, &info) == nil && info.PageCount > 0 {
+			_ = shared.TouchFile(infoPath)
 			return &info, nil
 		}
 	}
