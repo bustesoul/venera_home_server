@@ -149,6 +149,13 @@ func (a *App) Rescan(ctx context.Context, libraryID string) error {
 			continue
 		}
 		scanStarted := time.Now().UTC()
+		if a.metadataStore != nil {
+			nextScanStarted, err := a.metadataStore.NextLibraryScanStarted(ctx, lib.ID, scanStarted)
+			if err != nil {
+				return fmt.Errorf("prepare metadata scan %s: %w", lib.ID, err)
+			}
+			scanStarted = nextScanStarted
+		}
 		backend := a.backends[lib.ID]
 		libraryCtx := withMetadataScanStarted(ctx, scanStarted)
 		comics, err := a.scanLibrary(libraryCtx, lib, backend)
@@ -351,15 +358,16 @@ func (a *App) buildBaseComic(lib configpkg.LibraryConfig, rel string, title stri
 }
 
 type chapterCandidate struct {
-	Meta         ParsedMetadata
-	GroupKey     string
-	GroupTitle   string
-	ChapterTitle string
-	SourceType   string
-	SourceRef    string
-	EntryPrefix  string
-	PageCount    int
-	SortKey      string
+	Meta               ParsedMetadata
+	GroupKey           string
+	GroupTitle         string
+	ChapterTitle       string
+	SourceType         string
+	SourceRef          string
+	EntryPrefix        string
+	PageCount          int
+	ContentFingerprint string
+	SortKey            string
 }
 
 type archiveFolderGroup struct {
@@ -441,6 +449,7 @@ func (a *App) inspectChapterDirCandidate(ctx context.Context, backend backendpkg
 	archiveRef := ""
 	archiveName := ""
 	dirCount := 0
+	images := make([]backendpkg.Entry, 0, len(entries))
 	for _, item := range entries {
 		if item.IsDir {
 			dirCount++
@@ -448,6 +457,7 @@ func (a *App) inspectChapterDirCandidate(ctx context.Context, backend backendpkg
 		}
 		if shared.IsImageFile(item.Name) {
 			count++
+			images = append(images, item)
 		}
 		if shared.IsArchiveFile(item.Name) {
 			archiveRef = item.RelPath
@@ -456,10 +466,12 @@ func (a *App) inspectChapterDirCandidate(ctx context.Context, backend backendpkg
 	}
 	sourceType := "dir"
 	sourceRef := shared.CleanRel(rel)
+	contentFingerprint := dirContentFingerprint(images)
 	meta := dirMeta
 	if count == 0 && archiveRef != "" && dirCount == 0 {
 		sourceType = "archive"
 		sourceRef = shared.CleanRel(archiveRef)
+		contentFingerprint = a.archiveContentFingerprint(ctx, backend, archiveRef)
 		archiveMeta, count2, err := a.loadMetadataForArchive(ctx, backend, archiveRef, shared.BaseNameTitle(archiveName))
 		if err == nil {
 			meta = mergeMetadata(archiveMeta, dirMeta)
@@ -468,14 +480,15 @@ func (a *App) inspectChapterDirCandidate(ctx context.Context, backend backendpkg
 	}
 	groupTitle := resolveComicTitle(meta, fallback)
 	return chapterCandidate{
-		Meta:         meta,
-		GroupKey:     explicitSeriesKey(meta),
-		GroupTitle:   groupTitle,
-		ChapterTitle: resolveChapterTitle(meta, fallback, groupTitle),
-		SourceType:   sourceType,
-		SourceRef:    sourceRef,
-		PageCount:    count,
-		SortKey:      fallback,
+		Meta:               meta,
+		GroupKey:           explicitSeriesKey(meta),
+		GroupTitle:         groupTitle,
+		ChapterTitle:       resolveChapterTitle(meta, fallback, groupTitle),
+		SourceType:         sourceType,
+		SourceRef:          sourceRef,
+		PageCount:          count,
+		ContentFingerprint: contentFingerprint,
+		SortKey:            fallback,
 	}, nil
 }
 
@@ -486,14 +499,15 @@ func (a *App) inspectArchiveCandidate(ctx context.Context, backend backendpkg.Ba
 	}
 	groupTitle := resolveComicTitle(meta, fallback)
 	return chapterCandidate{
-		Meta:         meta,
-		GroupKey:     explicitSeriesKey(meta),
-		GroupTitle:   groupTitle,
-		ChapterTitle: resolveChapterTitle(meta, fallback, groupTitle),
-		SourceType:   "archive",
-		SourceRef:    shared.CleanRel(rel),
-		PageCount:    pageCount,
-		SortKey:      fallback,
+		Meta:               meta,
+		GroupKey:           explicitSeriesKey(meta),
+		GroupTitle:         groupTitle,
+		ChapterTitle:       resolveChapterTitle(meta, fallback, groupTitle),
+		SourceType:         "archive",
+		SourceRef:          shared.CleanRel(rel),
+		PageCount:          pageCount,
+		ContentFingerprint: a.archiveContentFingerprint(ctx, backend, rel),
+		SortKey:            fallback,
 	}, nil
 }
 

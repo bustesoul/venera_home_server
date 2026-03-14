@@ -5,6 +5,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"net/http"
 	"os"
@@ -166,6 +169,24 @@ func MustWriteMinimalPDF(t *testing.T, target, text string) {
 	}
 	output = append(output, []byte(fmt.Sprintf("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", xrefStart))...)
 	MustWriteFile(t, target, output)
+}
+
+func MustWriteSolidJPEG(t *testing.T, target string, width int, height int, fill color.Color) {
+	t.Helper()
+	if width <= 0 || height <= 0 {
+		t.Fatal("invalid jpeg size")
+	}
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, fill)
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatal(err)
+	}
+	MustWriteFile(t, target, buf.Bytes())
 }
 
 type DAVTestItem struct {

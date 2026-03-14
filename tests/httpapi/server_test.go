@@ -1,8 +1,11 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"log"
 	"net/http"
@@ -16,6 +19,7 @@ import (
 	apppkg "venera_home_server/app"
 	configpkg "venera_home_server/config"
 	httpapipkg "venera_home_server/httpapi"
+	metadatapkg "venera_home_server/metadata"
 	"venera_home_server/tests/testkit"
 )
 
@@ -251,6 +255,126 @@ func TestPageRequestsBuildOnlyRequestedPagesAsync(t *testing.T) {
 	}
 	if len(cachedPages) != 2 {
 		t.Fatalf("expected two requested pages to be cached, got %d", len(cachedPages))
+	}
+}
+
+func TestCoverLazyThumbnailStoredInSeparateSQLite(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteSolidJPEG(t, filepath.Join(root, "Cover Book", "001.jpg"), 800, 400, color.RGBA{R: 220, G: 40, B: 40, A: 255})
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	comic := findComicByTitle(t, application, "local-main", "Cover Book")
+	locator := metadatapkg.Locator{LibraryID: comic.LibraryID, RootType: comic.RootType, RootRef: comic.RootRef}
+	beforeThumb, err := application.MetadataStore().GetCoverThumbnail(context.Background(), locator)
+	if err != nil {
+		t.Fatalf("GetCoverThumbnail before request: %v", err)
+	}
+	if beforeThumb != nil {
+		t.Fatalf("expected no cover thumbnail before first request, got %#v", beforeThumb)
+	}
+	details := testkit.GetJSON(t, srv.URL+"/api/v1/comics/"+comic.ID, cfg.Server.Token)
+	coverURL := details["data"].(map[string]any)["cover_url"].(string)
+
+	firstRes, err := http.Get(coverURL)
+	if err != nil {
+		t.Fatalf("first cover request: %v", err)
+	}
+	defer firstRes.Body.Close()
+	firstBody, _ := io.ReadAll(firstRes.Body)
+	if got := firstRes.Header.Get("Content-Type"); !strings.HasPrefix(got, "image/jpeg") {
+		t.Fatalf("expected jpeg cover thumbnail, got %q", got)
+	}
+	cfgJPEG, err := jpeg.DecodeConfig(bytes.NewReader(firstBody))
+	if err != nil {
+		t.Fatalf("decode first cover thumbnail: %v", err)
+	}
+	if cfgJPEG.Width != 256 || cfgJPEG.Height != 128 {
+		t.Fatalf("unexpected first thumbnail size: %dx%d", cfgJPEG.Width, cfgJPEG.Height)
+	}
+	afterThumb, err := application.MetadataStore().GetCoverThumbnail(context.Background(), locator)
+	if err != nil {
+		t.Fatalf("GetCoverThumbnail after request: %v", err)
+	}
+	if afterThumb == nil || len(afterThumb.Data) == 0 {
+		t.Fatalf("expected stored cover thumbnail after first request, got %#v", afterThumb)
+	}
+	if _, err := os.Stat(application.MetadataStore().ThumbnailPath()); err != nil {
+		t.Fatalf("expected thumbnail sqlite file: %v", err)
+	}
+
+	testkit.MustWriteFile(t, filepath.Join(root, "Cover Book", "001.jpg"), []byte("broken-source"))
+
+	secondRes, err := http.Get(coverURL)
+	if err != nil {
+		t.Fatalf("second cover request: %v", err)
+	}
+	defer secondRes.Body.Close()
+	secondBody, _ := io.ReadAll(secondRes.Body)
+	if !bytes.Equal(firstBody, secondBody) {
+		t.Fatalf("expected second cover request to reuse stored thumbnail")
+	}
+}
+
+func TestCoverThumbnailRegeneratesAfterRescanFingerprintChange(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "Regen Book", "001.jpg")
+	initialTime := time.Now().Add(-2 * time.Hour)
+	testkit.MustWriteSolidJPEG(t, target, 800, 400, color.RGBA{R: 220, G: 40, B: 40, A: 255})
+	if err := os.Chtimes(target, initialTime, initialTime); err != nil {
+		t.Fatalf("Chtimes initial cover: %v", err)
+	}
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	comic := findComicByTitle(t, application, "local-main", "Regen Book")
+	details := testkit.GetJSON(t, srv.URL+"/api/v1/comics/"+comic.ID, cfg.Server.Token)
+	coverURL := details["data"].(map[string]any)["cover_url"].(string)
+
+	firstRes, err := http.Get(coverURL)
+	if err != nil {
+		t.Fatalf("first cover request: %v", err)
+	}
+	defer firstRes.Body.Close()
+	firstBody, _ := io.ReadAll(firstRes.Body)
+	firstCfg, err := jpeg.DecodeConfig(bytes.NewReader(firstBody))
+	if err != nil {
+		t.Fatalf("decode first cover thumbnail: %v", err)
+	}
+	if firstCfg.Width != 256 || firstCfg.Height != 128 {
+		t.Fatalf("unexpected first thumbnail size: %dx%d", firstCfg.Width, firstCfg.Height)
+	}
+
+	testkit.MustWriteSolidJPEG(t, target, 400, 800, color.RGBA{R: 40, G: 40, B: 220, A: 255})
+	updatedTime := initialTime.Add(2 * time.Hour)
+	if err := os.Chtimes(target, updatedTime, updatedTime); err != nil {
+		t.Fatalf("Chtimes updated cover: %v", err)
+	}
+	if err := application.Rescan(context.Background(), "local-main"); err != nil {
+		t.Fatalf("Rescan: %v", err)
+	}
+
+	secondRes, err := http.Get(coverURL)
+	if err != nil {
+		t.Fatalf("second cover request: %v", err)
+	}
+	defer secondRes.Body.Close()
+	secondBody, _ := io.ReadAll(secondRes.Body)
+	if bytes.Equal(firstBody, secondBody) {
+		t.Fatalf("expected thumbnail bytes to change after rescan fingerprint update")
+	}
+	secondCfg, err := jpeg.DecodeConfig(bytes.NewReader(secondBody))
+	if err != nil {
+		t.Fatalf("decode second cover thumbnail: %v", err)
+	}
+	if secondCfg.Width != 128 || secondCfg.Height != 256 {
+		t.Fatalf("unexpected second thumbnail size: %dx%d", secondCfg.Width, secondCfg.Height)
 	}
 }
 

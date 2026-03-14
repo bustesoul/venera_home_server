@@ -87,10 +87,18 @@ func TestMetadataStoreRebindsMovedComicByFingerprint(t *testing.T) {
 		t.Fatalf("Rescan: %v", err)
 	}
 
-	retitled := findAppComicByTitle(t, application, "local-main", "Persisted Title")
 	expectedRootRef := filepath.ToSlash(filepath.Join("Shelf", "Book B"))
+	retitled := findAppComicByRootRef(t, application, expectedRootRef)
 	if retitled.RootRef != expectedRootRef {
 		t.Fatalf("expected rebound root_ref %q, got %q", expectedRootRef, retitled.RootRef)
+	}
+	if retitled.Title != "Persisted Title" {
+		records, err := application.MetadataRecords(context.Background(), metadatapkg.ListQuery{LibraryID: "local-main", Limit: 10})
+		if err != nil {
+			t.Fatalf("MetadataRecords on mismatch: %v", err)
+		}
+		t.Logf("records on mismatch=%#v", records)
+		t.Fatalf("expected rebound title %q, got %q", "Persisted Title", retitled.Title)
 	}
 	if retitled.Description != "Persisted Description" {
 		t.Fatalf("expected rebound description, got %q", retitled.Description)

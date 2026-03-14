@@ -244,8 +244,10 @@ type CleanupResult struct {
 }
 
 type Store struct {
-	db   *sql.DB
-	path string
+	db        *sql.DB
+	path      string
+	thumbDB   *sql.DB
+	thumbPath string
 }
 
 func OpenStore(dataDir string, configuredPath string) (*Store, error) {
@@ -258,10 +260,67 @@ func OpenStore(dataDir string, configuredPath string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
+	db, err := openSQLiteDB(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := initSchema(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	thumbPath := coverThumbnailDBPath(path)
+	thumbDB, err := openSQLiteDB(thumbPath)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := initCoverThumbnailSchema(thumbDB); err != nil {
+		_ = thumbDB.Close()
+		_ = db.Close()
+		return nil, err
+	}
+	return &Store{db: db, path: path, thumbDB: thumbDB, thumbPath: thumbPath}, nil
+}
+
+func (s *Store) Close() error {
+	if s == nil {
+		return nil
+	}
+	var errs []error
+	if s.thumbDB != nil {
+		if err := s.thumbDB.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if s.db != nil {
+		if err := s.db.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (s *Store) Path() string {
+	if s == nil {
+		return ""
+	}
+	return s.path
+}
+
+func (s *Store) ThumbnailPath() string {
+	if s == nil {
+		return ""
+	}
+	return s.thumbPath
+}
+
+func openSQLiteDB(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	if _, err := db.Exec(`PRAGMA journal_mode = WAL;`); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -270,25 +329,7 @@ func OpenStore(dataDir string, configuredPath string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	if err := initSchema(db); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	return &Store{db: db, path: path}, nil
-}
-
-func (s *Store) Close() error {
-	if s == nil || s.db == nil {
-		return nil
-	}
-	return s.db.Close()
-}
-
-func (s *Store) Path() string {
-	if s == nil {
-		return ""
-	}
-	return s.path
+	return db, nil
 }
 
 func initSchema(db *sql.DB) error {
@@ -418,6 +459,9 @@ WHERE id = ?
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
+		if strings.TrimSpace(existing.ContentFingerprint) != strings.TrimSpace(input.ContentFingerprint) {
+			_ = s.DeleteCoverThumbnail(ctx, input.Locator)
+		}
 		return updated, nil
 	}
 
@@ -442,6 +486,9 @@ WHERE id = ?
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
+		oldLocator := Locator{LibraryID: rebound.LibraryID, RootType: rebound.RootType, RootRef: rebound.RootRef}
+		_ = s.DeleteCoverThumbnail(ctx, oldLocator)
+		_ = s.DeleteCoverThumbnail(ctx, input.Locator)
 		return updated, nil
 	}
 
@@ -484,6 +531,31 @@ func (s *Store) GetByLocator(ctx context.Context, locator Locator) (*Record, err
 		return nil, nil
 	}
 	return s.getByLocatorCtx(ctx, s.db, locator)
+}
+
+func (s *Store) NextLibraryScanStarted(ctx context.Context, libraryID string, candidate time.Time) (time.Time, error) {
+	if s == nil || s.db == nil {
+		return candidate.UTC(), nil
+	}
+	libraryID = strings.TrimSpace(libraryID)
+	candidate = candidate.UTC()
+	if libraryID == "" {
+		return candidate, nil
+	}
+	var raw sql.NullString
+	err := s.db.QueryRowContext(ctx, `
+SELECT MAX(last_seen_at)
+FROM manga_metadata
+WHERE library_id = ?
+`, libraryID).Scan(&raw)
+	if err != nil {
+		return time.Time{}, err
+	}
+	maxSeen := parseTimePtr(raw.String)
+	if maxSeen == nil || candidate.After(*maxSeen) {
+		return candidate, nil
+	}
+	return maxSeen.Add(time.Nanosecond).UTC(), nil
 }
 
 func (s *Store) ApplyUpdate(ctx context.Context, locator Locator, update Update) error {

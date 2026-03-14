@@ -176,7 +176,7 @@ func dirContentFingerprint(images []backendpkg.Entry) string {
 	sort.Slice(ordered, func(i, j int) bool { return shared.NaturalLess(ordered[i].Name, ordered[j].Name) })
 	parts := []string{"dir", strconv.Itoa(len(ordered))}
 	for _, item := range sampleEntries(ordered) {
-		parts = append(parts, item.Name, strconv.FormatInt(item.Size, 10))
+		parts = append(parts, item.Name, strconv.FormatInt(item.Size, 10), strconv.FormatInt(item.ModTime.UTC().UnixNano(), 10))
 	}
 	return fingerprintFromParts(parts)
 }
@@ -200,7 +200,7 @@ func (a *App) archiveContentFingerprint(ctx context.Context, backend backendpkg.
 	sort.Slice(entries, func(i, j int) bool { return shared.NaturalLess(entries[i].Name, entries[j].Name) })
 	parts := []string{"archive", strconv.Itoa(len(entries))}
 	for _, item := range sampleArchiveEntries(entries) {
-		parts = append(parts, item.Name, strconv.FormatInt(item.Size, 10))
+		parts = append(parts, item.Name, strconv.FormatInt(item.Size, 10), strconv.FormatInt(item.ModTime.UTC().UnixNano(), 10))
 	}
 	return fingerprintFromParts(parts)
 }
@@ -213,7 +213,7 @@ func seriesContentFingerprint(candidates []chapterCandidate) string {
 	sort.Slice(ordered, func(i, j int) bool { return shared.NaturalLess(ordered[i].SortKey, ordered[j].SortKey) })
 	parts := []string{"series", strconv.Itoa(len(ordered))}
 	for _, item := range ordered {
-		parts = append(parts, normalizeMetaKey(item.ChapterTitle), strconv.Itoa(item.PageCount), item.SourceType)
+		parts = append(parts, normalizeMetaKey(item.ChapterTitle), strconv.Itoa(item.PageCount), item.SourceType, strings.TrimSpace(item.ContentFingerprint))
 	}
 	return fingerprintFromParts(parts)
 }

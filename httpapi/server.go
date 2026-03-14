@@ -346,6 +346,7 @@ func (s *Server) handleComicDetails(w http.ResponseWriter, r *http.Request, comi
 	relativePath := s.comicRelativePath(comic)
 	localPath := s.comicLocalPath(comic)
 	tags := buildComicTagGroups(comic, true)
+	s.fillComicDetailTagFallbacks(r.Context(), comic, tags)
 	recommend := s.relatedComics(comic)
 	writeData(w, map[string]any{
 		"id":            comic.ID,
@@ -363,6 +364,31 @@ func (s *Server) handleComicDetails(w http.ResponseWriter, r *http.Request, comi
 		"relative_path": relativePath,
 		"local_path":    localPath,
 	})
+}
+
+func (s *Server) fillComicDetailTagFallbacks(ctx context.Context, comic *apppkg.Comic, tags map[string][]string) {
+	if comic == nil || len(tags["language"]) > 0 {
+		return
+	}
+	store := s.app.MetadataStore()
+	if store == nil {
+		return
+	}
+	record, err := store.GetByLocator(ctx, metadatapkg.Locator{
+		LibraryID: comic.LibraryID,
+		RootType:  comic.RootType,
+		RootRef:   comic.RootRef,
+	})
+	if err != nil || record == nil {
+		return
+	}
+	if value := shared.LanguageTagValue(record.EffectiveLanguage()); value != "" {
+		tags["language"] = []string{value}
+		return
+	}
+	if value := strings.TrimSpace(record.EffectiveLanguage()); value != "" {
+		tags["language"] = []string{value}
+	}
 }
 
 func (s *Server) comicRelativePath(comic *apppkg.Comic) string {
@@ -1167,9 +1193,21 @@ func (s *Server) scheduleChapterPrefetch(chapter *apppkg.Chapter, pages []apppkg
 }
 
 func (s *Server) serveCover(w http.ResponseWriter, r *http.Request, payload *shared.SignedPayload) {
+	if setMediaCacheHeaders(w, r) {
+		return
+	}
 	comic := s.app.ComicByID(payload.ComicID)
 	if comic == nil || len(comic.Chapters) == 0 {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "comic not found")
+		return
+	}
+	if thumb, err := s.app.LoadOrCreateCoverThumbnail(r.Context(), comic); err == nil && thumb != nil && len(thumb.Data) > 0 {
+		w.Header().Set("Content-Type", thumb.MIMEType)
+		w.Header().Set("Content-Length", strconv.Itoa(len(thumb.Data)))
+		if !thumb.UpdatedAt.IsZero() {
+			w.Header().Set("Last-Modified", thumb.UpdatedAt.UTC().Format(http.TimeFormat))
+		}
+		_, _ = w.Write(thumb.Data)
 		return
 	}
 	pages, err := s.app.MaterializeChapterPages(r.Context(), comic.Chapters[0])
