@@ -38,24 +38,24 @@ func TestAdminHomePageUsesReadableUTF8Text(t *testing.T) {
 	}
 	text := string(body)
 	for _, needle := range []string{
-		"Metadata Admin",
-		"themeToggleBtn",
-		"rescanLibraryBtn",
-		"cleanupDryRunBtn",
-		"sidecarModal",
+		"Venera Metadata Admin",
+		"<div id=\"root\"></div>",
 		"/api/v1/admin/metadata/sidecar",
 		"EH Bot Pull / Import",
-		"botTabBtn",
-		"metadataTabBtn",
-		"jobsTabBtn",
-		"runEHBotPullBtn",
-		"createEHBotJobBtn",
-		"saveEHBotConfigBtn",
-		"jobHistoryTable",
+		"Manage bot polling, claim, artifact download, import, and auto-rescan.",
+		"Metadata",
+		"Job History",
+		"Run Once",
+		"Save Config",
+		"创建远程下载任务",
+		"重扫当前书库",
+		"测试清理（Dry Run）",
+		"编辑 .venera.json（Sidecar）",
 		"/api/v1/admin/ehbot/status",
 		"/api/v1/admin/ehbot/config",
 		"/api/v1/admin/ehbot/jobs/create",
 		"/api/v1/admin/jobs",
+		"ReactDOM.createRoot(document.getElementById('root')).render(<App />);",
 	} {
 		if !strings.Contains(text, needle) {
 			t.Fatalf("expected admin page to contain %q, got %q", needle, text)
