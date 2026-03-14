@@ -97,7 +97,7 @@ func (s *Server) handleMetadataRecordAction(w http.ResponseWriter, r *http.Reque
 	writeData(w, result)
 }
 
-func metadataRecordMap(record metadatapkg.Record) map[string]any {
+func metadataRecordMap(record metadatapkg.Record, coverPreviewURL string) map[string]any {
 	item := map[string]any{
 		"id":                  record.ID,
 		"locator":             map[string]any{"library_id": record.LibraryID, "root_type": record.RootType, "root_ref": record.RootRef},
@@ -122,6 +122,7 @@ func metadataRecordMap(record metadatapkg.Record) map[string]any {
 		"manual_locked":       record.ManualLocked,
 		"cover_source_url":    emptyToNil(record.CoverSourceURL),
 		"cover_blob_relpath":  emptyToNil(record.CoverBlobRelpath),
+		"cover_preview_url":   emptyToNil(coverPreviewURL),
 		"last_error":          emptyToNil(record.LastError),
 		"fetched_at":          formatTimePtrRFC3339(record.FetchedAt),
 		"stale_after":         formatTimePtrRFC3339(record.StaleAfter),

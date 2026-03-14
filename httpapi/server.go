@@ -661,9 +661,15 @@ func (s *Server) handleMetadataRecords(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "METADATA_RECORDS_FAILED", err.Error())
 		return
 	}
+	base := baseURL(r)
 	items := make([]map[string]any, 0, len(result.Items))
 	for _, record := range result.Items {
-		items = append(items, metadataRecordMap(record))
+		coverPreviewURL := ""
+		locator := metadatapkg.Locator{LibraryID: record.LibraryID, RootType: record.RootType, RootRef: record.RootRef}
+		if comic := s.app.ComicByLocator(locator); comic != nil {
+			coverPreviewURL = s.mediaURL(base, shared.SignedPayload{Type: "cover", ComicID: comic.ID})
+		}
+		items = append(items, metadataRecordMap(record, coverPreviewURL))
 	}
 	writeData(w, map[string]any{
 		"items":     items,

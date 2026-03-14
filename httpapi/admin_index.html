@@ -256,6 +256,32 @@ const GroupBadge = ({ record }) => {
   );
 };
 
+const RecordPreviewCell = ({ url, title }) => {
+  const [broken, setBroken] = useState(false);
+  if (!url || broken) {
+    return <Text type="secondary">-</Text>;
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" title={title || '预览'}>
+      <img
+        src={url}
+        alt={title || 'preview'}
+        loading="lazy"
+        onError={() => setBroken(true)}
+        style={{
+          width: 64,
+          height: 64,
+          objectFit: 'cover',
+          borderRadius: 8,
+          display: 'block',
+          border: '1px solid rgba(127,127,127,0.25)',
+          background: 'rgba(127,127,127,0.08)',
+        }}
+      />
+    </a>
+  );
+};
+
 const TagsCell = ({ item, setStatus }) => {
   const [expanded, setExpanded] = useState(false);
   const artists = Array.isArray(item.artists) ? item.artists.filter(Boolean) : [];
@@ -835,10 +861,11 @@ const MetadataPanel = () => {
   const selectedKeys = Object.keys(selectedRecords);
   const recordCols = [
     { title: '状态', dataIndex: 'state', key: 'st', width: 90, render: (v) => <StatusTag value={v} /> },
+    { title: '预览', key: 'preview', width: 88, render: (_, r) => <RecordPreviewCell url={r.cover_preview_url} title={r.title || r.root_ref || ''} /> },
     { title: '标题 / TAG', key: 'title', render: (_, r) => <TagsCell item={r} setStatus={setStatus} /> },
     {
       title: '相对路径 / 绝对路径', key: 'path', width: 260,
-      render: (_, r) => (<div><Text className="mono" strong>{r.root_ref || ''}</Text><br/><Text type="secondary" className="mono" style={{ fontSize: 12 }}>{r.folder_path || ''}</Text></div>),
+        render: (_, r) => (<div><Text className="mono" strong>{r.root_ref || ''}</Text><br/><Text type="secondary" className="mono" style={{ fontSize: 12 }}>{r.folder_path || ''}</Text></div>),
     },
     {
       title: '来源信息', key: 'source', width: 150,
@@ -1002,7 +1029,7 @@ const MetadataPanel = () => {
           rowKey={(r) => locatorKey(r.locator)}
           size="small"
           loading={recordsLoading}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1180 }}
           locale={{ emptyText: '暂无符合条件的记录' }}
           rowSelection={{
             selectedRowKeys: selectedKeys,

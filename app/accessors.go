@@ -6,6 +6,7 @@ import (
 	backendpkg "venera_home_server/backend"
 	"venera_home_server/config"
 	"venera_home_server/favorites"
+	metadatapkg "venera_home_server/metadata"
 )
 
 func (a *App) Config() *config.Config {
@@ -34,6 +35,23 @@ func (a *App) Comics() []*Comic {
 
 func (a *App) ComicByID(id string) *Comic {
 	return a.comicByID(id)
+}
+
+func (a *App) ComicByLocator(locator metadatapkg.Locator) *Comic {
+	if a == nil || !locator.Valid() {
+		return nil
+	}
+	a.comicsMu.RLock()
+	defer a.comicsMu.RUnlock()
+	for _, comic := range a.comics {
+		if comic == nil {
+			continue
+		}
+		if comic.LibraryID == locator.LibraryID && comic.RootType == locator.RootType && comic.RootRef == locator.RootRef {
+			return comic
+		}
+	}
+	return nil
 }
 
 func (a *App) ChapterByID(id string) *Chapter {

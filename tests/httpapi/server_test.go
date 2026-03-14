@@ -378,6 +378,44 @@ func TestCoverThumbnailRegeneratesAfterRescanFingerprintChange(t *testing.T) {
 	}
 }
 
+func TestAdminMetadataRecordsExposeCoverPreviewURL(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteSolidJPEG(t, filepath.Join(root, "Admin Preview Book", "001.jpg"), 600, 400, color.RGBA{R: 120, G: 60, B: 220, A: 255})
+
+	cfg := newServerTestConfig(root, 16)
+	application := newServerTestApp(t, cfg)
+	srv := httptest.NewServer(httpapipkg.NewHTTPServer(application, log.New(io.Discard, "", 0)))
+	defer srv.Close()
+
+	records := testkit.GetJSON(t, srv.URL+"/api/v1/admin/metadata/records?library_id=local-main&page=1&limit=10", cfg.Server.Token)
+	items := records["data"].(map[string]any)["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 metadata record, got %d", len(items))
+	}
+	record := items[0].(map[string]any)
+	previewURL, _ := record["cover_preview_url"].(string)
+	if strings.TrimSpace(previewURL) == "" {
+		t.Fatalf("expected cover_preview_url in %#v", record)
+	}
+
+	res, err := http.Get(previewURL)
+	if err != nil {
+		t.Fatalf("cover preview request: %v", err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	if got := res.Header.Get("Content-Type"); !strings.HasPrefix(got, "image/jpeg") {
+		t.Fatalf("expected jpeg cover preview, got %q", got)
+	}
+	cfgJPEG, err := jpeg.DecodeConfig(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("decode cover preview: %v", err)
+	}
+	if cfgJPEG.Width != 256 || cfgJPEG.Height != 171 {
+		t.Fatalf("unexpected cover preview size: %dx%d", cfgJPEG.Width, cfgJPEG.Height)
+	}
+}
+
 func TestFilePageServesFromMemoryAfterDiskCacheRemoval(t *testing.T) {
 	root := t.TempDir()
 	testkit.MustWriteFile(t, filepath.Join(root, "Direct", "001.jpg"), []byte("local-page"))
