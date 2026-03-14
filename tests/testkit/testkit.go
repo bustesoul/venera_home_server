@@ -108,12 +108,27 @@ func PostJSON(t *testing.T, url, token string, payload map[string]any) map[strin
 	return out
 }
 
+func ListRenderedCacheFiles(root string) ([]string, error) {
+	paths, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if strings.Contains(filepath.Base(path), ".tmp-") {
+			continue
+		}
+		filtered = append(filtered, path)
+	}
+	return filtered, nil
+}
+
 func WaitForRenderedCacheCount(root string, wantAtLeast int, timeout time.Duration) ([]string, error) {
 	deadline := time.Now().Add(timeout)
 	for {
-		cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+		cachedPages, err := ListRenderedCacheFiles(root)
 		if err != nil {
-			return nil, fmt.Errorf("glob cache files: %w", err)
+			return nil, fmt.Errorf("list rendered cache files: %w", err)
 		}
 		if len(cachedPages) >= wantAtLeast {
 			return cachedPages, nil

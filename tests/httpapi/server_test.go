@@ -116,9 +116,9 @@ func TestLocalServerFlow(t *testing.T) {
 	if res.Header.Get("Cache-Control") == "" || res.Header.Get("ETag") == "" {
 		t.Fatalf("expected media cache headers, got Cache-Control=%q ETag=%q", res.Header.Get("Cache-Control"), res.Header.Get("ETag"))
 	}
-	cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	cachedPages, err := testkit.ListRenderedCacheFiles(root)
 	if err != nil {
-		t.Fatalf("glob cache files: %v", err)
+		t.Fatalf("list cache files: %v", err)
 	}
 	if len(cachedPages) == 0 {
 		if cachedPages, err = testkit.WaitForRenderedCacheCount(root, 1, 3*time.Second); err != nil {
@@ -167,9 +167,9 @@ func TestArchivePageRequestBuildsOnlyRequestedPageAsync(t *testing.T) {
 		t.Fatalf("expected 4 images, got %d", len(images))
 	}
 	time.Sleep(150 * time.Millisecond)
-	cachedPages, err := filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	cachedPages, err := testkit.ListRenderedCacheFiles(root)
 	if err != nil {
-		t.Fatalf("glob cache files before media request: %v", err)
+		t.Fatalf("list cache files before media request: %v", err)
 	}
 	if len(cachedPages) != 0 {
 		t.Fatalf("expected chapter page listing to avoid prefetch, got %d cached files", len(cachedPages))
@@ -187,9 +187,9 @@ func TestArchivePageRequestBuildsOnlyRequestedPageAsync(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(150 * time.Millisecond)
-	cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	cachedPages, err = testkit.ListRenderedCacheFiles(root)
 	if err != nil {
-		t.Fatalf("glob cache files: %v", err)
+		t.Fatalf("list cache files: %v", err)
 	}
 	if len(cachedPages) != 1 {
 		t.Fatalf("expected only requested page to be cached, got %d files", len(cachedPages))
@@ -228,9 +228,9 @@ func TestPageRequestsBuildOnlyRequestedPagesAsync(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(150 * time.Millisecond)
-	cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	cachedPages, err = testkit.ListRenderedCacheFiles(root)
 	if err != nil {
-		t.Fatalf("glob cache files after first request: %v", err)
+		t.Fatalf("list cache files after first request: %v", err)
 	}
 	if len(cachedPages) != 1 {
 		t.Fatalf("expected first request to cache exactly 1 page, got %d", len(cachedPages))
@@ -249,9 +249,9 @@ func TestPageRequestsBuildOnlyRequestedPagesAsync(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(150 * time.Millisecond)
-	cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	cachedPages, err = testkit.ListRenderedCacheFiles(root)
 	if err != nil {
-		t.Fatalf("glob cache files after second request: %v", err)
+		t.Fatalf("list cache files after second request: %v", err)
 	}
 	if len(cachedPages) != 2 {
 		t.Fatalf("expected two requested pages to be cached, got %d", len(cachedPages))
@@ -466,9 +466,9 @@ func TestFilePageServesFromMemoryAfterDiskCacheRemoval(t *testing.T) {
 		t.Fatalf("unexpected second media body: %q", string(secondBody))
 	}
 
-	cachedPages, err = filepath.Glob(filepath.Join(root, "cache", "rendered-pages", "*"))
+	cachedPages, err = testkit.ListRenderedCacheFiles(root)
 	if err != nil {
-		t.Fatalf("glob cache files after memory hit: %v", err)
+		t.Fatalf("list cache files after memory hit: %v", err)
 	}
 	if len(cachedPages) != 0 {
 		t.Fatalf("expected memory hit without recreating disk cache, got %d files", len(cachedPages))
