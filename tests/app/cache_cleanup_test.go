@@ -18,7 +18,7 @@ func TestCleanupCacheNowRemovesExpiredDiskCacheFiles(t *testing.T) {
 			Listen:                      "127.0.0.1:0",
 			DataDir:                     filepath.Join(root, "data"),
 			CacheDir:                    cacheDir,
-			CacheMaxAgeHours:            1,
+			CacheMaxAgeHours:            0,
 			CacheCleanupIntervalMinutes: 360,
 		},
 		Scan:      configpkg.ScanConfig{Concurrency: 1, ExtractArchives: true},
@@ -40,6 +40,7 @@ func TestCleanupCacheNowRemovesExpiredDiskCacheFiles(t *testing.T) {
 	oldArchive := writeCacheFile(t, filepath.Join(cacheDir, "archive-source", "old.cbz"), []byte("old-archive"), time.Now().Add(-3*time.Hour))
 	newWebDAV := writeCacheFile(t, filepath.Join(cacheDir, "webdav", "dav-lib", "fresh.zip"), []byte("fresh-webdav"), time.Now())
 	oldPDF := writeCacheFile(t, filepath.Join(cacheDir, "pdf", "deadbeef", "pages", "0001.png"), []byte("old-pdf"), time.Now().Add(-3*time.Hour))
+	cfg.Server.CacheMaxAgeHours = 1
 
 	result, err := application.CleanupCacheNow()
 	if err != nil {
