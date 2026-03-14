@@ -274,3 +274,65 @@ func rawJSON(value string) json.RawMessage {
 	}
 	return json.RawMessage(value)
 }
+
+func (s *Store) DistinctJobKinds(ctx context.Context) ([]string, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT DISTINCT kind
+FROM job_history
+ORDER BY kind
+`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	kinds := make([]string, 0)
+	for rows.Next() {
+		var kind string
+		if err := rows.Scan(&kind); err != nil {
+			return nil, err
+		}
+		kind = strings.TrimSpace(kind)
+		if kind == "" {
+			continue
+		}
+		kinds = append(kinds, kind)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return kinds, nil
+}
+
+func (s *Store) PruneJobsByKind(ctx context.Context, kind string, keep int) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		return 0, nil
+	}
+	if keep <= 0 {
+		result, err := s.db.ExecContext(ctx, `DELETE FROM job_history WHERE kind = ?`, kind)
+		if err != nil {
+			return 0, err
+		}
+		return result.RowsAffected()
+	}
+	result, err := s.db.ExecContext(ctx, `
+DELETE FROM job_history
+WHERE kind = ? AND job_id NOT IN (
+	SELECT job_id
+	FROM job_history
+	WHERE kind = ?
+	ORDER BY updated_at DESC, job_id DESC
+	LIMIT ?
+)`, kind, kind, keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

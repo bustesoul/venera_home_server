@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -174,6 +175,83 @@ func TestStartupMarksUnfinishedJobsFailed(t *testing.T) {
 	}
 	if !foundStartupDone {
 		t.Fatalf("expected a completed startup metadata.refresh job, got %#v", jobs)
+	}
+}
+
+func TestPruneJobHistoryUsesPerKindRetention(t *testing.T) {
+	root := t.TempDir()
+	testkit.MustWriteFile(t, filepath.Join(root, "Book A", "001.jpg"), []byte("img"))
+
+	application := newTestApp(t, root)
+	t.Cleanup(func() { _ = application.Close() })
+
+	store := application.MetadataStore()
+	baseTime := time.Now().UTC().Add(-3 * time.Hour)
+
+	for i := 0; i < 205; i++ {
+		at := baseTime.Add(time.Duration(i) * time.Second)
+		if err := store.UpsertJob(context.Background(), metadatapkg.JobRecord{
+			ID:          fmt.Sprintf("ehbot-%03d", i),
+			Kind:        "ehbot.pull",
+			Trigger:     "test",
+			Status:      "done",
+			RequestedAt: at,
+			UpdatedAt:   at,
+		}); err != nil {
+			t.Fatalf("UpsertJob ehbot.pull[%d]: %v", i, err)
+		}
+	}
+
+	for i := 0; i < 2005; i++ {
+		at := baseTime.Add(time.Duration(i) * time.Second)
+		if err := store.UpsertJob(context.Background(), metadatapkg.JobRecord{
+			ID:          fmt.Sprintf("metadata-%04d", i),
+			Kind:        "custom.kind",
+			Trigger:     "test",
+			Status:      "done",
+			RequestedAt: at,
+			UpdatedAt:   at,
+		}); err != nil {
+			t.Fatalf("UpsertJob metadata.refresh[%d]: %v", i, err)
+		}
+	}
+
+	deleted, err := application.PruneJobHistory(context.Background())
+	if err != nil {
+		t.Fatalf("PruneJobHistory: %v", err)
+	}
+	if deleted != 10 {
+		t.Fatalf("expected 10 deleted rows, got %d", deleted)
+	}
+
+	ehbotPage, err := application.JobHistoryPage(context.Background(), metadatapkg.JobQuery{Kind: "ehbot.pull", Limit: 1})
+	if err != nil {
+		t.Fatalf("JobHistoryPage ehbot.pull total: %v", err)
+	}
+	if ehbotPage.Total != 200 {
+		t.Fatalf("expected 200 ehbot.pull jobs after prune, got %d", ehbotPage.Total)
+	}
+	lastEHBot, err := application.JobHistoryPage(context.Background(), metadatapkg.JobQuery{Kind: "ehbot.pull", Limit: 1, Offset: 199})
+	if err != nil {
+		t.Fatalf("JobHistoryPage ehbot.pull last kept: %v", err)
+	}
+	if len(lastEHBot.Items) != 1 || lastEHBot.Items[0].ID != "ehbot-005" {
+		t.Fatalf("expected oldest kept ehbot job ehbot-005, got %#v", lastEHBot.Items)
+	}
+
+	metadataPage, err := application.JobHistoryPage(context.Background(), metadatapkg.JobQuery{Kind: "custom.kind", Limit: 1})
+	if err != nil {
+		t.Fatalf("JobHistoryPage custom.kind total: %v", err)
+	}
+	if metadataPage.Total != 2000 {
+		t.Fatalf("expected 2000 custom.kind jobs after prune, got %d", metadataPage.Total)
+	}
+	lastMetadata, err := application.JobHistoryPage(context.Background(), metadatapkg.JobQuery{Kind: "custom.kind", Limit: 1, Offset: 1999})
+	if err != nil {
+		t.Fatalf("JobHistoryPage custom.kind last kept: %v", err)
+	}
+	if len(lastMetadata.Items) != 1 || lastMetadata.Items[0].ID != "metadata-0005" {
+		t.Fatalf("expected oldest kept custom.kind job metadata-0005, got %#v", lastMetadata.Items)
 	}
 }
 

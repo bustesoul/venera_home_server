@@ -8,6 +8,7 @@ func (a *App) Close() error {
 	}
 	a.stopEHBotService()
 	a.stopCacheCleanupService()
+	a.stopJobHistoryCleanupService()
 	var errs []error
 	if a.metadataStore != nil {
 		if err := a.metadataStore.Close(); err != nil {

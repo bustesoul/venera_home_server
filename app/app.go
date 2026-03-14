@@ -22,22 +22,23 @@ import (
 )
 
 type App struct {
-	cfg            *configpkg.Config
-	backends       map[string]backendpkg.Backend
-	comicsMu       sync.RWMutex
-	comics         map[string]*Comic
-	libraries      map[string][]string
-	chapters       map[string]*Chapter
-	favorites      *favoritespkg.FavoritesStore
-	metadataStore  *metadatapkg.Store
-	metadataJobsMu sync.RWMutex
-	metadataJobs   map[string]*MetadataRefreshJob
-	ehBotMu        sync.RWMutex
-	ehBotJobs      map[string]*EHBotPullJob
-	ehBotState     EHBotRuntimeState
-	ehBotQueue     chan *EHBotPullJob
-	ehBotCancel    context.CancelFunc
-	cacheCleanupCancel context.CancelFunc
+	cfg                     *configpkg.Config
+	backends                map[string]backendpkg.Backend
+	comicsMu                sync.RWMutex
+	comics                  map[string]*Comic
+	libraries               map[string][]string
+	chapters                map[string]*Chapter
+	favorites               *favoritespkg.FavoritesStore
+	metadataStore           *metadatapkg.Store
+	metadataJobsMu          sync.RWMutex
+	metadataJobs            map[string]*MetadataRefreshJob
+	ehBotMu                 sync.RWMutex
+	ehBotJobs               map[string]*EHBotPullJob
+	ehBotState              EHBotRuntimeState
+	ehBotQueue              chan *EHBotPullJob
+	ehBotCancel             context.CancelFunc
+	cacheCleanupCancel      context.CancelFunc
+	jobHistoryCleanupCancel context.CancelFunc
 }
 
 type comicInfoXML struct {
@@ -105,6 +106,7 @@ func NewApp(cfg *configpkg.Config) (*App, error) {
 	}
 	app.startEHBotService()
 	app.startCacheCleanupService()
+	app.startJobHistoryCleanupService()
 	return app, nil
 }
 

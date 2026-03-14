@@ -3,944 +3,39 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Venera Metadata Admin</title>
+  <title>Venera Metadata Admin (Ant Design)</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/dayjs/dayjs.min.js"></script>
+  <script src="https://unpkg.com/antd@5/dist/antd.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    :root {
-      color-scheme: dark;
-      /* Zinc Palette for Dark Theme */
-      --bg: #09090b; /* zinc-950 */
-      --panel: #18181b; /* zinc-900 */
-      --bg-hover: #27272a; /* zinc-800 */
-      --border: #27272a; /* zinc-800, deeper border */
-      --border-hover: #3f3f46; /* zinc-700 */
-      --text-main: #fafafa; /* zinc-50 */
-      --text-muted: #a1a1aa; /* zinc-400 */
-      
-      --primary: #3b82f6; /* blue-500 */
-      --primary-hover: #60a5fa; /* blue-400 */
-      --primary-alpha: rgba(59, 130, 246, 0.15);
-      
-      --ok: #10b981; /* emerald-500 */
-      --ok-bg: rgba(16, 185, 129, 0.15);
-      --warn: #f59e0b; /* amber-500 */
-      --warn-bg: rgba(245, 158, 11, 0.15);
-      --err: #ef4444; /* red-500 */
-      --err-bg: rgba(239, 68, 68, 0.15);
-      
-      /* Modern smooth shadows */
-      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
-      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-      
-      /* Advanced tables */
-      --table-header: #131316;
-      --table-row-alt: #0e0e11;
-      --table-row-hover: #1f1f24;
-      --table-row-active: #27272a;
-      
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --radius-lg: 16px;
-      --radius-full: 9999px;
-    }
-
-    body[data-theme="light"] {
-      color-scheme: light;
-      --bg: #f4f4f5; /* zinc-100 */
-      --panel: #ffffff;
-      --bg-hover: #e4e4e7; /* zinc-200 */
-      --border: #e4e4e7; /* zinc-200 */
-      --border-hover: #d4d4d8; /* zinc-300 */
-      --text-main: #18181b; /* zinc-900 */
-      --text-muted: #71717a; /* zinc-500 */
-      
-      --primary: #2563eb; /* blue-600 */
-      --primary-hover: #1d4ed8; /* blue-700 */
-      --primary-alpha: rgba(37, 99, 235, 0.15);
-      
-      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
-      
-      --table-header: #fafafa;
-      --table-row-alt: #f8f8f8;
-      --table-row-hover: #f4f4f5;
-      --table-row-active: #e4e4e7;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { min-height: 100%; }
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text-main);
-      line-height: 1.5;
-      font-size: 14px;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    h1 { font-size: 1.35rem; font-weight: 600; letter-spacing: -0.025em; }
-    h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 20px; color: var(--text-main); letter-spacing: -0.015em; }
-    .muted { color: var(--text-muted); font-size: 0.875rem; }
-
-    header {
-      padding: 16px 36px;
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      background: var(--panel);
-      background: color-mix(in srgb, var(--panel) 75%, transparent);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      z-index: 20;
-      box-shadow: var(--shadow-sm);
-    }
-
-    main { padding: 36px; display: grid; gap: 28px; max-width: 1600px; margin: 0 auto; }
-    .grid { display: grid; gap: 28px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
-    .panel {
-      min-width: 0;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 28px;
-      box-shadow: var(--shadow-md);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .panel:hover { 
-      box-shadow: var(--shadow-lg); 
-      border-color: var(--border-hover);
-      transform: translateY(-2px);
-    }
-    .panel.wide { grid-column: 1 / -1; }
-
-    .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
-    .row + .row { margin-top: 18px; }
-    .spacer { flex: 1; }
-
-    label { display: flex; flex-direction: column; gap: 8px; min-width: 140px; flex: 1; font-size: 0.875rem; font-weight: 500; color: var(--text-main); }
-    label span { color: var(--text-muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
-
-    input:not([type="checkbox"]), select, textarea {
-      background: var(--bg);
-      color: var(--text-main);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 9px 14px;
-      font-family: inherit;
-      font-size: 0.875rem;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      width: 100%;
-      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
-    }
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--primary-hover);
-      box-shadow: 0 0 0 4px var(--primary-alpha), inset 0 1px 2px rgba(0, 0, 0, 0.02);
-    }
-    textarea { min-height: 200px; resize: vertical; line-height: 1.6; }
-
-    input[type="checkbox"] { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--primary); transition: transform 0.1s; }
-    input[type="checkbox"]:active { transform: scale(0.85); }
-    .checkbox { display: flex; flex-direction: row; align-items: center; gap: 10px; cursor: pointer; }
-
-    button {
-      cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      background: var(--bg);
-      color: var(--text-main);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 9px 18px;
-      font-family: inherit;
-      font-size: 0.875rem;
-      font-weight: 500;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      user-select: none;
-    }
-    button:hover:not(:disabled) { 
-      background: var(--bg-hover); 
-      border-color: var(--border-hover);
-      transform: translateY(-1px); 
-      box-shadow: var(--shadow-sm);
-    }
-    button:active:not(:disabled) { transform: translateY(0) scale(0.97); box-shadow: none; }
-    button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--border-hover); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    button.primary { background: var(--primary); border-color: var(--primary); color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.1); }
-    button.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); box-shadow: 0 6px 16px var(--primary-alpha), 0 2px 4px var(--primary-alpha); }
-    button.primary:focus-visible { box-shadow: 0 0 0 3px var(--primary-alpha); }
-    button.warn { background: transparent; border-color: var(--err); color: var(--err); }
-    button.warn:hover:not(:disabled) { background: var(--err); border-color: var(--err); color: #fff; box-shadow: 0 4px 12px var(--err-bg); }
-    button.ghost { background: transparent; border-color: transparent; }
-    button.ghost:hover:not(:disabled) { background: var(--bg-hover); border-color: transparent; }
-
-    .status {
-      padding: 12px 16px;
-      border-radius: var(--radius-md);
-      background: var(--bg);
-      border-left: 4px solid var(--border);
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-    }
-    .status.ok { border-left-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
-    .status.err { border-left-color: var(--err); background: var(--err-bg); color: var(--err); }
-    .status.warn { border-left-color: var(--warn); background: var(--warn-bg); color: var(--warn); }
-
-    .scroll {
-      width: 100%;
-      overflow: auto;
-      max-height: 60vh;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      background: var(--bg);
-      scrollbar-width: thin;
-      scrollbar-color: var(--border) transparent;
-    }
-    .scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-    .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
-    table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
-    th, td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    thead th {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      background: var(--table-header);
-      background: color-mix(in srgb, var(--table-header) 85%, transparent);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      color: var(--text-muted);
-      font-weight: 600;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      border-bottom: 2px solid var(--border);
-    }
-    tbody tr { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-    tbody tr:nth-child(even) { background: var(--table-row-alt); }
-    tbody tr:hover { background-color: var(--table-row-hover); }
-    tbody tr:last-child td { border-bottom: none; }
-    .wide-table th, .wide-table td { white-space: nowrap; }
-
-    .data-table { table-layout: fixed; font-size: 0.9rem; }
-    .data-table td { overflow-wrap: anywhere; }
-    .data-table .cell-stack { display: flex; flex-direction: column; gap: 6px; }
-    .data-table .cell-title { font-weight: 500; font-size: 0.95rem; color: var(--text-main); line-height: 1.4; }
-    .data-table .cell-sub { color: var(--text-muted); font-size: 0.8rem; line-height: 1.4; }
-    .data-table .cell-error { color: var(--err); font-weight: 500; }
-    
-    .tags-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 4px;
-    }
-    .tag-hidden { display: none !important; }
-
-    .table-empty { text-align: center; padding: 48px 32px; color: var(--text-muted); font-size: 0.95rem; }
-    .table-toolbar {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      padding: 16px 20px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      background: var(--bg);
-      box-shadow: var(--shadow-sm);
-    }
-    .table-toolbar .filters { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
-    .table-toolbar .filters label { min-width: 180px; flex: 1 1 180px; }
-    .table-summary { color: var(--text-muted); font-size: 0.85rem; font-weight: 500; }
-    .table-actions { margin-left: auto; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    .toolbar-right { margin-left: auto; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    .table-pagination { display: flex; align-items: center; gap: 10px; }
-    .table-pagination button { padding: 6px 14px; }
-    .table-pagination .page-info { color: var(--text-muted); font-size: 0.85rem; white-space: nowrap; font-weight: 500; }
-    .scroll.is-loading { opacity: 0.45; pointer-events: none; transition: opacity 0.2s ease; }
-    .actions { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; justify-content: flex-end; }
-    
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px 10px;
-      border-radius: var(--radius-full);
-      background: var(--bg-hover);
-      color: var(--text-main);
-      font-size: 0.75rem;
-      font-weight: 600;
-      white-space: nowrap;
-      letter-spacing: 0.02em;
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow-sm);
-      transition: all 0.2s;
-    }
-    .pill.compact { padding: 2px 8px; font-weight: 500; font-size: 0.75rem; box-shadow: none; cursor: pointer; transition: transform 0.1s, background-color 0.2s, border-color 0.2s; }
-    .pill.compact:hover { border-color: var(--border-hover); background: var(--bg); }
-    .pill.compact:active { transform: scale(0.95); }
-    .pill.ok { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
-    .pill.warn { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
-    .pill.err { color: var(--err); background: var(--err-bg); border-color: transparent; }
-
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.85em; word-break: normal; overflow-wrap: anywhere; }
-    .help { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; }
-    
-    /* Segmented Control / Modern Tabs */
-    .tab-nav { 
-      display: inline-flex; 
-      gap: 4px; 
-      background: var(--bg-hover);
-      padding: 4px;
-      border-radius: var(--radius-md);
-      margin-top: 4px; 
-      box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
-    }
-    .tab-btn { 
-      min-width: 120px; 
-      border-radius: var(--radius-sm);
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      box-shadow: none;
-    }
-    .tab-btn:hover:not(.active) { background: color-mix(in srgb, var(--text-main) 5%, transparent); transform: none; box-shadow: none; }
-    .tab-btn.active { 
-      background: var(--panel); 
-      color: var(--text-main); 
-      box-shadow: var(--shadow-sm); 
-    }
-    
-    .tab-panel { display: none; gap: 28px; }
-    .tab-panel.active { display: grid; }
-    .field-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 18px; }
-    .field-span-2 { grid-column: span 2; }
-    .hidden { display: none !important; }
-
-    @keyframes fadeIn { from { opacity: 0; backdrop-filter: blur(0); } to { opacity: 1; backdrop-filter: blur(8px); } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
-
-    .modal {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      background: rgba(0,0,0,0.4);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    .dialog {
-      width: min(980px, 100%);
-      max-height: min(90vh, 100%);
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-      padding: 36px;
-      border-radius: var(--radius-lg);
-      background: var(--panel);
-      border: 1px solid var(--border);
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border);
-      animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1) forwards;
-    }
-
-    .summary-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-    .summary-card { padding: 18px; border-radius: var(--radius-md); background: var(--bg); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02); }
-    .summary-card .muted { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-    .summary-card div:last-child { font-weight: 500; font-size: 1rem; }
-
-    @media (max-width: 900px) {
-      header { padding: 16px 20px; }
-      main { padding: 20px; gap: 16px; }
-      .grid { grid-template-columns: 1fr; gap: 16px; }
-      .panel { padding: 18px; }
-      .dialog { padding: 20px; }
-    }
-
-    @media (max-width: 640px) {
-      header { padding: 12px 16px; }
-      main { padding: 16px; }
-      .row { gap: 10px; }
-      label { min-width: 100%; }
-      .summary-grid { grid-template-columns: 1fr; }
-      .field-span-2 { grid-column: span 1; }
-    }
+    body { margin: 0; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.85em; word-break: break-all; }
   </style>
 </head>
-<body data-theme="dark">
-<header>
-  <div class="row">
-    <div>
-      <h1>Venera Metadata Admin</h1>
-      <div class="muted" style="margin-top: 4px;">管理 metadata store、外部数据源，以及手动补全任务。</div>
-    </div>
-    <div class="spacer"></div>
-    <label style="flex: 0 1 320px; flex-direction: row; align-items: center; gap: 12px;">
-      <span style="font-size: 14px;">Bearer Token</span>
-      <input id="tokenInput" type="password" placeholder="填写服务 Token" style="width: min(220px, 100%);">
-    </label>
-    <button id="saveTokenBtn" class="ghost">保存配置</button>
-    <button id="themeToggleBtn" class="ghost">切换浅色</button>
-  </div>
-</header>
-<main>
-  <div id="statusBox" class="status">系统已就绪，等待操作</div>
+<body>
+<div id="root"></div>
+<script type="text/babel">
 
-  <nav class="tab-nav" aria-label="Admin sections">
-    <button id="botTabBtn" class="tab-btn active" data-tab="bot">EH Bot</button>
-    <button id="metadataTabBtn" class="tab-btn" data-tab="metadata">Metadata</button>
-    <button id="jobsTabBtn" class="tab-btn" data-tab="jobs">Job History</button>
-  </nav>
+/* ═══════════════════════════════════════════════════════════
+   Destructure React & Ant Design
+   ═══════════════════════════════════════════════════════════ */
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+const {
+  ConfigProvider, Layout, Tabs, Card, Form, Input, InputNumber, Select,
+  Button, Table, Tag, Alert, Modal, Space, Row, Col, Statistic,
+  Checkbox, Typography, Divider, Popconfirm, Descriptions, Switch,
+  Flex, Tooltip,
+} = antd;
+const { Header, Content } = Layout;
+const { TextArea, Password, Search } = Input;
+const { Text, Title } = Typography;
+const { darkAlgorithm, defaultAlgorithm } = antd.theme;
 
-  <div id="botTabPanel" class="tab-panel active">
-
-  <section class="panel wide">
-    <div class="row" style="margin-bottom: 16px;">
-      <div>
-        <h2>EH Bot Pull / Import</h2>
-        <div class="muted">Manage bot polling, claim, artifact download, import, and auto-rescan separately from metadata enrichment.</div>
-      </div>
-      <div class="spacer"></div>
-      <button id="runEHBotPullBtn" class="primary">Run Once</button>
-      <button id="refreshEHBotBtn" class="ghost">Refresh EH Bot</button>
-    </div>
-    <div class="row" style="margin-top: 0; margin-bottom: 8px;">
-      <strong>EH Bot Config</strong>
-      <div class="spacer"></div>
-      <button id="loadEHBotConfigBtn" class="ghost">Reload Config</button>
-      <button id="saveEHBotConfigBtn" class="primary">Save Config</button>
-    </div>
-    <div class="field-grid" id="ehbotConfigForm">
-      <label class="checkbox field-span-2" style="min-width: 0; align-items: center;"><input id="ehbotConfigEnabled" type="checkbox"> Enable automatic EH Bot polling</label>
-      <label class="field-span-2"><span>Base URL</span><input id="ehbotConfigBaseURL" type="text" placeholder="https://ehbot.example.com"></label>
-      <label><span>Consumer ID</span><input id="ehbotConfigConsumerID" type="text" placeholder="home-server"></label>
-      <label><span>Target ID</span><input id="ehbotConfigTargetID" type="text" placeholder="home-server"></label>
-      <label><span>Target Library</span><select id="ehbotConfigTargetLibraryID"></select></label>
-      <label><span>Target Subdir</span><input id="ehbotConfigTargetSubdir" type="text" placeholder="EH Inbox"></label>
-      <label><span>Poll Interval (s)</span><input id="ehbotConfigPollIntervalSeconds" type="number" min="1" step="1"></label>
-      <label><span>Lease Seconds</span><input id="ehbotConfigLeaseSeconds" type="number" min="1" step="1"></label>
-      <label><span>Download Timeout (s)</span><input id="ehbotConfigDownloadTimeoutSeconds" type="number" min="1" step="1"></label>
-      <label><span>Max Jobs Per Poll</span><input id="ehbotConfigMaxJobsPerPoll" type="number" min="1" step="1"></label>
-      <label class="checkbox" style="min-width: 0; align-items: center;"><input id="ehbotConfigAutoRescan" type="checkbox"> Auto rescan after import</label>
-      <label class="checkbox" style="min-width: 0; align-items: center;"><input id="ehbotConfigClearPullToken" type="checkbox"> Clear stored pull token</label>
-      <label class="field-span-2"><span>Pull Token</span><input id="ehbotConfigPullToken" type="password" placeholder="Leave blank to keep current token"></label>
-    </div>
-    <div class="row" style="margin-top: 12px;">
-      <div class="muted">Config file: <span id="ehbotConfigPath" class="mono">-</span></div>
-      <div id="ehbotConfigWritableState">-</div>
-      <div id="ehbotPullTokenState">-</div>
-    </div>
-    <div class="help" id="ehbotConfigSaveSummary">Leave pull token blank to keep the current secret. Enable clear token to remove it.</div>
-    <div class="row" style="margin-top: 16px; margin-bottom: 8px;">
-      <strong>创建远程下载任务</strong>
-      <div class="spacer"></div>
-      <button id="createEHBotJobBtn" class="primary">创建下载任务</button>
-    </div>
-    <div class="field-grid" id="ehbotCreateForm">
-      <label class="field-span-2"><span>漫画链接 / gid/token</span><input id="ehbotCreateInput" type="text" placeholder="https://e-hentai.org/g/... 或 12345/abcdef"></label>
-      <label><span>Target ID</span><input id="ehbotCreateTargetID" type="text" placeholder="留空则使用当前配置"></label>
-    </div>
-    <div class="help">这个按钮会通过 Home Server 代理请求 `ehbot_server` 创建远程下载任务，无需依赖 Telegram。</div>
-    <div class="summary-grid">
-      <div class="summary-card"><div class="muted">Mode</div><div id="ehbotRunState">-</div></div>
-      <div class="summary-card"><div class="muted">Target</div><div id="ehbotTarget">-</div></div>
-      <div class="summary-card"><div class="muted">Last Activity</div><div id="ehbotLastActivity">-</div></div>
-    </div>
-    <div class="help" id="ehbotConfigSummary" style="margin-top: 16px;">Waiting for EH Bot status...</div>
-    <div class="table-toolbar" style="margin-top: 12px;">
-      <div class="filters">
-        <label><span>搜索</span><input id="ehbotJobsSearch" type="text" placeholder="job_id / 标题 / 路径"></label>
-        <label><span>状态</span>
-          <select id="ehbotJobsStatus">
-            <option value="">全部状态</option>
-            <option value="queued">queued</option>
-            <option value="running">running</option>
-            <option value="done">done</option>
-            <option value="failed">failed</option>
-            <option value="accepted">accepted</option>
-          </select>
-        </label>
-        <label class="checkbox" style="min-width: 0; align-items: center;">
-          <input id="ehbotJobsAggregate" type="checkbox" checked> 聚合同状态相邻记录
-        </label>
-      </div>
-      <div id="ehbotJobsSummary" class="table-summary">-</div>
-    </div>
-    <div class="scroll" style="margin-top: 12px;">
-      <table id="ehbotJobsTable" class="data-table">
-        <thead>
-          <tr><th>Local Job</th><th>Status</th><th>Remote Job</th><th>Target</th><th>Progress</th><th>Imported Path</th><th>Error</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-  </div>
-
-  <div id="metadataTabPanel" class="tab-panel">
-    <div class="grid">
-      <section class="panel">
-        <h2>批量补全任务（Batch Enrich）</h2>
-        <div class="row">
-          <label><span>书库（Library）</span><input id="enrichLibrary" placeholder="例如 local-main"></label>
-          <label><span>状态（State）</span>
-            <select id="enrichState">
-              <option value="empty">empty</option>
-              <option value="ready">ready</option>
-              <option value="stale">stale</option>
-              <option value="error">error</option>
-              <option value="missing">missing</option>
-            </select>
-          </label>
-          <label><span>来源（Source）</span><select id="enrichSource"><option value="">自动选择可用数据源</option></select></label>
-        </div>
-        <div class="row">
-          <label><span>上限（Limit）</span><input id="enrichLimit" type="number" value="200" min="1" max="2000"></label>
-          <label><span>最低分（Min Score）</span><input id="enrichScore" type="number" value="0.72" min="0" max="1" step="0.01"></label>
-          <label><span>并发（Workers）</span><input id="enrichWorkers" type="number" value="3" min="1" max="4"></label>
-        </div>
-        <div class="row" style="margin-top: 24px;">
-          <button id="triggerEnrichBtn" class="primary">开始补全任务</button>
-          <button id="refreshSourcesBtn" class="ghost">刷新数据源</button>
-          <button id="refreshJobsBtn" class="ghost">刷新任务状态</button>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>元数据管理</h2>
-        <div class="row">
-          <label><span>书库（Library）</span><input id="mgmtLibrary" placeholder="例如 local-main"></label>
-          <label><span>missing 保留天数</span><input id="cleanupOlderThanDays" type="number" value="0" min="0"></label>
-        </div>
-        <div class="row">
-          <button id="rescanLibraryBtn" class="ghost">重扫当前书库</button>
-          <button id="rescanAllBtn" class="ghost">重扫全部</button>
-          <button id="cleanupDryRunBtn" class="ghost">测试清理（Dry Run）</button>
-          <button id="cleanupExecuteBtn" class="warn">清理失效记录</button>
-        </div>
-        <div class="help" id="cleanupSummary" style="margin-top: 12px;">清理仅处理 missing 记录，建议先试运行（Dry Run）；重扫和清理将使用上方指定的书库。</div>
-      </section>
-    </div>
-
-    <section class="panel wide">
-      <div class="row" style="margin-bottom: 16px;">
-        <h2>后台任务（Jobs）</h2>
-        <div class="spacer"></div>
-        <button id="togglePollBtn" class="ghost">暂停自动刷新</button>
-      </div>
-      <div class="table-toolbar">
-        <div class="filters">
-          <label><span>搜索</span><input id="jobsSearch" type="text" placeholder="job_id / 类型 / 书库 / 路径"></label>
-          <label><span>状态</span>
-            <select id="jobsStatus">
-              <option value="">全部状态</option>
-              <option value="queued">queued</option>
-              <option value="running">running</option>
-              <option value="done">done</option>
-              <option value="failed">failed</option>
-              <option value="ready">ready</option>
-              <option value="accepted">accepted</option>
-            </select>
-          </label>
-          <label class="checkbox" style="min-width: 0; align-items: center;">
-            <input id="jobsAggregate" type="checkbox" checked> 聚合同类相邻记录
-          </label>
-        </div>
-        <div id="jobsSummary" class="table-summary">-</div>
-      </div>
-      <div class="scroll" style="margin-top: 12px;"><table id="jobsTable" class="data-table"><thead><tr><th>任务 ID</th><th>类型</th><th>状态</th><th>书库</th><th>来源</th><th>进度</th><th>错误日志</th></tr></thead><tbody></tbody></table></div>
-    </section>
-
-    <section class="panel wide">
-      <div class="row" style="margin-bottom: 16px;">
-        <h2>本地元数据记录（Local Records）</h2>
-        <div class="spacer"></div>
-        <button id="queryRecordsBtn" class="primary">查询记录</button>
-      </div>
-      <div class="table-toolbar">
-        <div class="filters">
-          <label><span>书库（Library）</span><input id="recordLibrary" placeholder="留空表示全部书库"></label>
-          <label><span>状态（State）</span>
-            <select id="recordState">
-              <option value="">全部状态</option>
-              <option value="empty">empty</option>
-              <option value="ready">ready</option>
-              <option value="stale">stale</option>
-              <option value="error">error</option>
-              <option value="missing">missing</option>
-              <option value="locked">locked</option>
-            </select>
-          </label>
-          <label><span>搜索关键词</span><input id="recordSearch" placeholder="标题 / 路径 / 来源模糊搜索"></label>
-        </div>
-        <div class="toolbar-right">
-          <div id="recordSummary" class="table-summary">-</div>
-          <div id="recordPagination" class="table-pagination"></div>
-          <label><span>每页</span>
-            <select id="recordLimit">
-              <option value="30">30</option>
-              <option value="50" selected>50</option>
-              <option value="100">100</option>
-              <option value="200">200</option>
-            </select>
-          </label>
-        </div>
-      </div>
-      <div class="table-toolbar" style="margin-top: 8px;">
-        <span id="recordSelectionSummary" class="muted">未选择记录</span>
-        <select id="recordBatchAction" style="width: auto;">
-          <option value="">请选择批量动作...</option>
-          <option value="lock">锁定（Lock）</option>
-          <option value="unlock">解锁（Unlock）</option>
-          <option value="reset">重置（Reset）</option>
-          <option value="enrich">重新补全（Enrich）</option>
-        </select>
-        <button id="applyBatchActionBtn" class="primary" disabled>应用到已选</button>
-        <button id="clearSelectedRecordsBtn" class="ghost" disabled>清空选择</button>
-      </div>
-      <div class="scroll" style="margin-top: 12px;"><table id="recordsTable" class="data-table"><thead><tr><th style="width: 40px;"><input id="selectAllRecords" type="checkbox" aria-label="选择当前页全部记录"></th><th style="width: 80px;">状态</th><th>标题 / TAG</th><th>相对路径 / 绝对路径</th><th>来源信息</th><th style="width: 90px;">置信度</th><th style="width: 280px; text-align: right;">操作</th></tr></thead><tbody></tbody></table></div>
-    </section>
-
-    <div class="grid">
-      <section class="panel">
-        <div class="row" style="margin-bottom: 16px;">
-          <h2>外部数据源（External Sources）</h2>
-        </div>
-        <div class="help" id="sourceDirLabel" style="margin-bottom: 16px;"></div>
-        <div class="scroll"><table id="sourcesTable" class="wide-table"><thead><tr><th>名称 / 路径</th><th>目标</th><th>行数</th><th>状态</th><th>操作</th></tr></thead><tbody></tbody></table></div>
-      </section>
-
-      <section class="panel">
-        <h2>数据源浏览（Browse Data）</h2>
-        <div class="table-toolbar">
-          <div class="filters">
-            <label><span>选择源库</span><select id="browseSource"></select></label>
-            <label><span>模糊查询</span><input id="browseQuery" placeholder="标题 / 作者模糊搜索"></label>
-          </div>
-          <div class="toolbar-right">
-            <div id="browseSummary" class="table-summary"></div>
-            <div id="browsePagination" class="table-pagination"></div>
-            <label><span>每页</span>
-              <select id="browseLimit">
-                <option value="30" selected>30</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-                <option value="200">200</option>
-              </select>
-            </label>
-            <button id="browseBtn" class="primary">查询数据</button>
-          </div>
-        </div>
-        <div class="scroll" style="margin-top: 12px;"><table id="browseTable" class="wide-table"><thead></thead><tbody></tbody></table></div>
-      </section>
-    </div>
-  </div>
-
-  <div id="jobsTabPanel" class="tab-panel">
-    <section class="panel wide">
-      <div class="row" style="margin-bottom: 16px;">
-        <div>
-          <h2>统一 Job 历史</h2>
-          <div class="muted">汇总显示 metadata、EH Bot 拉取，以及手动触发的远程建单等后台任务记录。</div>
-        </div>
-        <div class="spacer"></div>
-        <button id="refreshJobHistoryBtn" class="ghost">刷新 Job 历史</button>
-      </div>
-      <div class="table-toolbar">
-        <div class="filters">
-          <label><span>类型</span><input id="jobHistoryKind" type="text" placeholder="如 metadata.refresh / ehbot.pull"></label>
-          <label><span>触发方式</span><select id="jobHistoryTrigger"><option value="">全部</option><option value="manual">manual</option><option value="auto">auto</option><option value="rescan">rescan</option><option value="refresh">refresh</option><option value="enrich">enrich</option><option value="record_action">record_action</option><option value="startup">startup</option></select></label>
-          <label><span>状态</span><select id="jobHistoryStatus"><option value="">全部</option><option value="queued">queued</option><option value="running">running</option><option value="done">done</option><option value="failed">failed</option><option value="ready">ready</option><option value="accepted">accepted</option></select></label>
-          <label><span>书库</span><input id="jobHistoryLibrary" type="text" placeholder="如 local-main"></label>
-          <label class="checkbox" style="min-width: 0; align-items: center;">
-            <input id="jobHistoryAggregate" type="checkbox" checked>
-            聚合同类同状态相邻记录
-          </label>
-        </div>
-        <div class="toolbar-right">
-          <div id="jobHistorySummary" class="table-summary">-</div>
-          <div id="jobHistoryPagination" class="table-pagination"></div>
-          <label><span>每页</span>
-            <select id="jobHistoryLimit">
-              <option value="30">30</option>
-              <option value="50">50</option>
-              <option value="100" selected>100</option>
-              <option value="200">200</option>
-            </select>
-          </label>
-        </div>
-      </div>
-      <div class="scroll" style="margin-top: 12px;">
-        <table id="jobHistoryTable" class="data-table">
-          <thead>
-            <tr><th>任务 ID</th><th>类型</th><th>触发</th><th>状态</th><th>书库/目标</th><th>时间</th><th>摘要</th><th>错误</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-</main>
-
-<div id="sidecarModal" class="modal hidden" aria-hidden="true">
-  <div class="dialog">
-    <div class="row">
-      <div>
-        <h2 style="margin: 0;">编辑 `.venera.json`（Sidecar）</h2>
-        <div id="sidecarMeta" class="muted" style="margin-top: 4px;">未选择记录</div>
-      </div>
-      <div class="spacer"></div>
-      <button id="sidecarReloadBtn" class="ghost">重新读取</button>
-      <button id="sidecarTemplateBtn" class="ghost">应用模板</button>
-      <button id="closeSidecarBtn" class="ghost">关闭</button>
-    </div>
-    <div class="summary-grid">
-      <div class="summary-card"><div class="muted">文件路径</div><div id="sidecarPath" class="mono">-</div></div>
-      <div class="summary-card"><div class="muted">当前状态</div><div id="sidecarState">-</div></div>
-      <div class="summary-card"><div class="muted">存储后端</div><div id="sidecarBackend">-</div></div>
-    </div>
-    <label class="checkbox" style="font-size: 14px; font-weight: normal;"><input id="sidecarAutoRescan" type="checkbox" checked> 保存或删除后，自动触发该书库的 Rescan 任务</label>
-    <textarea id="sidecarEditor" class="mono" spellcheck="false" placeholder="在此处直接编辑 JSON 内容..."></textarea>
-    <div class="row" style="margin-top: 8px;">
-      <button id="sidecarSaveBtn" class="primary">保存 Sidecar 文件</button>
-      <button id="sidecarDeleteBtn" class="warn">删除文件</button>
-      <div class="spacer"></div>
-      <span id="sidecarSummary" class="muted">等待操作</span>
-    </div>
-  </div>
-</div>
-<script>
-
-const state = {
-  poll: true,
-  theme: 'dark',
-  activeTab: 'bot',
-  sources: [],
-  ehbotStatus: null,
-  ehbotConfig: null,
-  ehbotJobs: [],
-  jobs: [],
-  selectedRecords: {},
-  lastRecordItems: [],
-  sidecar: { locator: null, item: null, info: null },
-  recordsPage: 1,
-  browsePage: 1,
-  jobHistoryPage: 1,
-};
-
-const tokenInput = document.getElementById('tokenInput');
-const statusBox = document.getElementById('statusBox');
-const togglePollBtn = document.getElementById('togglePollBtn');
-const themeToggleBtn = document.getElementById('themeToggleBtn');
-const sidecarModal = document.getElementById('sidecarModal');
-
-tokenInput.value = localStorage.getItem('venera_admin_token') || '';
-applyTheme(preferredTheme());
-
-document.getElementById('saveTokenBtn').addEventListener('click', () => {
-  localStorage.setItem('venera_admin_token', tokenInput.value.trim());
-  setStatus('配置已保存', 'ok');
-});
-document.getElementById('triggerEnrichBtn').addEventListener('click', triggerEnrich);
-document.getElementById('refreshSourcesBtn').addEventListener('click', refreshSources);
-document.getElementById('refreshJobsBtn').addEventListener('click', refreshJobs);
-document.getElementById('jobsSearch').addEventListener('input', renderJobs);
-document.getElementById('jobsStatus').addEventListener('change', renderJobs);
-document.getElementById('jobsAggregate').addEventListener('change', renderJobs);
-document.getElementById('runEHBotPullBtn').addEventListener('click', runEHBotPullOnce);
-document.getElementById('refreshEHBotBtn').addEventListener('click', async () => { await Promise.all([refreshEHBotStatus(), refreshEHBotJobs()]); });
-document.getElementById('ehbotJobsSearch').addEventListener('input', renderEHBotJobs);
-document.getElementById('ehbotJobsStatus').addEventListener('change', renderEHBotJobs);
-document.getElementById('ehbotJobsAggregate').addEventListener('change', renderEHBotJobs);
-document.getElementById('loadEHBotConfigBtn').addEventListener('click', loadEHBotConfig);
-document.getElementById('saveEHBotConfigBtn').addEventListener('click', saveEHBotConfig);
-document.getElementById('ehbotConfigClearPullToken').addEventListener('change', syncEHBotTokenInputs);
-document.getElementById('createEHBotJobBtn').addEventListener('click', createEHBotJob);
-document.getElementById('refreshJobHistoryBtn').addEventListener('click', () => refreshJobHistory(true));
-document.getElementById('jobHistoryLimit').addEventListener('change', () => refreshJobHistory(true));
-document.getElementById('jobHistoryAggregate').addEventListener('change', () => refreshJobHistory(false));
-document.getElementById('jobHistoryTrigger').addEventListener('change', () => refreshJobHistory(true));
-document.getElementById('jobHistoryStatus').addEventListener('change', () => refreshJobHistory(true));
-document.getElementById('jobHistoryKind').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') refreshJobHistory(true);
-});
-document.getElementById('jobHistoryLibrary').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') refreshJobHistory(true);
-});
-document.querySelectorAll('.tab-btn').forEach((button) => {
-  button.addEventListener('click', () => setActiveTab(button.dataset.tab));
-});
-document.getElementById('queryRecordsBtn').addEventListener('click', () => refreshRecords(true));
-document.getElementById('cleanupDryRunBtn').addEventListener('click', () => runCleanup(true));
-document.getElementById('cleanupExecuteBtn').addEventListener('click', () => runCleanup(false));
-document.getElementById('rescanLibraryBtn').addEventListener('click', rescanSelectedLibrary);
-document.getElementById('rescanAllBtn').addEventListener('click', rescanAllLibraries);
-document.getElementById('browseBtn').addEventListener('click', () => browseSource(true));
-document.getElementById('browseLimit').addEventListener('change', () => browseSource(true));
-document.getElementById('recordBatchAction').addEventListener('change', syncRecordSelectionUI);
-document.getElementById('applyBatchActionBtn').addEventListener('click', applyBatchRecordAction);
-document.getElementById('clearSelectedRecordsBtn').addEventListener('click', clearRecordSelection);
-document.getElementById('selectAllRecords').addEventListener('change', (event) => setAllVisibleRecordSelection(event.target.checked));
-document.getElementById('sidecarReloadBtn').addEventListener('click', loadSidecar);
-document.getElementById('sidecarTemplateBtn').addEventListener('click', applySidecarTemplate);
-document.getElementById('sidecarSaveBtn').addEventListener('click', saveSidecar);
-document.getElementById('sidecarDeleteBtn').addEventListener('click', deleteSidecar);
-document.getElementById('closeSidecarBtn').addEventListener('click', closeSidecar);
-document.getElementById('recordSearch').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') refreshRecords(true);
-});
-document.getElementById('recordLimit').addEventListener('change', () => refreshRecords(true));
-document.getElementById('browseQuery').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') browseSource(true);
-});
-togglePollBtn.addEventListener('click', () => {
-  state.poll = !state.poll;
-  updatePollButton();
-});
-themeToggleBtn.addEventListener('click', () => {
-  applyTheme(state.theme === 'dark' ? 'light' : 'dark');
-});
-sidecarModal.addEventListener('click', (event) => {
-  if (event.target === sidecarModal) closeSidecar();
-});
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !sidecarModal.classList.contains('hidden')) closeSidecar();
-});
-
-function preferredTheme() {
-  const stored = localStorage.getItem('venera_admin_theme');
-  if (stored === 'dark' || stored === 'light') return stored;
-  return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-}
-
-function applyTheme(theme) {
-  state.theme = theme;
-  document.body.dataset.theme = theme;
-  localStorage.setItem('venera_admin_theme', theme);
-  themeToggleBtn.textContent = theme === 'dark' ? '切换到浅色' : '切换到深色';
-}
-
-function updatePollButton() {
-  togglePollBtn.textContent = state.poll ? '暂停自动刷新' : '恢复自动刷新';
-}
-
-function authHeaders() {
-  const token = tokenInput.value.trim();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-async function fetchJSON(url, options = {}) {
-  const headers = { ...(options.headers || {}), ...authHeaders() };
-  if (options.body != null && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
-  }
-  const response = await fetch(url, { ...options, headers });
-  const text = await response.text();
-  let json = {};
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch (_) {}
-  if (!response.ok) {
-    const message = json?.error?.message || `${response.status} ${response.statusText}`;
-    throw new Error(message);
-  }
-  return json.data;
-}
-
-function setStatus(message, kind = '') {
-  statusBox.textContent = message || '系统已就绪，等待操作';
-  statusBox.className = `status${kind ? ` ${kind}` : ''}`;
-}
-
-function htmlEscape(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function currentMaintenanceLibrary() {
-  return document.getElementById('mgmtLibrary').value.trim();
-}
-
-function pill(text, kind = '') {
-  return `<span class="pill ${kind}">${htmlEscape(text || '-')}</span>`;
-}
-
-function renderEmptyRow(colspan, message) {
-  return `<tr><td colspan="${colspan}" class="table-empty">${htmlEscape(message)}</td></tr>`;
-}
-
-function copyToClipboard(text) {
-  if (!text) return;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => {
-      setStatus(`已复制到剪贴板: ${text}`, 'ok');
-    }).catch(err => {
-      setStatus(`复制失败: ${err.message}`, 'err');
-    });
-  } else {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      const success = document.execCommand('copy');
-      document.body.removeChild(ta);
-      if (success) {
-        setStatus(`已复制到剪贴板: ${text}`, 'ok');
-      } else {
-        setStatus('复制失败: 浏览器阻止了此操作', 'err');
-      }
-    } catch (err) {
-      setStatus(`复制异常: ${err.message}`, 'err');
-    }
-  }
-}
-
-function renderPagination(containerId, { page, total, pageSize, onPageChange }) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const currentPage = Math.min(Math.max(1, page), totalPages);
-  container.innerHTML = `
-    <button class="ghost" ${currentPage <= 1 ? 'disabled' : ''} data-page="${currentPage - 1}">上一页</button>
-    <span class="page-info">第 ${currentPage} / ${totalPages} 页</span>
-    <button class="ghost" ${currentPage >= totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">下一页</button>
-  `;
-  container.querySelectorAll('button[data-page]').forEach((btn) => {
-    btn.addEventListener('click', () => onPageChange(Number(btn.dataset.page)));
-  });
-}
-
-function setScrollLoading(tableId, loading) {
-  const table = document.getElementById(tableId);
-  if (!table) return;
-  const scroll = table.closest('.scroll');
-  if (scroll) scroll.classList.toggle('is-loading', loading);
-}
-
-function formatTableSummary({ total, filtered, displayed, aggregated }) {
-  const parts = [`共 ${total} 条`];
-  if (filtered != null && filtered !== total) parts.push(`过滤后 ${filtered} 条`);
-  parts.push(`当前显示 ${displayed} 行`);
-  if (aggregated) parts.push('（已聚合）');
-  return parts.join(' / ');
-}
-
+/* ═══════════════════════════════════════════════════════════
+   Utility Functions (ported from original)
+   ═══════════════════════════════════════════════════════════ */
 function normalizeQuery(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -959,10 +54,7 @@ function aggregateAdjacentItems(items, keyFn) {
   for (const item of Array.isArray(items) ? items : []) {
     const key = keyFn(item || {});
     const last = groups[groups.length - 1];
-    if (last && last.key === key) {
-      last.items.push(item);
-      continue;
-    }
+    if (last && last.key === key) { last.items.push(item); continue; }
     groups.push({ key, items: [item] });
   }
   return groups.map((group) => {
@@ -972,389 +64,17 @@ function aggregateAdjacentItems(items, keyFn) {
       ...latest,
       _group_count: group.items.length,
       _group_first_job_id: earliest.job_id || '',
-      _group_error_count: group.items.filter((entry) => entry && entry.error).length,
+      _group_error_count: group.items.filter((e) => e && e.error).length,
     };
   });
 }
 
 function aggregateEHBotItems(items) {
-  return aggregateAdjacentItems(items, (job) => `${job.status || ''}::${job.library_id || ''}::${job.remote_target_id || ''}`);
+  return aggregateAdjacentItems(items, (j) => `${j.status || ''}::${j.library_id || ''}::${j.remote_target_id || ''}`);
 }
 
 function aggregateJobsItems(items) {
-  return aggregateAdjacentItems(items, (job) => `${job.kind || ''}::${job.status || ''}::${job.library_id || ''}`);
-}
-function actionLabel(action) {
-  if (action === 'lock') return '锁定';
-  if (action === 'unlock') return '解锁';
-  if (action === 'reset') return '重置';
-  if (action === 'enrich') return '重新补全';
-  return action;
-}
-
-function encodeLocator(locator) {
-  return encodeURIComponent(JSON.stringify(locator || {}));
-}
-
-function decodeLocator(encodedLocator) {
-  try {
-    return JSON.parse(decodeURIComponent(encodedLocator || '')) || {};
-  } catch (_) {
-    return {};
-  }
-}
-
-function locatorKey(locator) {
-  if (!locator || typeof locator !== 'object') {
-    return '';
-  }
-  return `${locator.library_id || ''}::${locator.root_type || ''}::${locator.root_ref || ''}`;
-}
-
-function storeSelectedRecord(locator, checked) {
-  const key = locatorKey(locator);
-  if (!key) return;
-  if (checked) {
-    state.selectedRecords[key] = locator;
-  } else {
-    delete state.selectedRecords[key];
-  }
-}
-
-function toggleRecordSelection(encodedLocator, checked) {
-  storeSelectedRecord(decodeLocator(encodedLocator), checked);
-  syncRecordSelectionUI();
-}
-
-function setAllVisibleRecordSelection(checked) {
-  for (const item of state.lastRecordItems) {
-    storeSelectedRecord(item.locator || {}, checked);
-  }
-  syncRecordSelectionUI();
-}
-
-function clearRecordSelection() {
-  state.selectedRecords = {};
-  syncRecordSelectionUI();
-}
-
-function syncRecordSelectionUI() {
-  const selectedKeys = Object.keys(state.selectedRecords);
-  const count = selectedKeys.length;
-  document.getElementById('recordSelectionSummary').textContent = count === 0 ? '未选择记录' : `已选择 ${count} 条记录`;
-  document.getElementById('applyBatchActionBtn').disabled = count === 0 || !document.getElementById('recordBatchAction').value;
-  document.getElementById('clearSelectedRecordsBtn').disabled = count === 0;
-
-  const visibleKeys = state.lastRecordItems.map((item) => locatorKey(item.locator || {})).filter(Boolean);
-  const selectedVisibleCount = visibleKeys.filter((key) => state.selectedRecords[key]).length;
-  const selectAll = document.getElementById('selectAllRecords');
-  selectAll.checked = visibleKeys.length > 0 && selectedVisibleCount === visibleKeys.length;
-  selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleKeys.length;
-
-  document.querySelectorAll('#recordsTable tbody input[data-record-key]').forEach((input) => {
-    input.checked = Boolean(state.selectedRecords[input.dataset.recordKey || '']);
-  });
-}
-
-function renderState(value) {
-  const labelMap = {
-    empty: '空',
-    ready: '就绪',
-    stale: '过期',
-    error: '错误',
-    missing: '缺失',
-    locked: '已锁定',
-    done: '完成',
-    failed: '失败',
-    running: '进行中',
-    queued: '排队中',
-    accepted: '已接收',
-  };
-  const kind = value === 'done' || value === 'ready' || value === 'accepted'
-    ? 'ok'
-    : value === 'failed' || value === 'error' || value === 'missing'
-      ? 'err'
-      : value === 'running' || value === 'stale' || value === 'locked' || value === 'queued'
-        ? 'warn'
-        : '';
-  return pill(labelMap[value] || value || '-', kind);
-}
-
-function formatJobSources(job) {
-  if (Array.isArray(job.sources) && job.sources.length > 0) {
-    return job.sources.join(', ');
-  }
-  return job.source_id || '-';
-}
-
-function formatJobProgress(job) {
-  const parts = [];
-  if (job.path) parts.push(job.path);
-  if (job.examined || job.processed) {
-    parts.push(`${job.processed || 0}/${job.examined || job.processed || 0}`);
-  }
-  if (job.matched || job.matched === 0) parts.push(`matched ${job.matched || 0}`);
-  if (job.updated || job.updated === 0) parts.push(`updated ${job.updated || 0}`);
-  if (job.skipped || job.skipped === 0) parts.push(`skipped ${job.skipped || 0}`);
-  if (job.unmatched || job.unmatched === 0) parts.push(`unmatched ${job.unmatched || 0}`);
-  return parts.join(' / ') || '-';
-}
-function formatDateTime(value) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
-function formatEHBotProgress(job) {
-  const parts = [];
-  parts.push(`listed ${job.listed || 0}`);
-  parts.push(`eligible ${job.eligible || 0}`);
-  parts.push(`claimed ${job.claimed || 0}`);
-  parts.push(`imported ${job.imported || 0}`);
-  parts.push(`failed ${job.failed || 0}`);
-  return parts.join(' | ');
-}
-
-function loadPreferredTab() {
-  const stored = localStorage.getItem('venera_admin_tab');
-  return ['bot', 'metadata', 'jobs'].includes(stored) ? stored : 'bot';
-}
-
-function setActiveTab(tab) {
-  state.activeTab = ['metadata', 'jobs'].includes(tab) ? tab : 'bot';
-  document.getElementById('botTabBtn').classList.toggle('active', state.activeTab === 'bot');
-  document.getElementById('metadataTabBtn').classList.toggle('active', state.activeTab === 'metadata');
-  document.getElementById('jobsTabBtn').classList.toggle('active', state.activeTab === 'jobs');
-  document.getElementById('botTabPanel').classList.toggle('active', state.activeTab === 'bot');
-  document.getElementById('metadataTabPanel').classList.toggle('active', state.activeTab === 'metadata');
-  document.getElementById('jobsTabPanel').classList.toggle('active', state.activeTab === 'jobs');
-  localStorage.setItem('venera_admin_tab', state.activeTab);
-}
-
-function syncEHBotTokenInputs() {
-  const clear = document.getElementById('ehbotConfigClearPullToken').checked;
-  const input = document.getElementById('ehbotConfigPullToken');
-  input.disabled = clear;
-  if (clear) input.value = '';
-}
-
-function renderEHBotLibraryOptions(libraries, selected) {
-  const select = document.getElementById('ehbotConfigTargetLibraryID');
-  const items = Array.isArray(libraries) ? libraries : [];
-  let hasSelected = false;
-  const options = ['<option value="">Select target library</option>'];
-  for (const item of items) {
-    if (item.id === selected) hasSelected = true;
-    options.push(`<option value="${htmlEscape(item.id || '')}">${htmlEscape(item.name || item.id || '')} (${htmlEscape(item.kind || '-')})</option>`);
-  }
-  if (selected && !hasSelected) {
-    options.push(`<option value="${htmlEscape(selected)}">${htmlEscape(selected)}</option>`);
-  }
-  select.innerHTML = options.join('');
-  select.value = selected || '';
-}
-
-function populateEHBotConfigForm(data) {
-  state.ehbotConfig = data || null;
-  renderEHBotLibraryOptions(data?.libraries || [], data?.target_library_id || '');
-  document.getElementById('ehbotConfigEnabled').checked = Boolean(data?.enabled);
-  document.getElementById('ehbotConfigBaseURL').value = data?.base_url || '';
-  document.getElementById('ehbotConfigPullToken').value = '';
-  document.getElementById('ehbotConfigClearPullToken').checked = false;
-  document.getElementById('ehbotConfigConsumerID').value = data?.consumer_id || '';
-  document.getElementById('ehbotConfigTargetID').value = data?.target_id || '';
-  document.getElementById('ehbotConfigTargetSubdir').value = data?.target_subdir || '';
-  document.getElementById('ehbotConfigPollIntervalSeconds').value = data?.poll_interval_seconds || 60;
-  document.getElementById('ehbotConfigLeaseSeconds').value = data?.lease_seconds || 1800;
-  document.getElementById('ehbotConfigDownloadTimeoutSeconds').value = data?.download_timeout_seconds || 1800;
-  document.getElementById('ehbotConfigAutoRescan').checked = Boolean(data?.auto_rescan);
-  document.getElementById('ehbotConfigMaxJobsPerPoll').value = data?.max_jobs_per_poll || 1;
-  document.getElementById('ehbotConfigPath').textContent = data?.config_path || '-';
-  document.getElementById('ehbotConfigWritableState').innerHTML = data?.writable ? pill('可写', 'ok') : pill('只读', 'warn');
-  document.getElementById('ehbotPullTokenState').innerHTML = data?.pull_token_configured ? pill('已配置 Token', 'ok') : pill('Token 为空', 'warn');
-  document.getElementById('ehbotConfigSaveSummary').textContent = data?.rewrite_warning || 'Pull Token 留空表示保持现状；勾选清空则移除已有 token。';
-  document.getElementById('saveEHBotConfigBtn').disabled = !data?.writable;
-  syncEHBotTokenInputs();
-}
-
-async function loadEHBotConfig() {
-  try {
-    const data = await fetchJSON('/api/v1/admin/ehbot/config');
-    populateEHBotConfigForm(data);
-  } catch (error) {
-    document.getElementById('ehbotConfigSaveSummary').textContent = error.message;
-    document.getElementById('ehbotConfigWritableState').innerHTML = pill('加载失败', 'err');
-    document.getElementById('saveEHBotConfigBtn').disabled = true;
-    setStatus(`EH Bot 配置加载失败：${error.message}`, 'err');
-  }
-}
-
-async function saveEHBotConfig() {
-  const payload = {
-    enabled: document.getElementById('ehbotConfigEnabled').checked,
-    base_url: document.getElementById('ehbotConfigBaseURL').value.trim(),
-    pull_token: document.getElementById('ehbotConfigPullToken').value.trim(),
-    clear_pull_token: document.getElementById('ehbotConfigClearPullToken').checked,
-    consumer_id: document.getElementById('ehbotConfigConsumerID').value.trim(),
-    target_id: document.getElementById('ehbotConfigTargetID').value.trim(),
-    target_library_id: document.getElementById('ehbotConfigTargetLibraryID').value,
-    target_subdir: document.getElementById('ehbotConfigTargetSubdir').value.trim(),
-    poll_interval_seconds: Number(document.getElementById('ehbotConfigPollIntervalSeconds').value || 0),
-    lease_seconds: Number(document.getElementById('ehbotConfigLeaseSeconds').value || 0),
-    download_timeout_seconds: Number(document.getElementById('ehbotConfigDownloadTimeoutSeconds').value || 0),
-    auto_rescan: document.getElementById('ehbotConfigAutoRescan').checked,
-    max_jobs_per_poll: Number(document.getElementById('ehbotConfigMaxJobsPerPoll').value || 0),
-  };
-  try {
-    const data = await fetchJSON('/api/v1/admin/ehbot/config', { method: 'PUT', body: JSON.stringify(payload) });
-    populateEHBotConfigForm(data);
-    await Promise.all([refreshEHBotStatus(), refreshEHBotJobs()]);
-    setStatus('EH Bot 配置已保存', 'ok');
-  } catch (error) {
-    document.getElementById('ehbotConfigSaveSummary').textContent = error.message;
-    setStatus(`EH Bot 配置保存失败：${error.message}`, 'err');
-  }
-}
-
-async function createEHBotJob() {
-  try {
-    const payload = {
-      input: document.getElementById('ehbotCreateInput').value.trim(),
-      target_id: document.getElementById('ehbotCreateTargetID').value.trim(),
-    };
-    if (!payload.input) {
-      setStatus('请先填写漫画链接或 gid/token', 'warn');
-      return;
-    }
-    const data = await fetchJSON('/api/v1/admin/ehbot/jobs/create', { method: 'POST', body: JSON.stringify(payload) });
-    document.getElementById('ehbotCreateInput').value = '';
-    setStatus(`EH Bot 远程下载任务已创建：${data.job_id || '-'}${data.title ? ` | ${data.title}` : ''}`, 'ok');
-    await Promise.all([refreshJobHistory(), refreshEHBotJobs(), refreshEHBotStatus()]);
-  } catch (error) {
-    setStatus(`EH Bot 远程建单失败：${error.message}`, 'err');
-  }
-}
-
-async function runEHBotPullOnce() {
-  try {
-    const data = await fetchJSON('/api/v1/admin/ehbot/pull/run-once', { method: 'POST', body: '{}' });
-    setStatus(`EH Bot 拉取任务已入队：${data.job_id || '-'}`, 'ok');
-    await Promise.all([refreshEHBotStatus(), refreshEHBotJobs()]);
-  } catch (error) {
-    setStatus(`EH Bot 拉取失败：${error.message}`, 'err');
-  }
-}
-
-async function refreshEHBotStatus() {
-  try {
-    const data = await fetchJSON('/api/v1/admin/ehbot/status');
-    state.ehbotStatus = data;
-    const mode = !data.configured
-      ? pill('配置错误', 'err')
-      : data.running
-        ? pill('运行中', 'warn')
-        : data.enabled
-          ? pill('自动轮询已启用', 'ok')
-          : pill('仅手动模式', 'warn');
-    document.getElementById('ehbotRunState').innerHTML = mode;
-    document.getElementById('ehbotTarget').innerHTML = `<div>${htmlEscape(data.target_library_id || '-')}</div><div class="muted mono">${htmlEscape(data.target_subdir || '/')} ${data.target_id ? ` | target=${htmlEscape(data.target_id)}` : ''}</div>`;
-    const lastPoll = formatDateTime(data.last_poll_at);
-    const lastSuccess = formatDateTime(data.last_success_at);
-    document.getElementById('ehbotLastActivity').innerHTML = `<div>${htmlEscape(lastPoll)}</div><div class="muted">${htmlEscape(lastSuccess)}</div>`;
-    const summary = [
-      `base_url=${data.base_url || '-'}`,
-      `consumer_id=${data.consumer_id || '-'}`,
-      `target_library=${data.target_library_id || '-'}`,
-      `library_kind=${data.target_library_kind || '-'}`,
-      `poll=${data.poll_interval_seconds || 0}s`,
-      `lease=${data.lease_seconds || 0}s`,
-      `download_timeout=${data.download_timeout_seconds || 0}s`,
-      `max_jobs=${data.max_jobs_per_poll || 0}`,
-      `auto_rescan=${data.auto_rescan ? 'true' : 'false'}`,
-      `queue=${data.queue_depth || 0}`,
-    ];
-    if (data.config_error) summary.push(`config_error=${data.config_error}`);
-    if (data.last_imported_path) summary.push(`last_imported=${data.last_imported_path}`);
-    document.getElementById('ehbotConfigSummary').innerHTML = `<span class="mono">${htmlEscape(summary.join(' | '))}</span>`;
-    document.getElementById('runEHBotPullBtn').disabled = !data.configured;
-  } catch (error) {
-    document.getElementById('ehbotRunState').innerHTML = pill('加载失败', 'err');
-    document.getElementById('ehbotConfigSummary').innerHTML = `<span class="mono">${htmlEscape(error.message)}</span>`;
-    setStatus(`EH Bot 状态加载失败：${error.message}`, 'err');
-  }
-}
-
-function renderEHBotJobs() {
-  const items = Array.isArray(state.ehbotJobs) ? state.ehbotJobs : [];
-  const query = normalizeQuery(document.getElementById('ehbotJobsSearch').value);
-  const status = document.getElementById('ehbotJobsStatus').value;
-  const filtered = items.filter((job) => {
-    if (status && (job.status || '') !== status) return false;
-    if (!matchesQuery([
-      job.job_id,
-      job.remote_job_id,
-      job.remote_title,
-      job.imported_path,
-      job.library_id,
-      job.remote_target_id,
-      job.error,
-      job.trigger,
-    ], query)) return false;
-    return true;
-  });
-  const aggregate = document.getElementById('ehbotJobsAggregate').checked;
-  const displayItems = aggregate ? aggregateEHBotItems(filtered) : filtered;
-  document.getElementById('ehbotJobsSummary').textContent = `共 ${items.length} 条 / 过滤后 ${filtered.length} 条 / 当前显示 ${displayItems.length} 行${aggregate ? '（已聚合）' : ''}`;
-  const tbody = document.querySelector('#ehbotJobsTable tbody');
-  tbody.innerHTML = displayItems.map((job) => {
-    const groupCount = Number(job._group_count || 1);
-    const groupMeta = groupCount > 1
-      ? `<div class="cell-sub">${pill('×' + groupCount, 'warn')} <span class="mono">最早 ${htmlEscape(job._group_first_job_id || '')}</span></div>`
-      : '';
-    const errorCell = (job.error || groupCount > 1)
-      ? `<div class="mono cell-error">${htmlEscape(job.error || '')}</div>${groupCount > 1 && (job._group_error_count || 0) > 0 ? `<div class="cell-sub">聚合内含 ${htmlEscape(job._group_error_count || 0)} 条错误记录</div>` : ''}`
-      : '-';
-    return `<tr>
-      <td class="mono">
-        <div class="cell-stack">
-          <div class="cell-title">${htmlEscape(job.job_id || '')}</div>
-          <div class="cell-sub">${htmlEscape(job.trigger || '-')}</div>
-          ${groupMeta}
-        </div>
-      </td>
-      <td>${renderState(job.status)}</td>
-      <td>
-        <div class="cell-stack">
-          <div class="mono cell-title">${htmlEscape(job.remote_job_id || '-')}</div>
-          <div class="cell-sub">${htmlEscape(job.remote_title || '')}</div>
-        </div>
-      </td>
-      <td>
-        <div class="cell-stack">
-          <div class="mono cell-title">${htmlEscape(job.library_id || '-')}</div>
-          <div class="cell-sub mono">${htmlEscape(job.remote_target_id || '')}</div>
-        </div>
-      </td>
-      <td class="mono">${htmlEscape(formatEHBotProgress(job))}</td>
-      <td class="mono">${htmlEscape(job.imported_path || '-')}</td>
-      <td>${errorCell}</td>
-    </tr>`;
-  }).join('') || renderEmptyRow(7, '暂无 EH Bot 任务。');
-}
-
-async function refreshEHBotJobs() {
-  setScrollLoading('ehbotJobsTable', true);
-  try {
-    const data = await fetchJSON('/api/v1/admin/ehbot/jobs');
-    state.ehbotJobs = data.items || [];
-    renderEHBotJobs();
-  } catch (error) {
-    document.getElementById('ehbotJobsSummary').textContent = '加载失败';
-    setStatus(`EH Bot 任务加载失败：${error.message}`, 'err');
-  } finally {
-    setScrollLoading('ehbotJobsTable', false);
-  }
+  return aggregateAdjacentItems(items, (j) => `${j.kind || ''}::${j.status || ''}::${j.library_id || ''}`);
 }
 
 function aggregateJobHistoryItems(items) {
@@ -1362,8 +82,7 @@ function aggregateJobHistoryItems(items) {
   for (const job of Array.isArray(items) ? items : []) {
     const last = groups[groups.length - 1];
     if (last && last.kind === (job.kind || '') && last.status === (job.status || '')) {
-      last.items.push(job);
-      continue;
+      last.items.push(job); continue;
     }
     groups.push({ kind: job.kind || '', status: job.status || '', items: [job] });
   }
@@ -1377,324 +96,60 @@ function aggregateJobHistoryItems(items) {
       _group_first_updated_at: earliest.updated_at || earliest.requested_at || '',
       _group_last_job_id: latest.job_id || '',
       _group_last_updated_at: latest.updated_at || latest.requested_at || '',
-      _group_error_count: group.items.filter((item) => item && item.error).length,
+      _group_error_count: group.items.filter((i) => i && i.error).length,
     };
   });
 }
 
-async function refreshJobHistory(resetPage = false) {
-  setScrollLoading('jobHistoryTable', true);
-  try {
-    if (resetPage) state.jobHistoryPage = 1;
-    const page = state.jobHistoryPage;
-    const limit = Number(document.getElementById('jobHistoryLimit').value || 100);
-    const params = new URLSearchParams({
-      kind: document.getElementById('jobHistoryKind').value.trim(),
-      trigger: document.getElementById('jobHistoryTrigger').value,
-      status: document.getElementById('jobHistoryStatus').value,
-      library_id: document.getElementById('jobHistoryLibrary').value.trim(),
-      page: String(page),
-      limit: String(limit),
-    });
-    const data = await fetchJSON(`/api/v1/admin/jobs?${params.toString()}`);
-    const rawItems = data.items || [];
-    const aggregate = document.getElementById('jobHistoryAggregate').checked;
-    const items = aggregate ? aggregateJobHistoryItems(rawItems) : rawItems;
-    const currentPage = Number(data.page || page || 1);
-    const total = Number(data.total || 0);
-    const pageSize = Number(data.page_size || limit || 100);
-    state.jobHistoryPage = currentPage;
-    document.getElementById('jobHistorySummary').textContent = formatTableSummary({
-      total,
-      displayed: items.length,
-      aggregated: aggregate,
-    }) + ` / 本页原始 ${rawItems.length} 条 / 每页 ${pageSize} 条`;
-    renderPagination('jobHistoryPagination', {
-      page: currentPage,
-      total,
-      pageSize,
-      onPageChange: (p) => { state.jobHistoryPage = p; refreshJobHistory(); },
-    });
-    const tbody = document.querySelector('#jobHistoryTable tbody');
-    tbody.innerHTML = items.map((job) => {
-      const target = [job.library_id || '', job.target_id || '', job.remote_job_id || ''].filter(Boolean).join(' / ');
-      const groupCount = Number(job._group_count || 1);
-      const idExtra = groupCount > 1
-        ? `<div class="cell-sub">${pill('×' + groupCount, 'warn')} <span class="mono">最早 ${htmlEscape(job._group_first_job_id || '')}</span></div>`
-        : '';
-      const timePrimary = formatDateTime(job.updated_at || job.requested_at);
-      const timeExtra = groupCount > 1
-        ? `<div class="cell-sub mono">起始 ${htmlEscape(formatDateTime(job._group_first_updated_at || job.requested_at))}</div>`
-        : '';
-      const summaryCell = groupCount > 1
-        ? `<div>${htmlEscape(job.summary || '-')}</div><div class="cell-sub">相邻 ${groupCount} 条相同类型且相同状态记录已折叠</div>`
-        : htmlEscape(job.summary || '-');
-      const errorCell = (job.error || groupCount > 1)
-        ? `<div class="mono cell-error">${htmlEscape(job.error || '')}</div>${groupCount > 1 && (job._group_error_count || 0) > 0 ? `<div class="cell-sub">聚合内含 ${htmlEscape(job._group_error_count || 0)} 条错误记录</div>` : ''}`
-        : '-';
-      return `<tr>
-        <td class="mono">
-          <div class="cell-stack">
-            <div class="cell-title">${htmlEscape(job.job_id || '')}</div>
-            ${idExtra}
-          </div>
-        </td>
-        <td>${pill(job.kind || '-')}</td>
-        <td>${pill(job.trigger || '-', job.trigger === 'manual' ? 'warn' : job.trigger ? 'ok' : '')}</td>
-        <td>${renderState(job.status)}</td>
-        <td>
-          <div class="cell-stack">
-            <div class="mono cell-title">${htmlEscape(target || '-')}</div>
-            <div class="cell-sub mono">${htmlEscape(job.path || '')}</div>
-          </div>
-        </td>
-        <td class="mono">
-          <div class="cell-stack">
-            <div class="cell-title">${htmlEscape(timePrimary || '-')}</div>
-            ${timeExtra}
-          </div>
-        </td>
-        <td>${summaryCell}</td>
-        <td>${errorCell}</td>
-      </tr>`;
-    }).join('') || renderEmptyRow(8, '暂无 Job 历史记录。');
-  } catch (error) {
-    setStatus(`Job 历史加载失败：${error.message}`, 'err');
-  } finally {
-    setScrollLoading('jobHistoryTable', false);
-  }
+function formatJobProgress(job) {
+  const p = [];
+  if (job.path) p.push(job.path);
+  if (job.examined || job.processed) p.push(`${job.processed || 0}/${job.examined || job.processed || 0}`);
+  if (job.matched != null) p.push(`matched ${job.matched || 0}`);
+  if (job.updated != null) p.push(`updated ${job.updated || 0}`);
+  if (job.skipped != null) p.push(`skipped ${job.skipped || 0}`);
+  if (job.unmatched != null) p.push(`unmatched ${job.unmatched || 0}`);
+  return p.join(' / ') || '-';
 }
 
-async function triggerEnrich() {
-  try {
-    const payload = {
-      library_id: document.getElementById('enrichLibrary').value.trim(),
-      state: document.getElementById('enrichState').value,
-      limit: Number(document.getElementById('enrichLimit').value || 200),
-      min_score: Number(document.getElementById('enrichScore').value || 0.72),
-      source_id: document.getElementById('enrichSource').value,
-      workers: Number(document.getElementById('enrichWorkers').value || 3),
-    };
-    const data = await fetchJSON('/api/v1/admin/metadata/enrich', { method: 'POST', body: JSON.stringify(payload) });
-    setStatus(`已提交补全任务 ${data.job_id || '-'}`, 'ok');
-    await refreshJobs();
-  } catch (error) {
-    setStatus(error.message, 'err');
-  }
+function formatEHBotProgress(job) {
+  return [`listed ${job.listed || 0}`, `eligible ${job.eligible || 0}`, `claimed ${job.claimed || 0}`, `imported ${job.imported || 0}`, `failed ${job.failed || 0}`].join(' | ');
 }
 
-function renderJobs() {
-  const items = Array.isArray(state.jobs) ? state.jobs : [];
-  const query = normalizeQuery(document.getElementById('jobsSearch').value);
-  const status = document.getElementById('jobsStatus').value;
-  const filtered = items.filter((job) => {
-    if (status && (job.status || '') !== status) return false;
-    if (!matchesQuery([
-      job.job_id,
-      job.kind,
-      job.library_id,
-      job.path,
-      job.error,
-      formatJobSources(job),
-    ], query)) return false;
-    return true;
-  });
-  const aggregate = document.getElementById('jobsAggregate').checked;
-  const displayItems = aggregate ? aggregateJobsItems(filtered) : filtered;
-  document.getElementById('jobsSummary').textContent = `共 ${items.length} 条 / 过滤后 ${filtered.length} 条 / 当前显示 ${displayItems.length} 行${aggregate ? '（已聚合）' : ''}`;
-  const tbody = document.querySelector('#jobsTable tbody');
-  tbody.innerHTML = displayItems.map((job) => {
-    const groupCount = Number(job._group_count || 1);
-    const groupMeta = groupCount > 1
-      ? `<div class="cell-sub">${pill('×' + groupCount, 'warn')} <span class="mono">最早 ${htmlEscape(job._group_first_job_id || '')}</span></div>`
-      : '';
-    const errorCell = (job.error || groupCount > 1)
-      ? `<div class="mono cell-error">${htmlEscape(job.error || '')}</div>${groupCount > 1 && (job._group_error_count || 0) > 0 ? `<div class="cell-sub">聚合内含 ${htmlEscape(job._group_error_count || 0)} 条错误记录</div>` : ''}`
-      : '-';
-    return `<tr>
-      <td class="mono">
-        <div class="cell-stack">
-          <div class="cell-title">${htmlEscape(job.job_id || '')}</div>
-          ${groupMeta}
-        </div>
-      </td>
-      <td>${pill(job.kind || '-')}</td>
-      <td>${renderState(job.status)}</td>
-      <td class="mono">${htmlEscape(job.library_id || '-')}</td>
-      <td class="cell-sub">${htmlEscape(formatJobSources(job))}</td>
-      <td class="mono">${htmlEscape(formatJobProgress(job))}</td>
-      <td>${errorCell}</td>
-    </tr>`;
-  }).join('') || renderEmptyRow(7, '当前没有运行中的任务');
+function formatDateTime(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString();
 }
 
-async function refreshJobs() {
-  setScrollLoading('jobsTable', true);
-  try {
-    const data = await fetchJSON('/api/v1/admin/metadata/jobs');
-    state.jobs = data.items || [];
-    renderJobs();
-  } catch (error) {
-    document.getElementById('jobsSummary').textContent = '加载失败';
-    setStatus(error.message, 'err');
-  } finally {
-    setScrollLoading('jobsTable', false);
-  }
+function formatTableSummary({ total, filtered, displayed, aggregated }) {
+  const p = [`共 ${total} 条`];
+  if (filtered != null && filtered !== total) p.push(`过滤后 ${filtered} 条`);
+  p.push(`当前显示 ${displayed} 行`);
+  if (aggregated) p.push('（已聚合）');
+  return p.join(' / ');
 }
 
-async function refreshRecords(resetPage = false) {
-  setScrollLoading('recordsTable', true);
-  try {
-    if (resetPage) state.recordsPage = 1;
-    const page = state.recordsPage;
-    const limit = Number(document.getElementById('recordLimit').value || 50);
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-      library_id: document.getElementById('recordLibrary').value.trim(),
-      state: document.getElementById('recordState').value,
-      search: document.getElementById('recordSearch').value.trim(),
-    });
-    const data = await fetchJSON(`/api/v1/admin/metadata/records?${params.toString()}`);
-    const total = Number(data.total || 0);
-    const currentPage = Number(data.page || page);
-    const pageSize = Number(data.page_size || limit);
-    state.recordsPage = currentPage;
-    document.getElementById('recordSummary').textContent = formatTableSummary({
-      total,
-      displayed: (data.items || []).length,
-    }) + ` / 每页 ${pageSize} 条`;
-    renderPagination('recordPagination', {
-      page: currentPage,
-      total,
-      pageSize,
-      onPageChange: (p) => { state.recordsPage = p; refreshRecords(); },
-    });
-    state.lastRecordItems = data.items || [];
-    const tbody = document.querySelector('#recordsTable tbody');
-    tbody.innerHTML = state.lastRecordItems.map((item) => {
-      const encodedLocator = encodeLocator(item.locator || {});
-      const key = locatorKey(item.locator || {});
-      const artists = Array.isArray(item.artists) ? item.artists.filter(Boolean) : [];
-      let tags = Array.isArray(item.tags) ? item.tags.filter(Boolean) : [];
-      
-      const artistTags = tags.filter(tag => tag.startsWith('artist:'));
-      tags = tags.filter(tag => !tag.startsWith('artist:'));
-      const languageTags = tags.filter(tag => tag.startsWith('language:'));
-      tags = tags.filter(tag => !tag.startsWith('language:'));
-      
-      const combinedArtists = [...new Set(
-        (artists.length > 0 ? artists : artistTags.map(tag => tag.substring(7)))
-          .map(artist => String(artist || '').trim())
-          .filter(Boolean)
-      )];
-      
-      const artistsElements = combinedArtists.map(artist => `<span class="pill compact" style="background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--text-main);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(artist)}</span>`).join('');
-      
-      let tagElements = '';
-      if (tags.length <= 5) {
-        tagElements = tags.map(tag => `<span class="pill compact" style="color: var(--text-muted);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(tag)}</span>`).join('');
-      } else {
-        const visibleTags = tags.slice(0, 5).map(tag => `<span class="pill compact" style="color: var(--text-muted);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(tag)}</span>`).join('');
-        const hiddenTags = tags.slice(5).map(tag => `<span class="pill compact tag-hidden" style="color: var(--text-muted);" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(tag)}</span>`).join('');
-        const toggleBtn = `<span class="pill compact" style="cursor: pointer; background: var(--bg-hover); color: var(--text-main); font-weight: 600;" onclick="this.parentElement.querySelectorAll('.tag-hidden').forEach(e => e.classList.remove('tag-hidden')); this.remove(); event.stopPropagation();" title="展开更多标签">+${tags.length - 5}</span>`;
-        tagElements = visibleTags + hiddenTags + toggleBtn;
-      }
-      
-      const derivedLanguage = item.language || (languageTags.length > 0 ? languageTags[0].substring(9) : '');
-      const langElement = derivedLanguage ? `<span class="pill compact" style="background: color-mix(in srgb, var(--err) 15%, transparent); color: var(--text-main); font-weight: 600;" onclick="copyToClipboard(this.textContent); event.stopPropagation();" title="点击复制">${htmlEscape(derivedLanguage)}</span>` : '';
-      
-      const metaContainer = (artistsElements || tagElements || langElement) 
-        ? `<div class="tags-container">
-             ${langElement}
-             ${artistsElements}
-             ${tagElements}
-           </div>`
-        : '';
-
-      return `<tr>
-        <td><input type="checkbox" data-record-key="${htmlEscape(key)}" onchange='toggleRecordSelection("${encodedLocator}", this.checked)'></td>
-        <td>${renderState(item.state)}</td>
-        <td>
-          <div class="cell-stack" style="gap: 4px;">
-            <div class="cell-title">${htmlEscape(item.title || item.title_jpn || '(未匹配到标题)')}</div>
-            ${item.subtitle ? `<div class="cell-sub mono">${htmlEscape(item.subtitle)}</div>` : ''}
-            ${metaContainer}
-          </div>
-        </td>
-        <td>
-          <div class="cell-stack">
-            <div class="mono cell-title">${htmlEscape(item.root_ref || '')}</div>
-            <div class="cell-sub mono">${htmlEscape(item.folder_path || '')}</div>
-          </div>
-        </td>
-        <td>
-          <div class="cell-stack">
-            <div class="cell-title">${htmlEscape(item.source || '')}</div>
-            <div class="cell-sub mono">${htmlEscape(item.source_id || '')}</div>
-          </div>
-        </td>
-        <td class="mono" style="font-weight: 500;">${item.confidence == null ? '-' : htmlEscape(item.confidence)}</td>
-        <td><div class="actions" style="justify-content: flex-end;">
-          <button class="ghost" onclick='openSidecarEditor("${encodedLocator}")'>配置</button>
-          <button class="ghost" onclick='recordAction("${item.manual_locked ? 'unlock' : 'lock'}", "${encodedLocator}")'>${item.manual_locked ? '解锁' : '锁定'}</button>
-          <button class="ghost" onclick='recordAction("reset", "${encodedLocator}")'>重置</button>
-          <button class="ghost" style="color: var(--primary);" onclick='recordAction("enrich", "${encodedLocator}")'>补全</button>
-        </div></td>
-      </tr>`;
-    }).join('') || renderEmptyRow(7, '暂无符合条件的记录');
-    syncRecordSelectionUI();
-  } catch (error) {
-    setStatus(error.message, 'err');
-  } finally {
-    setScrollLoading('recordsTable', false);
-  }
+function formatJobSources(job) {
+  if (Array.isArray(job.sources) && job.sources.length > 0) return job.sources.join(', ');
+  return job.source_id || '-';
 }
 
-function cleanupPayload(dryRun) {
-  return {
-    library_id: currentMaintenanceLibrary(),
-    older_than_days: Number(document.getElementById('cleanupOlderThanDays').value || 0),
-    dry_run: dryRun,
-  };
+function locatorKey(loc) {
+  if (!loc || typeof loc !== 'object') return '';
+  return `${loc.library_id || ''}::${loc.root_type || ''}::${loc.root_ref || ''}`;
 }
 
-function renderCleanupSummary(result, dryRun, payload) {
-  const scope = payload.library_id || '全部书库';
-  const olderThan = Number(payload.older_than_days || 0);
-  const prefix = dryRun ? 'Dry Run 结果' : '清理结果';
-  document.getElementById('cleanupSummary').innerHTML = `<strong>${htmlEscape(prefix)}</strong> 范围 [${htmlEscape(scope)}] / 保留 ${htmlEscape(olderThan)} 天 / 匹配 <span style="color:var(--warn)">${htmlEscape(result.matched || 0)}</span> 条 / 删除 <span style="color:var(--ok)">${htmlEscape(result.deleted || 0)}</span> 条`;
-}
-
-async function runCleanup(dryRun) {
-  try {
-    if (!dryRun && !window.confirm('确认物理删除数据库中的 missing 记录吗？建议先执行 Dry Run。')) return;
-    const payload = cleanupPayload(dryRun);
-    const data = await fetchJSON('/api/v1/admin/metadata/cleanup', { method: 'POST', body: JSON.stringify(payload) });
-    renderCleanupSummary(data, dryRun, payload);
-    if (dryRun) {
-      setStatus(`测试清理完成：共匹配 ${data.matched || 0} 条 missing 数据`, 'ok');
-    } else {
-      setStatus(`清理完成：成功删除 ${data.deleted || 0}/${data.matched || 0} 条记录`, 'ok');
-      clearRecordSelection();
-    }
-    await refreshRecords(false);
-  } catch (error) {
-    setStatus(error.message, 'err');
-  }
-}
-
-function recordByLocator(locator) {
-  const key = locatorKey(locator || {});
-  return state.lastRecordItems.find((item) => locatorKey(item.locator || {}) === key) || null;
-}
+function encodeLocator(loc) { return encodeURIComponent(JSON.stringify(loc || {})); }
+function decodeLocator(enc) { try { return JSON.parse(decodeURIComponent(enc || '')) || {}; } catch (_) { return {}; } }
 
 function guessTitleFromRecord(item) {
   if (!item) return '';
   if (item.title || item.title_jpn) return item.title || item.title_jpn;
-  const keywords = Array.isArray(item.hint?.keywords) ? [...item.hint.keywords] : [];
-  keywords.sort((left, right) => String(right).length - String(left).length);
-  if (keywords.length > 0) return keywords[0];
+  const kw = Array.isArray(item.hint?.keywords) ? [...item.hint.keywords] : [];
+  kw.sort((a, b) => String(b).length - String(a).length);
+  if (kw.length > 0) return kw[0];
   const parts = String(item.root_ref || item.folder_path || '').split('/').filter(Boolean);
   return parts.length ? parts[parts.length - 1] : '';
 }
@@ -1716,301 +171,1441 @@ function buildSidecarTemplate(item) {
 }
 
 function formatSidecarContent(raw, fallback) {
-  try {
-    return JSON.stringify(JSON.parse(raw || '{}'), null, 2);
-  } catch (_) {
-    return raw || fallback;
-  }
+  try { return JSON.stringify(JSON.parse(raw || '{}'), null, 2); } catch (_) { return raw || fallback; }
 }
 
-async function triggerRescanRequest(libraryID) {
-  return fetchJSON('/api/v1/admin/rescan', { method: 'POST', body: JSON.stringify({ library_id: libraryID || '' }) });
-}
-
-async function rescanSelectedLibrary() {
-  try {
-    const libraryID = currentMaintenanceLibrary();
-    if (!libraryID) {
-      setStatus('请先在“书库（Library）”输入框中填写书库 ID', 'err');
-      return;
+function copyToClipboard(text, setStatus) {
+  if (!text) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => setStatus?.(`已复制到剪贴板: ${text}`, 'ok'))
+      .catch((e) => setStatus?.(`复制失败: ${e.message}`, 'err'));
+  } else {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) setStatus?.(`已复制到剪贴板: ${text}`, 'ok');
+      else setStatus?.('复制失败: 浏览器阻止了此操作', 'err');
+    } catch (e) {
+      setStatus?.(`复制异常: ${e.message}`, 'err');
     }
-    const data = await triggerRescanRequest(libraryID);
-    setStatus(`已提交该书库 Rescan 任务 ${data.job_id}`, 'ok');
-  } catch (error) {
-    setStatus(error.message, 'err');
   }
 }
 
-async function rescanAllLibraries() {
-  try {
-    if (!window.confirm('确认对系统全部书库触发扫描任务吗？该操作可能耗时较长。')) return;
-    const data = await triggerRescanRequest('');
-    setStatus(`已提交全库扫描任务：${data.job_id}`, 'ok');
-    await Promise.all([refreshJobs(), refreshJobHistory()]);
-  } catch (error) {
-    setStatus(error.message, 'err');
-  }
+function actionLabel(a) {
+  return { lock: '锁定', unlock: '解锁', reset: '重置', enrich: '重新补全' }[a] || a;
 }
 
-function closeSidecar() {
-  sidecarModal.classList.add('hidden');
-  sidecarModal.setAttribute('aria-hidden', 'true');
+function preferredTheme() {
+  const stored = localStorage.getItem('venera_admin_theme');
+  if (stored === 'dark' || stored === 'light') return stored;
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
-async function openSidecarEditor(encodedLocator) {
-  const locator = decodeLocator(encodedLocator);
-  state.sidecar.locator = locator;
-  state.sidecar.item = recordByLocator(locator);
-  state.sidecar.info = null;
-  document.getElementById('sidecarMeta').textContent = `书库 ${locator.library_id || '-'} / 类型 ${locator.root_type || '-'} / 路径 ${locator.root_ref || '-'}`;
-  document.getElementById('sidecarPath').textContent = '加载中...';
-  document.getElementById('sidecarState').innerHTML = pill('加载中', 'warn');
-  document.getElementById('sidecarBackend').textContent = '-';
-  document.getElementById('sidecarEditor').value = '';
-  document.getElementById('sidecarSummary').textContent = '正在向服务端请求文件状态...';
-  sidecarModal.classList.remove('hidden');
-  sidecarModal.setAttribute('aria-hidden', 'false');
-  await loadSidecar();
+function loadPreferredTab() {
+  const stored = localStorage.getItem('venera_admin_tab');
+  return ['bot', 'metadata', 'jobs'].includes(stored) ? stored : 'bot';
 }
 
-async function loadSidecar() {
-  try {
-    const locator = state.sidecar.locator;
-    if (!locator) return;
-    const params = new URLSearchParams(locator);
-    const data = await fetchJSON(`/api/v1/admin/metadata/sidecar?${params.toString()}`);
-    state.sidecar.info = data;
-    document.getElementById('sidecarPath').textContent = data.display_path || data.sidecar_ref || '-';
-    document.getElementById('sidecarState').innerHTML = data.exists
-      ? pill(data.writable ? '已存在 / 可写' : '已存在 / 只读', data.writable ? 'ok' : 'warn')
-      : pill(data.writable ? '缺失 / 可写' : '缺失 / 只读', data.writable ? 'warn' : 'err');
-    document.getElementById('sidecarBackend').textContent = `${data.backend_kind || '-'}${data.writable ? '' : '（受保护）'}`;
-    document.getElementById('sidecarEditor').value = data.exists
-      ? formatSidecarContent(data.content, buildSidecarTemplate(state.sidecar.item))
-      : buildSidecarTemplate(state.sidecar.item);
-    document.getElementById('sidecarSaveBtn').disabled = !data.writable;
-    document.getElementById('sidecarDeleteBtn').disabled = !data.writable || !data.exists;
-    document.getElementById('sidecarSummary').textContent = data.exists ? '文件读取成功' : '本地暂无 Sidecar 文件，您可以直接编辑并保存以创建。';
-  } catch (error) {
-    document.getElementById('sidecarSummary').textContent = error.message;
-    setStatus(`读取失败: ${error.message}`, 'err');
-  }
+/* ═══════════════════════════════════════════════════════════
+   API Helper
+   ═══════════════════════════════════════════════════════════ */
+async function fetchJSON(url, token, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (options.body != null && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const resp = await fetch(url, { ...options, headers });
+  const text = await resp.text();
+  let json = {};
+  try { json = text ? JSON.parse(text) : {}; } catch (_) {}
+  if (!resp.ok) throw new Error(json?.error?.message || `${resp.status} ${resp.statusText}`);
+  return json.data;
 }
 
-function applySidecarTemplate() {
-  document.getElementById('sidecarEditor').value = buildSidecarTemplate(state.sidecar.item);
-  document.getElementById('sidecarSummary').textContent = '已自动生成模板结构';
-}
+/* ═══════════════════════════════════════════════════════════
+   Small UI Components
+   ═══════════════════════════════════════════════════════════ */
+const StatusTag = ({ value }) => {
+  const labels = { empty: '空', ready: '就绪', stale: '过期', error: '错误', missing: '缺失', locked: '已锁定', done: '完成', failed: '失败', running: '进行中', queued: '排队中', accepted: '已接收' };
+  const colors = { done: 'success', ready: 'success', accepted: 'success', failed: 'error', error: 'error', missing: 'error', running: 'warning', stale: 'warning', locked: 'warning', queued: 'warning', empty: 'default' };
+  return <Tag color={colors[value] || 'default'}>{labels[value] || value || '-'}</Tag>;
+};
 
-async function saveSidecar() {
-  try {
-    const locator = state.sidecar.locator;
-    if (!locator) return;
-    const content = document.getElementById('sidecarEditor').value.trim();
-    JSON.parse(content);
-    await fetchJSON('/api/v1/admin/metadata/sidecar', { method: 'PUT', body: JSON.stringify({ locator, content }) });
-    await loadSidecar();
-    document.getElementById('sidecarSummary').textContent = '保存成功';
-    if (document.getElementById('sidecarAutoRescan').checked) {
-      const data = await triggerRescanRequest(locator.library_id || '');
-      setStatus(`Sidecar 已保存，并已触发重扫任务：${data.job_id}`, 'ok');
-    } else {
-      setStatus('Sidecar 文件已成功保存到磁盘', 'ok');
-    }
-    await refreshRecords(false);
-  } catch (error) {
-    document.getElementById('sidecarSummary').textContent = `JSON 格式错误或保存失败：${error.message}`;
-    setStatus('文件保存失败，请检查格式', 'err');
-  }
-}
+const Pill = ({ text, kind }) => {
+  const color = kind === 'ok' ? 'success' : kind === 'err' ? 'error' : kind === 'warn' ? 'warning' : 'default';
+  return <Tag color={color}>{text || '-'}</Tag>;
+};
 
-async function deleteSidecar() {
-  try {
-    const locator = state.sidecar.locator;
-    if (!locator) return;
-    if (!window.confirm('危险操作：确认要彻底删除 Sidecar 配置文件吗？')) return;
-    await fetchJSON('/api/v1/admin/metadata/sidecar', { method: 'DELETE', body: JSON.stringify({ locator }) });
-    await loadSidecar();
-    document.getElementById('sidecarSummary').textContent = '文件已删除';
-    if (document.getElementById('sidecarAutoRescan').checked) {
-      const data = await triggerRescanRequest(locator.library_id || '');
-      setStatus(`Sidecar 已移除，并已触发重扫任务：${data.job_id}`, 'ok');
-    } else {
-      setStatus('Sidecar 文件已被删除', 'ok');
-    }
-    await refreshRecords(false);
-  } catch (error) {
-    document.getElementById('sidecarSummary').textContent = error.message;
-    setStatus(`删除失败: ${error.message}`, 'err');
-  }
-}
+const GroupBadge = ({ record }) => {
+  const count = Number(record._group_count || 1);
+  if (count <= 1) return null;
+  return (
+    <div>
+      <Tag color="warning">×{count}</Tag>
+      <Text code style={{ fontSize: 12 }}>最早 {record._group_first_job_id || ''}</Text>
+      {(record._group_error_count || 0) > 0 && (
+        <Text type="secondary" style={{ fontSize: 12, marginLeft: 4 }}>含 {record._group_error_count} 条错误</Text>
+      )}
+    </div>
+  );
+};
 
-async function recordAction(action, encodedLocator) {
-  try {
-    const payload = {
-      action,
-      locator: decodeLocator(encodedLocator),
-      source_id: document.getElementById('enrichSource').value,
-      min_score: Number(document.getElementById('enrichScore').value || 0.72),
-      workers: Number(document.getElementById('enrichWorkers').value || 3),
-    };
-    const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
-    if (Array.isArray(data.jobs) && data.jobs.length > 0) {
-      setStatus(`单条记录 [${actionLabel(action)}] 已拆分为 ${data.jobs.length} 个任务队列`, 'ok');
-      await refreshJobs();
-    } else if (data.job?.job_id) {
-      setStatus(`补全任务已投递：${data.job.job_id}`, 'ok');
-      await refreshJobs();
-    } else {
-      setStatus(`记录 [${actionLabel(action)}] 操作执行成功`, 'ok');
-    }
-    await refreshRecords(false);
-  } catch (error) {
-    setStatus(`操作失败：${error.message}`, 'err');
-  }
-}
+const TagsCell = ({ item, setStatus }) => {
+  const [expanded, setExpanded] = useState(false);
+  const artists = Array.isArray(item.artists) ? item.artists.filter(Boolean) : [];
+  let tags = Array.isArray(item.tags) ? item.tags.filter(Boolean) : [];
+  const artistTags = tags.filter(t => t.startsWith('artist:'));
+  tags = tags.filter(t => !t.startsWith('artist:'));
+  const languageTags = tags.filter(t => t.startsWith('language:'));
+  tags = tags.filter(t => !t.startsWith('language:'));
+  const combinedArtists = [...new Set(
+    (artists.length > 0 ? artists : artistTags.map(t => t.substring(7)))
+      .map(a => String(a || '').trim()).filter(Boolean)
+  )];
+  const derivedLang = item.language || (languageTags.length > 0 ? languageTags[0].substring(9) : '');
+  const visibleTags = expanded ? tags : tags.slice(0, 5);
+  const hiddenCount = tags.length - 5;
 
-async function applyBatchRecordAction() {
-  try {
-    const action = document.getElementById('recordBatchAction').value;
-    if (!action) {
-      setStatus('操作取消：请先在下拉框选择批量动作类型', 'warn');
-      return;
-    }
-    const locators = Object.values(state.selectedRecords);
-    if (locators.length === 0) {
-      setStatus('操作取消：当前未勾选任何记录', 'warn');
-      return;
-    }
-    const payload = {
-      action,
-      locators,
-      source_id: document.getElementById('enrichSource').value,
-      min_score: Number(document.getElementById('enrichScore').value || 0.72),
-      workers: Number(document.getElementById('enrichWorkers').value || 3),
-    };
-    const data = await fetchJSON('/api/v1/admin/metadata/records/actions', { method: 'POST', body: JSON.stringify(payload) });
-    if (Array.isArray(data.jobs) && data.jobs.length > 0) {
-      setStatus(`批量任务 [${actionLabel(action)}] 成功：拆分 ${data.jobs.length} 个队列`, 'ok');
-      await refreshJobs();
-    } else {
-      setStatus(`批量操作执行完成：处理 ${data.processed || locators.length} 条记录`, 'ok');
-    }
-    clearRecordSelection();
-    await refreshRecords(false);
-  } catch (error) {
-    setStatus(`批量操作失败：${error.message}`, 'err');
-  }
-}
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <Text strong>{item.title || item.title_jpn || '(未匹配到标题)'}</Text>
+      {item.subtitle && <Text type="secondary" className="mono" style={{ fontSize: 12 }}>{item.subtitle}</Text>}
+      <Flex wrap="wrap" gap={4}>
+        {derivedLang && <Tag color="red" style={{ cursor: 'pointer' }} onClick={() => copyToClipboard(derivedLang, setStatus)}>{derivedLang}</Tag>}
+        {combinedArtists.map((a, i) => <Tag key={`a-${i}`} color="blue" style={{ cursor: 'pointer' }} onClick={() => copyToClipboard(a, setStatus)}>{a}</Tag>)}
+        {visibleTags.map((t, i) => <Tag key={`t-${i}`} style={{ cursor: 'pointer' }} onClick={() => copyToClipboard(t, setStatus)}>{t}</Tag>)}
+        {!expanded && hiddenCount > 0 && <Tag style={{ cursor: 'pointer' }} onClick={() => setExpanded(true)}>+{hiddenCount}</Tag>}
+      </Flex>
+    </div>
+  );
+};
 
-async function refreshSources() {
-  setScrollLoading('sourcesTable', true);
-  try {
-    const prevEnrich = document.getElementById('enrichSource').value;
-    const prevBrowse = document.getElementById('browseSource').value;
-    const data = await fetchJSON('/api/v1/admin/metadata/sources');
-    state.sources = data.items || [];
-    document.getElementById('sourceDirLabel').innerHTML = `<span class="mono">数据源目录：${htmlEscape(data.directory || '未配置')}</span>`;
-    renderSourceSelectors(prevEnrich, prevBrowse);
-    const tbody = document.querySelector('#sourcesTable tbody');
-    tbody.innerHTML = state.sources.map((source) => `<tr>
-      <td><div style="font-weight: 500;">${htmlEscape(source.name)}</div><div class="muted mono">${htmlEscape(source.relative_path || '')}</div></td>
-      <td class="mono">${htmlEscape(source.chosen_table || '')}</td>
-      <td class="mono">${htmlEscape(source.row_count ?? '-')}</td>
-      <td>${source.error ? pill(source.error, 'err') : pill('就绪', 'ok')}</td>
-      <td><button class="ghost" ${source.error ? 'disabled' : ''} onclick='pickSource(${JSON.stringify(source.id)})' style="color: var(--primary);">查看</button></td>
-    </tr>`).join('') || renderEmptyRow(5, '目录为空。请将外部 sqlite 数据库放到 data/externaldb 目录。');
-  } catch (error) {
-    setStatus(`加载数据源失败：${error.message}`, 'err');
-  } finally {
-    setScrollLoading('sourcesTable', false);
-  }
-}
+/* ═══════════════════════════════════════════════════════════
+   Context
+   ═══════════════════════════════════════════════════════════ */
+const AppCtx = React.createContext({});
 
-function renderSourceSelectors(prevEnrich = '', prevBrowse = '') {
-  const enrichSource = document.getElementById('enrichSource');
-  const browseSourceSelect = document.getElementById('browseSource');
-  const options = state.sources
-    .filter((item) => !item.error)
-    .map((item) => `<option value="${htmlEscape(item.id)}">${htmlEscape(item.name)}</option>`)
-    .join('');
-  enrichSource.innerHTML = `<option value="">自动选择可用数据源</option>${options}`;
-  browseSourceSelect.innerHTML = options || '<option value="">暂无可用数据源</option>';
-  if (prevEnrich && Array.from(enrichSource.options).some((option) => option.value === prevEnrich)) {
-    enrichSource.value = prevEnrich;
-  }
-  if (prevBrowse && Array.from(browseSourceSelect.options).some((option) => option.value === prevBrowse)) {
-    browseSourceSelect.value = prevBrowse;
-  }
-}
+/* ═══════════════════════════════════════════════════════════
+   EH Bot Panel
+   ═══════════════════════════════════════════════════════════ */
+const EHBotPanel = () => {
+  const {
+    tokenRef, setStatus, ehbotStatus, ehbotConfig, ehbotJobs,
+    refreshEhbotStatus, refreshEhbotJobs, loadEhbotConfig, refreshJobHistory,
+  } = React.useContext(AppCtx);
 
-function pickSource(id) {
-  document.getElementById('browseSource').value = id;
-  browseSource(true);
-  document.getElementById('browseQuery').focus();
-}
+  const [configForm] = Form.useForm();
+  const [createForm] = Form.useForm();
+  const [clearToken, setClearToken] = useState(false);
+  const [configMeta, setConfigMeta] = useState({ config_path: '', writable: false, pull_token_configured: false, rewrite_warning: '', libraries: [] });
+  const [jobsSearch, setJobsSearch] = useState('');
+  const [jobsStatus, setJobsStatus] = useState('');
+  const [jobsAggregate, setJobsAggregate] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [pulling, setPulling] = useState(false);
 
-async function browseSource(resetPage = false) {
-  setScrollLoading('browseTable', true);
-  try {
-    if (resetPage) state.browsePage = 1;
-    const sourceId = document.getElementById('browseSource').value;
-    if (!sourceId) {
-      setStatus('查询失败：未选择或无可用数据源', 'warn');
-      return;
-    }
-    const limit = Number(document.getElementById('browseLimit').value || 30);
-    const params = new URLSearchParams({
-      q: document.getElementById('browseQuery').value.trim(),
-      page: String(state.browsePage),
-      limit: String(limit),
+  const populateConfig = useCallback((data) => {
+    if (!data) return;
+    setConfigMeta({
+      config_path: data.config_path || '',
+      writable: !!data.writable,
+      pull_token_configured: !!data.pull_token_configured,
+      rewrite_warning: data.rewrite_warning || 'Pull Token 留空表示保持现状；勾选清空则移除已有 token。',
+      libraries: data.libraries || [],
     });
-    const data = await fetchJSON(`/api/v1/admin/metadata/sources/${encodeURIComponent(sourceId)}/records?${params.toString()}`);
-    const browse = data.browse || {};
-    const total = Number(browse.total || 0);
-    const displayedCount = (browse.items || []).length;
-    document.getElementById('browseSummary').innerHTML = `<strong>${htmlEscape(data.source?.name || '-')}</strong> / 数据表：<span class="mono">${htmlEscape(browse.table || '-')}</span> / ${formatTableSummary({ total, displayed: displayedCount })}`;
-    renderPagination('browsePagination', {
-      page: state.browsePage,
-      total,
-      pageSize: limit,
-      onPageChange: (p) => { state.browsePage = p; browseSource(); },
+    configForm.setFieldsValue({
+      enabled: data.enabled,
+      base_url: data.base_url || '',
+      consumer_id: data.consumer_id || '',
+      target_id: data.target_id || '',
+      target_library_id: data.target_library_id || '',
+      target_subdir: data.target_subdir || '',
+      poll_interval_seconds: data.poll_interval_seconds || 60,
+      lease_seconds: data.lease_seconds || 1800,
+      download_timeout_seconds: data.download_timeout_seconds || 1800,
+      max_jobs_per_poll: data.max_jobs_per_poll || 1,
+      auto_rescan: data.auto_rescan,
+      clear_pull_token: false,
+      pull_token: '',
     });
-    const head = document.querySelector('#browseTable thead');
-    const body = document.querySelector('#browseTable tbody');
-    const columns = browse.columns || [];
-    head.innerHTML = `<tr>${columns.map((col) => `<th>${htmlEscape(col)}</th>`).join('')}</tr>`;
-    body.innerHTML = (browse.items || []).map((item) => `<tr>${columns.map((col) => `<td class="mono">${htmlEscape(item[col] ?? '')}</td>`).join('')}</tr>`).join('') || renderEmptyRow(Math.max(columns.length, 1), '暂无匹配查询结果');
-  } catch (error) {
-    setStatus(`数据查询异常：${error.message}`, 'err');
-  } finally {
-    setScrollLoading('browseTable', false);
-  }
-}
+    setClearToken(false);
+  }, [configForm]);
 
-async function boot() {
-  updatePollButton();
-  setActiveTab(loadPreferredTab());
-  syncEHBotTokenInputs();
-  syncRecordSelectionUI();
-  await Promise.all([loadEHBotConfig(), refreshEHBotStatus(), refreshEHBotJobs(), refreshSources(), refreshJobs(), refreshJobHistory(), refreshRecords(false)]);
-  setStatus('控制面板初始化完成', 'ok');
-}
+  useEffect(() => { if (ehbotConfig) populateConfig(ehbotConfig); }, [ehbotConfig, populateConfig]);
 
-setInterval(() => {
-  if (!state.poll) return;
-  refreshEHBotStatus();
-  refreshEHBotJobs();
-  refreshJobs();
-  refreshJobHistory();
-}, 3000);
+  const handleLoadConfig = async () => {
+    try {
+      const data = await fetchJSON('/api/v1/admin/ehbot/config', tokenRef.current);
+      populateConfig(data);
+    } catch (err) {
+      setConfigMeta(p => ({ ...p, writable: false }));
+      setStatus(`EH Bot 配置加载失败：${err.message}`, 'err');
+    }
+  };
 
-setInterval(() => {
-  if (!state.poll) return;
-  refreshRecords(false);
-}, 8000);
+  const handleSaveConfig = async () => {
+    setSaving(true);
+    try {
+      const v = configForm.getFieldsValue();
+      const payload = {
+        enabled: !!v.enabled,
+        base_url: (v.base_url || '').trim(),
+        pull_token: (v.pull_token || '').trim(),
+        clear_pull_token: !!v.clear_pull_token,
+        consumer_id: (v.consumer_id || '').trim(),
+        target_id: (v.target_id || '').trim(),
+        target_library_id: v.target_library_id || '',
+        target_subdir: (v.target_subdir || '').trim(),
+        poll_interval_seconds: Number(v.poll_interval_seconds || 0),
+        lease_seconds: Number(v.lease_seconds || 0),
+        download_timeout_seconds: Number(v.download_timeout_seconds || 0),
+        auto_rescan: !!v.auto_rescan,
+        max_jobs_per_poll: Number(v.max_jobs_per_poll || 0),
+      };
+      const data = await fetchJSON('/api/v1/admin/ehbot/config', tokenRef.current, { method: 'PUT', body: JSON.stringify(payload) });
+      populateConfig(data);
+      await Promise.all([refreshEhbotStatus(), refreshEhbotJobs()]);
+      setStatus('EH Bot 配置已保存', 'ok');
+    } catch (err) {
+      setStatus(`EH Bot 配置保存失败：${err.message}`, 'err');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-boot().catch((error) => setStatus(`系统启动失败：${error.message}`, 'err'));
+  const handleCreateJob = async () => {
+    setCreating(true);
+    try {
+      const v = createForm.getFieldsValue();
+      const input = (v.input || '').trim();
+      if (!input) { setStatus('请先填写漫画链接或 gid/token', 'warn'); return; }
+      const data = await fetchJSON('/api/v1/admin/ehbot/jobs/create', tokenRef.current, {
+        method: 'POST', body: JSON.stringify({ input, target_id: (v.target_id || '').trim() }),
+      });
+      createForm.resetFields();
+      setStatus(`EH Bot 远程下载任务已创建：${data.job_id || '-'}${data.title ? ` | ${data.title}` : ''}`, 'ok');
+      await Promise.all([refreshJobHistory(), refreshEhbotJobs(), refreshEhbotStatus()]);
+    } catch (err) {
+      setStatus(`EH Bot 远程建单失败：${err.message}`, 'err');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRunOnce = async () => {
+    setPulling(true);
+    try {
+      const data = await fetchJSON('/api/v1/admin/ehbot/pull/run-once', tokenRef.current, { method: 'POST', body: '{}' });
+      setStatus(`EH Bot 拉取任务已入队：${data.job_id || '-'}`, 'ok');
+      await Promise.all([refreshEhbotStatus(), refreshEhbotJobs()]);
+    } catch (err) {
+      setStatus(`EH Bot 拉取失败：${err.message}`, 'err');
+    } finally {
+      setPulling(false);
+    }
+  };
+
+  // Filter & aggregate jobs
+  const filteredJobs = useMemo(() => {
+    const q = normalizeQuery(jobsSearch);
+    return (ehbotJobs || []).filter(job => {
+      if (jobsStatus && job.status !== jobsStatus) return false;
+      return matchesQuery([job.job_id, job.remote_job_id, job.remote_title, job.imported_path, job.library_id, job.remote_target_id, job.error, job.trigger], q);
+    });
+  }, [ehbotJobs, jobsSearch, jobsStatus]);
+
+  const displayJobs = useMemo(() => jobsAggregate ? aggregateEHBotItems(filteredJobs) : filteredJobs, [filteredJobs, jobsAggregate]);
+
+  const jobsSummary = formatTableSummary({ total: (ehbotJobs || []).length, filtered: filteredJobs.length, displayed: displayJobs.length, aggregated: jobsAggregate });
+
+  const jobColumns = [
+    {
+      title: 'Local Job', dataIndex: 'job_id', key: 'job_id', width: 180,
+      render: (v, r) => (<div><Text code>{v}</Text><br/><Text type="secondary" style={{ fontSize: 12 }}>{r.trigger || '-'}</Text><GroupBadge record={r} /></div>),
+    },
+    { title: 'Status', dataIndex: 'status', key: 'status', width: 100, render: (v) => <StatusTag value={v} /> },
+    {
+      title: 'Remote Job', dataIndex: 'remote_job_id', key: 'remote', width: 200,
+      render: (v, r) => (<div><Text code>{v || '-'}</Text><br/><Text type="secondary" style={{ fontSize: 12 }}>{r.remote_title || ''}</Text></div>),
+    },
+    {
+      title: 'Target', dataIndex: 'library_id', key: 'target', width: 160,
+      render: (v, r) => (<div><Text code>{v || '-'}</Text><br/><Text type="secondary" className="mono" style={{ fontSize: 12 }}>{r.remote_target_id || ''}</Text></div>),
+    },
+    { title: 'Progress', dataIndex: 'listed', key: 'progress', render: (_, r) => <Text className="mono">{formatEHBotProgress(r)}</Text> },
+    { title: 'Imported Path', dataIndex: 'imported_path', key: 'path', render: (v) => <Text className="mono">{v || '-'}</Text> },
+    {
+      title: 'Error', dataIndex: 'error', key: 'error', width: 200,
+      render: (v, r) => v ? <Text type="danger" className="mono">{v}</Text> : '-',
+    },
+  ];
+
+  // EH Bot status summary
+  const st = ehbotStatus || {};
+  const modeTag = !st.configured
+    ? <Pill text="配置错误" kind="err" />
+    : st.running ? <Pill text="运行中" kind="warn" /> : st.enabled ? <Pill text="自动轮询已启用" kind="ok" /> : <Pill text="仅手动模式" kind="warn" />;
+
+  const summaryParts = [
+    `base_url=${st.base_url || '-'}`, `consumer_id=${st.consumer_id || '-'}`,
+    `target_library=${st.target_library_id || '-'}`, `library_kind=${st.target_library_kind || '-'}`,
+    `poll=${st.poll_interval_seconds || 0}s`, `lease=${st.lease_seconds || 0}s`,
+    `download_timeout=${st.download_timeout_seconds || 0}s`, `max_jobs=${st.max_jobs_per_poll || 0}`,
+    `auto_rescan=${st.auto_rescan ? 'true' : 'false'}`, `queue=${st.queue_depth || 0}`,
+  ];
+  if (st.config_error) summaryParts.push(`config_error=${st.config_error}`);
+  if (st.last_imported_path) summaryParts.push(`last_imported=${st.last_imported_path}`);
+
+  return (
+    <Card title={
+      <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+        <div>
+          <Title level={5} style={{ margin: 0 }}>EH Bot Pull / Import</Title>
+          <Text type="secondary">Manage bot polling, claim, artifact download, import, and auto-rescan.</Text>
+        </div>
+        <Space>
+          <Button type="primary" onClick={handleRunOnce} loading={pulling} disabled={!st.configured}>Run Once</Button>
+          <Button onClick={() => Promise.all([refreshEhbotStatus(), refreshEhbotJobs()])}>Refresh EH Bot</Button>
+        </Space>
+      </Flex>
+    }>
+      {/* Config Section */}
+      <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+        <Text strong>EH Bot Config</Text>
+        <Space>
+          <Button onClick={handleLoadConfig}>Reload Config</Button>
+          <Button type="primary" onClick={handleSaveConfig} loading={saving} disabled={!configMeta.writable}>Save Config</Button>
+        </Space>
+      </Flex>
+
+      <Form form={configForm} layout="vertical" size="small">
+        <Row gutter={16}>
+          <Col span={24}>
+            <Form.Item name="enabled" valuePropName="checked" style={{ marginBottom: 8 }}>
+              <Checkbox>Enable automatic EH Bot polling</Checkbox>
+            </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Form.Item name="base_url" label="Base URL"><Input placeholder="https://ehbot.example.com" /></Form.Item>
+          </Col>
+          <Col xs={12} md={6}><Form.Item name="consumer_id" label="Consumer ID"><Input placeholder="home-server" /></Form.Item></Col>
+          <Col xs={12} md={6}><Form.Item name="target_id" label="Target ID"><Input placeholder="home-server" /></Form.Item></Col>
+          <Col xs={12} md={6}>
+            <Form.Item name="target_library_id" label="Target Library">
+              <Select placeholder="Select target library" allowClear>
+                {(configMeta.libraries || []).map(lib => (
+                  <Select.Option key={lib.id} value={lib.id}>{lib.name || lib.id} ({lib.kind || '-'})</Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col xs={12} md={6}><Form.Item name="target_subdir" label="Target Subdir"><Input placeholder="EH Inbox" /></Form.Item></Col>
+          <Col xs={12} md={6}><Form.Item name="poll_interval_seconds" label="Poll Interval (s)"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+          <Col xs={12} md={6}><Form.Item name="lease_seconds" label="Lease Seconds"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+          <Col xs={12} md={6}><Form.Item name="download_timeout_seconds" label="Download Timeout (s)"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+          <Col xs={12} md={6}><Form.Item name="max_jobs_per_poll" label="Max Jobs Per Poll"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+          <Col xs={12} md={6}>
+            <Form.Item name="auto_rescan" valuePropName="checked" style={{ marginTop: 28 }}>
+              <Checkbox>Auto rescan after import</Checkbox>
+            </Form.Item>
+          </Col>
+          <Col xs={12} md={6}>
+            <Form.Item name="clear_pull_token" valuePropName="checked" style={{ marginTop: 28 }}>
+              <Checkbox onChange={(e) => { setClearToken(e.target.checked); if (e.target.checked) configForm.setFieldValue('pull_token', ''); }}>
+                Clear stored pull token
+              </Checkbox>
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item name="pull_token" label="Pull Token">
+              <Password disabled={clearToken} placeholder="Leave blank to keep current token" />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
+
+      <Space style={{ marginBottom: 16 }}>
+        <Text type="secondary">Config file: <Text code>{configMeta.config_path || '-'}</Text></Text>
+        {configMeta.writable ? <Pill text="可写" kind="ok" /> : <Pill text="只读" kind="warn" />}
+        {configMeta.pull_token_configured ? <Pill text="已配置 Token" kind="ok" /> : <Pill text="Token 为空" kind="warn" />}
+      </Space>
+      <br />
+      <Text type="secondary" style={{ fontSize: 12 }}>{configMeta.rewrite_warning || 'Pull Token 留空表示保持现状；勾选清空则移除已有 token。'}</Text>
+
+      <Divider />
+
+      {/* Create Job Section */}
+      <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
+        <Text strong>创建远程下载任务</Text>
+        <Button type="primary" onClick={handleCreateJob} loading={creating}>创建下载任务</Button>
+      </Flex>
+      <Form form={createForm} layout="vertical" size="small">
+        <Row gutter={16}>
+          <Col xs={24} md={16}>
+            <Form.Item name="input" label="漫画链接 / gid/token"><Input placeholder="https://e-hentai.org/g/... 或 12345/abcdef" /></Form.Item>
+          </Col>
+          <Col xs={24} md={8}>
+            <Form.Item name="target_id" label="Target ID"><Input placeholder="留空则使用当前配置" /></Form.Item>
+          </Col>
+        </Row>
+      </Form>
+      <Text type="secondary" style={{ fontSize: 12 }}>通过 Home Server 代理请求 ehbot_server 创建远程下载任务，无需依赖 Telegram。</Text>
+
+      <Divider />
+
+      {/* Summary Cards */}
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={8}><Card size="small"><Statistic title="Mode" valueRender={() => modeTag} /></Card></Col>
+        <Col xs={24} md={8}>
+          <Card size="small"><Statistic title="Target" valueRender={() => (
+            <div><Text className="mono">{st.target_library_id || '-'}</Text><br/>
+            <Text type="secondary" className="mono" style={{ fontSize: 12 }}>{st.target_subdir || '/'}{st.target_id ? ` | target=${st.target_id}` : ''}</Text></div>
+          )} /></Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card size="small"><Statistic title="Last Activity" valueRender={() => (
+            <div><Text>{formatDateTime(st.last_poll_at)}</Text><br/><Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(st.last_success_at)}</Text></div>
+          )} /></Card>
+        </Col>
+      </Row>
+      <Text type="secondary" className="mono" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>{summaryParts.join(' | ')}</Text>
+
+      {/* Jobs Table */}
+      <Flex gap={12} wrap="wrap" align="center" style={{ marginBottom: 12 }}>
+        <Input placeholder="job_id / 标题 / 路径" value={jobsSearch} onChange={(e) => setJobsSearch(e.target.value)} style={{ width: 220 }} size="small" allowClear />
+        <Select value={jobsStatus} onChange={setJobsStatus} style={{ width: 140 }} size="small" allowClear placeholder="全部状态">
+          <Select.Option value="queued">queued</Select.Option>
+          <Select.Option value="running">running</Select.Option>
+          <Select.Option value="done">done</Select.Option>
+          <Select.Option value="failed">failed</Select.Option>
+          <Select.Option value="accepted">accepted</Select.Option>
+        </Select>
+        <Checkbox checked={jobsAggregate} onChange={(e) => setJobsAggregate(e.target.checked)}>聚合同状态相邻记录</Checkbox>
+        <Text type="secondary" style={{ fontSize: 12 }}>{jobsSummary}</Text>
+      </Flex>
+      <Table
+        columns={jobColumns}
+        dataSource={displayJobs}
+        rowKey={(r, i) => r.job_id || `ej-${i}`}
+        size="small"
+        pagination={false}
+        scroll={{ x: 900, y: 500 }}
+        locale={{ emptyText: '暂无 EH Bot 任务' }}
+      />
+    </Card>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Metadata Panel
+   ═══════════════════════════════════════════════════════════ */
+const MetadataPanel = () => {
+  const {
+    tokenRef, setStatus, sources, sourceDir, metaJobs, metaJobsLoading,
+    refreshMetaJobs, refreshSources, refreshRecords, refreshJobHistory,
+    recordItems, recordTotal, recordPage, recordPageSize, recordsLoading,
+    polling, setPolling, openSidecar, selectedRecords, setSelectedRecords,
+  } = React.useContext(AppCtx);
+
+  const [enrichForm] = Form.useForm();
+  const [mgmtForm] = Form.useForm();
+  const [jobsSearch, setJobsSearch] = useState('');
+  const [jobsStatus, setJobsStatus] = useState('');
+  const [jobsAggregate, setJobsAggregate] = useState(true);
+  const [recLibrary, setRecLibrary] = useState('');
+  const [recState, setRecState] = useState('');
+  const [recSearch, setRecSearch] = useState('');
+  const [recPageSize, setRecPageSize] = useState(50);
+  const [batchAction, setBatchAction] = useState('');
+  const [enriching, setEnriching] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState('');
+  const browseQueryRef = useRef('');
+  const browseSourceRef = useRef('');
+  const [browseSourceId, setBrowseSourceId] = useState('');
+  const [browseQuery, setBrowseQuery] = useState('');
+  const [browsePageSize, setBrowsePageSize] = useState(30);
+  const [browsePage, setBrowsePage] = useState(1);
+  const [browseData, setBrowseData] = useState({ items: [], columns: [], total: 0, source: null, table: '' });
+  const [browseLoading, setBrowseLoading] = useState(false);
+
+  // Enrich
+  const handleEnrich = async () => {
+    setEnriching(true);
+    try {
+      const v = enrichForm.getFieldsValue();
+      const payload = {
+        library_id: (v.library_id || '').trim(),
+        state: v.state || 'empty',
+        limit: Number(v.limit || 200),
+        min_score: Number(v.min_score || 0.72),
+        source_id: v.source_id || '',
+        workers: Number(v.workers || 3),
+      };
+      const data = await fetchJSON('/api/v1/admin/metadata/enrich', tokenRef.current, { method: 'POST', body: JSON.stringify(payload) });
+      setStatus(`已提交补全任务 ${data.job_id || '-'}`, 'ok');
+      await refreshMetaJobs();
+    } catch (err) {
+      setStatus(err.message, 'err');
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+  // Cleanup
+  const handleCleanup = async (dryRun) => {
+    if (!dryRun) {
+      Modal.confirm({
+        title: '确认清理', content: '确认物理删除数据库中的 missing 记录吗？建议先执行 Dry Run。',
+        okText: '确认删除', okType: 'danger', cancelText: '取消',
+        onOk: () => doCleanup(false),
+      });
+      return;
+    }
+    await doCleanup(true);
+  };
+
+  const doCleanup = async (dryRun) => {
+    try {
+      const v = mgmtForm.getFieldsValue();
+      const payload = { library_id: (v.library_id || '').trim(), older_than_days: Number(v.older_than_days || 0), dry_run: dryRun };
+      const data = await fetchJSON('/api/v1/admin/metadata/cleanup', tokenRef.current, { method: 'POST', body: JSON.stringify(payload) });
+      const scope = payload.library_id || '全部书库';
+      const prefix = dryRun ? 'Dry Run 结果' : '清理结果';
+      setCleanupResult(`${prefix} 范围 [${scope}] / 保留 ${payload.older_than_days} 天 / 匹配 ${data.matched || 0} 条 / 删除 ${data.deleted || 0} 条`);
+      if (dryRun) {
+        setStatus(`测试清理完成：共匹配 ${data.matched || 0} 条 missing 数据`, 'ok');
+      } else {
+        setStatus(`清理完成：成功删除 ${data.deleted || 0}/${data.matched || 0} 条记录`, 'ok');
+        setSelectedRecords({});
+      }
+      refreshRecords();
+    } catch (err) {
+      setStatus(err.message, 'err');
+    }
+  };
+
+  // Rescan
+  const handleRescan = async (libraryId) => {
+    try {
+      if (libraryId === undefined) {
+        const v = mgmtForm.getFieldsValue();
+        libraryId = (v.library_id || '').trim();
+      }
+      if (libraryId === '' && libraryId !== undefined) {
+        // rescan all - needs confirm
+      }
+      const data = await fetchJSON('/api/v1/admin/rescan', tokenRef.current, { method: 'POST', body: JSON.stringify({ library_id: libraryId || '' }) });
+      setStatus(`已提交 Rescan 任务 ${data.job_id}`, 'ok');
+      await Promise.all([refreshMetaJobs(), refreshJobHistory()]);
+    } catch (err) {
+      setStatus(err.message, 'err');
+    }
+  };
+
+  const handleRescanSelected = async () => {
+    const v = mgmtForm.getFieldsValue();
+    const lib = (v.library_id || '').trim();
+    if (!lib) { setStatus('请先在"书库"输入框中填写书库 ID', 'err'); return; }
+    await handleRescan(lib);
+  };
+
+  const handleRescanAll = () => {
+    Modal.confirm({
+      title: '确认全库扫描', content: '确认对系统全部书库触发扫描任务吗？该操作可能耗时较长。',
+      okText: '确认', cancelText: '取消',
+      onOk: () => handleRescan(''),
+    });
+  };
+
+  // Records
+  const handleQueryRecords = (page = 1) => {
+    refreshRecords({ page, limit: recPageSize, library_id: recLibrary, state: recState, search: recSearch });
+  };
+
+  // Record actions
+  const handleRecordAction = async (action, locator) => {
+    try {
+      const ev = enrichForm.getFieldsValue();
+      const payload = {
+        action, locator,
+        source_id: ev.source_id || '',
+        min_score: Number(ev.min_score || 0.72),
+        workers: Number(ev.workers || 3),
+      };
+      const data = await fetchJSON('/api/v1/admin/metadata/records/actions', tokenRef.current, { method: 'POST', body: JSON.stringify(payload) });
+      if (Array.isArray(data.jobs) && data.jobs.length > 0) {
+        setStatus(`单条记录 [${actionLabel(action)}] 已拆分为 ${data.jobs.length} 个任务队列`, 'ok');
+        await refreshMetaJobs();
+      } else if (data.job?.job_id) {
+        setStatus(`补全任务已投递：${data.job.job_id}`, 'ok');
+        await refreshMetaJobs();
+      } else {
+        setStatus(`记录 [${actionLabel(action)}] 操作执行成功`, 'ok');
+      }
+      refreshRecords();
+    } catch (err) {
+      setStatus(`操作失败：${err.message}`, 'err');
+    }
+  };
+
+  const handleBatchAction = async () => {
+    if (!batchAction) { setStatus('请先选择批量动作类型', 'warn'); return; }
+    const locators = Object.values(selectedRecords);
+    if (locators.length === 0) { setStatus('当前未勾选任何记录', 'warn'); return; }
+    try {
+      const ev = enrichForm.getFieldsValue();
+      const payload = {
+        action: batchAction, locators,
+        source_id: ev.source_id || '',
+        min_score: Number(ev.min_score || 0.72),
+        workers: Number(ev.workers || 3),
+      };
+      const data = await fetchJSON('/api/v1/admin/metadata/records/actions', tokenRef.current, { method: 'POST', body: JSON.stringify(payload) });
+      if (Array.isArray(data.jobs) && data.jobs.length > 0) {
+        setStatus(`批量任务 [${actionLabel(batchAction)}] 成功：拆分 ${data.jobs.length} 个队列`, 'ok');
+        await refreshMetaJobs();
+      } else {
+        setStatus(`批量操作完成：处理 ${data.processed || locators.length} 条记录`, 'ok');
+      }
+      setSelectedRecords({});
+      refreshRecords();
+    } catch (err) {
+      setStatus(`批量操作失败：${err.message}`, 'err');
+    }
+  };
+
+  // Browse
+  const handleBrowse = async (page = 1) => {
+    setBrowseLoading(true);
+    try {
+      const srcId = browseSourceId;
+      if (!srcId) { setStatus('查询失败：未选择或无可用数据源', 'warn'); return; }
+      const params = new URLSearchParams({ q: browseQuery.trim(), page: String(page), limit: String(browsePageSize) });
+      const data = await fetchJSON(`/api/v1/admin/metadata/sources/${encodeURIComponent(srcId)}/records?${params}`, tokenRef.current);
+      const browse = data.browse || {};
+      setBrowseData({
+        items: (browse.items || []).map((item, i) => ({ ...item, _key: `b-${i}` })),
+        columns: browse.columns || [],
+        total: Number(browse.total || 0),
+        source: data.source,
+        table: browse.table || '',
+      });
+      setBrowsePage(page);
+    } catch (err) {
+      setStatus(`数据查询异常：${err.message}`, 'err');
+    } finally {
+      setBrowseLoading(false);
+    }
+  };
+
+  const pickSource = (id) => {
+    setBrowseSourceId(id);
+    setTimeout(() => handleBrowse(1), 0);
+  };
+
+  // Filter metadata jobs
+  const filteredMetaJobs = useMemo(() => {
+    const q = normalizeQuery(jobsSearch);
+    return (metaJobs || []).filter(job => {
+      if (jobsStatus && job.status !== jobsStatus) return false;
+      return matchesQuery([job.job_id, job.kind, job.library_id, job.path, job.error, formatJobSources(job)], q);
+    });
+  }, [metaJobs, jobsSearch, jobsStatus]);
+
+  const displayMetaJobs = useMemo(() => jobsAggregate ? aggregateJobsItems(filteredMetaJobs) : filteredMetaJobs, [filteredMetaJobs, jobsAggregate]);
+
+  const metaJobsCols = [
+    { title: '任务 ID', dataIndex: 'job_id', key: 'jid', width: 160, render: (v, r) => (<div><Text code>{v}</Text><GroupBadge record={r} /></div>) },
+    { title: '类型', dataIndex: 'kind', key: 'kind', width: 100, render: (v) => <Tag>{v || '-'}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'st', width: 90, render: (v) => <StatusTag value={v} /> },
+    { title: '书库', dataIndex: 'library_id', key: 'lib', width: 120, render: (v) => <Text className="mono">{v || '-'}</Text> },
+    { title: '来源', dataIndex: 'source_id', key: 'src', width: 120, render: (_, r) => <Text type="secondary">{formatJobSources(r)}</Text> },
+    { title: '进度', dataIndex: 'processed', key: 'prog', render: (_, r) => <Text className="mono">{formatJobProgress(r)}</Text> },
+    { title: '错误日志', dataIndex: 'error', key: 'err', width: 200, render: (v) => v ? <Text type="danger" className="mono">{v}</Text> : '-' },
+  ];
+
+  // Record columns
+  const selectedKeys = Object.keys(selectedRecords);
+  const recordCols = [
+    { title: '状态', dataIndex: 'state', key: 'st', width: 90, render: (v) => <StatusTag value={v} /> },
+    { title: '标题 / TAG', key: 'title', render: (_, r) => <TagsCell item={r} setStatus={setStatus} /> },
+    {
+      title: '相对路径 / 绝对路径', key: 'path', width: 260,
+      render: (_, r) => (<div><Text className="mono" strong>{r.root_ref || ''}</Text><br/><Text type="secondary" className="mono" style={{ fontSize: 12 }}>{r.folder_path || ''}</Text></div>),
+    },
+    {
+      title: '来源信息', key: 'source', width: 150,
+      render: (_, r) => (<div><Text>{r.source || ''}</Text><br/><Text type="secondary" className="mono" style={{ fontSize: 12 }}>{r.source_id || ''}</Text></div>),
+    },
+    { title: '置信度', dataIndex: 'confidence', key: 'conf', width: 80, render: (v) => <Text className="mono">{v == null ? '-' : v}</Text> },
+    {
+      title: '操作', key: 'actions', width: 280, fixed: 'right',
+      render: (_, r) => (
+        <Space size={4}>
+          <Button size="small" onClick={() => openSidecar(r)}>配置</Button>
+          <Button size="small" onClick={() => handleRecordAction(r.manual_locked ? 'unlock' : 'lock', r.locator)}>{r.manual_locked ? '解锁' : '锁定'}</Button>
+          <Button size="small" onClick={() => handleRecordAction('reset', r.locator)}>重置</Button>
+          <Button size="small" type="primary" ghost onClick={() => handleRecordAction('enrich', r.locator)}>补全</Button>
+        </Space>
+      ),
+    },
+  ];
+
+  // Sources columns
+  const sourceCols = [
+    {
+      title: '名称 / 路径', key: 'name',
+      render: (_, r) => (<div><Text strong>{r.name}</Text><br/><Text type="secondary" className="mono" style={{ fontSize: 12 }}>{r.relative_path || ''}</Text></div>),
+    },
+    { title: '目标', dataIndex: 'chosen_table', key: 'tbl', render: (v) => <Text className="mono">{v || ''}</Text> },
+    { title: '行数', dataIndex: 'row_count', key: 'rows', width: 80, render: (v) => <Text className="mono">{v ?? '-'}</Text> },
+    { title: '状态', key: 'st', width: 80, render: (_, r) => r.error ? <Pill text={r.error} kind="err" /> : <Pill text="就绪" kind="ok" /> },
+    { title: '操作', key: 'act', width: 80, render: (_, r) => <Button size="small" type="link" disabled={!!r.error} onClick={() => pickSource(r.id)}>查看</Button> },
+  ];
+
+  // Browse columns (dynamic)
+  const browseCols = useMemo(() => browseData.columns.map(col => ({
+    title: col, dataIndex: col, key: col, ellipsis: true,
+    render: (v) => <Text className="mono">{v ?? ''}</Text>,
+  })), [browseData.columns]);
+
+  const availableSources = (sources || []).filter(s => !s.error);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Enrich + Management */}
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={12}>
+          <Card title="批量补全任务（Batch Enrich）" size="small">
+            <Form form={enrichForm} layout="vertical" size="small" initialValues={{ state: 'empty', limit: 200, min_score: 0.72, workers: 3 }}>
+              <Row gutter={12}>
+                <Col xs={24} md={8}><Form.Item name="library_id" label="书库（Library）"><Input placeholder="例如 local-main" /></Form.Item></Col>
+                <Col xs={24} md={8}>
+                  <Form.Item name="state" label="状态（State）">
+                    <Select>
+                      <Select.Option value="empty">empty</Select.Option>
+                      <Select.Option value="ready">ready</Select.Option>
+                      <Select.Option value="stale">stale</Select.Option>
+                      <Select.Option value="error">error</Select.Option>
+                      <Select.Option value="missing">missing</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item name="source_id" label="来源（Source）">
+                    <Select placeholder="自动选择可用数据源" allowClear>
+                      {availableSources.map(s => <Select.Option key={s.id} value={s.id}>{s.name}</Select.Option>)}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col xs={8}><Form.Item name="limit" label="上限"><InputNumber min={1} max={2000} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={8}><Form.Item name="min_score" label="最低分"><InputNumber min={0} max={1} step={0.01} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={8}><Form.Item name="workers" label="并发"><InputNumber min={1} max={4} style={{ width: '100%' }} /></Form.Item></Col>
+              </Row>
+            </Form>
+            <Space style={{ marginTop: 8 }}>
+              <Button type="primary" onClick={handleEnrich} loading={enriching}>开始补全任务</Button>
+              <Button onClick={refreshSources}>刷新数据源</Button>
+              <Button onClick={refreshMetaJobs}>刷新任务状态</Button>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="元数据管理" size="small">
+            <Form form={mgmtForm} layout="vertical" size="small" initialValues={{ older_than_days: 0 }}>
+              <Row gutter={12}>
+                <Col xs={12}><Form.Item name="library_id" label="书库（Library）"><Input placeholder="例如 local-main" /></Form.Item></Col>
+                <Col xs={12}><Form.Item name="older_than_days" label="missing 保留天数"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+              </Row>
+            </Form>
+            <Space wrap style={{ marginTop: 8 }}>
+              <Button onClick={handleRescanSelected}>重扫当前书库</Button>
+              <Button onClick={handleRescanAll}>重扫全部</Button>
+              <Button onClick={() => handleCleanup(true)}>测试清理（Dry Run）</Button>
+              <Button danger onClick={() => handleCleanup(false)}>清理失效记录</Button>
+            </Space>
+            {cleanupResult && <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>{cleanupResult}</Text>}
+            <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>清理仅处理 missing 记录，建议先试运行（Dry Run）；重扫和清理将使用上方指定的书库。</Text>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Background Jobs */}
+      <Card title={
+        <Flex justify="space-between" align="center">
+          <span>后台任务（Jobs）</span>
+          <Button size="small" onClick={() => setPolling(p => !p)}>{polling ? '暂停自动刷新' : '恢复自动刷新'}</Button>
+        </Flex>
+      } size="small">
+        <Flex gap={12} wrap="wrap" align="center" style={{ marginBottom: 12 }}>
+          <Input placeholder="job_id / 类型 / 书库 / 路径" value={jobsSearch} onChange={(e) => setJobsSearch(e.target.value)} style={{ width: 220 }} size="small" allowClear />
+          <Select value={jobsStatus || undefined} onChange={(v) => setJobsStatus(v || '')} style={{ width: 140 }} size="small" allowClear placeholder="全部状态">
+            <Select.Option value="queued">queued</Select.Option>
+            <Select.Option value="running">running</Select.Option>
+            <Select.Option value="done">done</Select.Option>
+            <Select.Option value="failed">failed</Select.Option>
+            <Select.Option value="ready">ready</Select.Option>
+            <Select.Option value="accepted">accepted</Select.Option>
+          </Select>
+          <Checkbox checked={jobsAggregate} onChange={(e) => setJobsAggregate(e.target.checked)}>聚合同类相邻记录</Checkbox>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {formatTableSummary({ total: (metaJobs || []).length, filtered: filteredMetaJobs.length, displayed: displayMetaJobs.length, aggregated: jobsAggregate })}
+          </Text>
+        </Flex>
+        <Table columns={metaJobsCols} dataSource={displayMetaJobs} rowKey={(r, i) => r.job_id || `mj-${i}`} size="small"
+          pagination={false} scroll={{ x: 800, y: 400 }} loading={metaJobsLoading} locale={{ emptyText: '当前没有运行中的任务' }} />
+      </Card>
+
+      {/* Local Records */}
+      <Card title="本地元数据记录（Local Records）" size="small"
+        extra={<Button type="primary" size="small" onClick={() => handleQueryRecords(1)}>查询记录</Button>}>
+        <Flex gap={12} wrap="wrap" align="center" style={{ marginBottom: 12 }}>
+          <Input placeholder="书库（留空表示全部）" value={recLibrary} onChange={(e) => setRecLibrary(e.target.value)} style={{ width: 160 }} size="small" />
+          <Select value={recState || undefined} onChange={(v) => setRecState(v || '')} style={{ width: 130 }} size="small" allowClear placeholder="全部状态">
+            <Select.Option value="empty">empty</Select.Option>
+            <Select.Option value="ready">ready</Select.Option>
+            <Select.Option value="stale">stale</Select.Option>
+            <Select.Option value="error">error</Select.Option>
+            <Select.Option value="missing">missing</Select.Option>
+            <Select.Option value="locked">locked</Select.Option>
+          </Select>
+          <Input placeholder="标题 / 路径 / 来源模糊搜索" value={recSearch} onChange={(e) => setRecSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleQueryRecords(1); }} style={{ width: 220 }} size="small" allowClear />
+          <Select value={recPageSize} onChange={(v) => { setRecPageSize(v); refreshRecords({ limit: v, page: 1 }); }} style={{ width: 90 }} size="small">
+            <Select.Option value={30}>30/页</Select.Option>
+            <Select.Option value={50}>50/页</Select.Option>
+            <Select.Option value={100}>100/页</Select.Option>
+            <Select.Option value={200}>200/页</Select.Option>
+          </Select>
+        </Flex>
+        <Flex gap={12} wrap="wrap" align="center" style={{ marginBottom: 12 }}>
+          <Text type="secondary">{selectedKeys.length === 0 ? '未选择记录' : `已选择 ${selectedKeys.length} 条记录`}</Text>
+          <Select value={batchAction || undefined} onChange={(v) => setBatchAction(v || '')} style={{ width: 160 }} size="small" allowClear placeholder="请选择批量动作...">
+            <Select.Option value="lock">锁定（Lock）</Select.Option>
+            <Select.Option value="unlock">解锁（Unlock）</Select.Option>
+            <Select.Option value="reset">重置（Reset）</Select.Option>
+            <Select.Option value="enrich">重新补全（Enrich）</Select.Option>
+          </Select>
+          <Button size="small" type="primary" disabled={selectedKeys.length === 0 || !batchAction} onClick={handleBatchAction}>应用到已选</Button>
+          <Button size="small" disabled={selectedKeys.length === 0} onClick={() => setSelectedRecords({})}>清空选择</Button>
+        </Flex>
+        <Table
+          columns={recordCols}
+          dataSource={recordItems}
+          rowKey={(r) => locatorKey(r.locator)}
+          size="small"
+          loading={recordsLoading}
+          scroll={{ x: 1100 }}
+          locale={{ emptyText: '暂无符合条件的记录' }}
+          rowSelection={{
+            selectedRowKeys: selectedKeys,
+            onSelect: (record, selected) => {
+              const key = locatorKey(record.locator);
+              setSelectedRecords(prev => {
+                const next = { ...prev };
+                if (selected) next[key] = record.locator; else delete next[key];
+                return next;
+              });
+            },
+            onSelectAll: (selected, _, changeRows) => {
+              setSelectedRecords(prev => {
+                const next = { ...prev };
+                changeRows.forEach(r => { const k = locatorKey(r.locator); if (selected) next[k] = r.locator; else delete next[k]; });
+                return next;
+              });
+            },
+          }}
+          pagination={{
+            current: recordPage, pageSize: recordPageSize, total: recordTotal,
+            onChange: (p, ps) => refreshRecords({ page: p, limit: ps }),
+            showSizeChanger: false, showTotal: (t) => `共 ${t} 条`,
+          }}
+        />
+      </Card>
+
+      {/* Sources + Browse */}
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={12}>
+          <Card title="外部数据源（External Sources）" size="small">
+            {sourceDir && <Text type="secondary" className="mono" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>数据源目录：{sourceDir}</Text>}
+            <Table columns={sourceCols} dataSource={sources} rowKey="id" size="small" pagination={false}
+              scroll={{ y: 300 }} locale={{ emptyText: '目录为空。请将外部 sqlite 数据库放到 data/externaldb 目录。' }} />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="数据源浏览（Browse Data）" size="small">
+            <Flex gap={12} wrap="wrap" align="center" style={{ marginBottom: 12 }}>
+              <Select value={browseSourceId || undefined} onChange={(v) => setBrowseSourceId(v || '')} style={{ width: 180 }} size="small" placeholder="选择源库">
+                {availableSources.map(s => <Select.Option key={s.id} value={s.id}>{s.name}</Select.Option>)}
+              </Select>
+              <Input placeholder="标题 / 作者模糊搜索" value={browseQuery} onChange={(e) => setBrowseQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleBrowse(1); }} style={{ width: 180 }} size="small" allowClear />
+              <Select value={browsePageSize} onChange={(v) => setBrowsePageSize(v)} style={{ width: 80 }} size="small">
+                <Select.Option value={30}>30</Select.Option>
+                <Select.Option value={50}>50</Select.Option>
+                <Select.Option value={100}>100</Select.Option>
+                <Select.Option value={200}>200</Select.Option>
+              </Select>
+              <Button type="primary" size="small" onClick={() => handleBrowse(1)}>查询数据</Button>
+            </Flex>
+            {browseData.source && (
+              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                <Text strong>{browseData.source.name || '-'}</Text> / 数据表：<Text code>{browseData.table}</Text> / {formatTableSummary({ total: browseData.total, displayed: browseData.items.length })}
+              </Text>
+            )}
+            <Table columns={browseCols} dataSource={browseData.items} rowKey="_key" size="small" loading={browseLoading}
+              scroll={{ x: 600, y: 300 }} locale={{ emptyText: '暂无匹配查询结果' }}
+              pagination={{
+                current: browsePage, pageSize: browsePageSize, total: browseData.total,
+                onChange: (p) => handleBrowse(p), showSizeChanger: false, size: 'small',
+              }}
+            />
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Job History Panel
+   ═══════════════════════════════════════════════════════════ */
+const JobHistoryPanel = () => {
+  const { tokenRef, setStatus, historyItems, historyTotal, historyPage, historyPageSize, historyLoading, refreshJobHistory } = React.useContext(AppCtx);
+  const [kind, setKind] = useState('');
+  const [trigger, setTrigger] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [library, setLibrary] = useState('');
+  const [aggregate, setAggregate] = useState(true);
+  const [pageSize, setPageSize] = useState(100);
+
+  const handleRefresh = (resetPage = false) => {
+    refreshJobHistory({
+      kind: kind.trim(), trigger, status: statusFilter, library_id: library.trim(),
+      page: resetPage ? 1 : undefined, limit: pageSize,
+    });
+  };
+
+  const rawItems = historyItems || [];
+  const displayItems = useMemo(() => aggregate ? aggregateJobHistoryItems(rawItems) : rawItems, [rawItems, aggregate]);
+
+  const cols = [
+    {
+      title: '任务 ID', dataIndex: 'job_id', key: 'jid', width: 160,
+      render: (v, r) => {
+        const count = Number(r._group_count || 1);
+        return (<div>
+          <Text code>{v}</Text>
+          {count > 1 && <div><Tag color="warning">×{count}</Tag> <Text code style={{ fontSize: 11 }}>最早 {r._group_first_job_id || ''}</Text></div>}
+        </div>);
+      },
+    },
+    { title: '类型', dataIndex: 'kind', key: 'kind', width: 130, render: (v) => <Tag>{v || '-'}</Tag> },
+    { title: '触发', dataIndex: 'trigger', key: 'trig', width: 100, render: (v) => <Tag color={v === 'manual' ? 'warning' : v ? 'success' : 'default'}>{v || '-'}</Tag> },
+    { title: '状态', dataIndex: 'status', key: 'st', width: 90, render: (v) => <StatusTag value={v} /> },
+    {
+      title: '书库/目标', key: 'target', width: 180,
+      render: (_, r) => {
+        const target = [r.library_id, r.target_id, r.remote_job_id].filter(Boolean).join(' / ');
+        return (<div><Text className="mono" strong>{target || '-'}</Text><br/><Text type="secondary" className="mono" style={{ fontSize: 12 }}>{r.path || ''}</Text></div>);
+      },
+    },
+    {
+      title: '时间', key: 'time', width: 180,
+      render: (_, r) => {
+        const count = Number(r._group_count || 1);
+        return (<div>
+          <Text className="mono">{formatDateTime(r.updated_at || r.requested_at)}</Text>
+          {count > 1 && <br />}
+          {count > 1 && <Text type="secondary" className="mono" style={{ fontSize: 11 }}>起始 {formatDateTime(r._group_first_updated_at || r.requested_at)}</Text>}
+        </div>);
+      },
+    },
+    {
+      title: '摘要', dataIndex: 'summary', key: 'sum',
+      render: (v, r) => {
+        const count = Number(r._group_count || 1);
+        return (<div>{v || '-'}{count > 1 && <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>相邻 {count} 条相同类型且相同状态记录已折叠</Text>}</div>);
+      },
+    },
+    {
+      title: '错误', dataIndex: 'error', key: 'err', width: 200,
+      render: (v, r) => {
+        if (!v && !(r._group_error_count > 0)) return '-';
+        return (<div>{v && <Text type="danger" className="mono">{v}</Text>}{r._group_error_count > 0 && <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>聚合内含 {r._group_error_count} 条错误</Text>}</div>);
+      },
+    },
+  ];
+
+  return (
+    <Card title={
+      <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+        <div>
+          <Title level={5} style={{ margin: 0 }}>统一 Job 历史</Title>
+          <Text type="secondary">汇总显示 metadata、EH Bot 拉取，以及手动触发的远程建单等后台任务记录。</Text>
+        </div>
+        <Button onClick={() => handleRefresh(true)}>刷新 Job 历史</Button>
+      </Flex>
+    }>
+      <Flex gap={12} wrap="wrap" align="center" style={{ marginBottom: 12 }}>
+        <Input placeholder="如 metadata.refresh / ehbot.pull" value={kind} onChange={(e) => setKind(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleRefresh(true); }} style={{ width: 200 }} size="small" />
+        <Select value={trigger || undefined} onChange={(v) => { setTrigger(v || ''); }} style={{ width: 130 }} size="small" allowClear placeholder="全部触发方式">
+          <Select.Option value="manual">manual</Select.Option>
+          <Select.Option value="auto">auto</Select.Option>
+          <Select.Option value="rescan">rescan</Select.Option>
+          <Select.Option value="refresh">refresh</Select.Option>
+          <Select.Option value="enrich">enrich</Select.Option>
+          <Select.Option value="record_action">record_action</Select.Option>
+          <Select.Option value="startup">startup</Select.Option>
+        </Select>
+        <Select value={statusFilter || undefined} onChange={(v) => { setStatusFilter(v || ''); }} style={{ width: 120 }} size="small" allowClear placeholder="全部状态">
+          <Select.Option value="queued">queued</Select.Option>
+          <Select.Option value="running">running</Select.Option>
+          <Select.Option value="done">done</Select.Option>
+          <Select.Option value="failed">failed</Select.Option>
+          <Select.Option value="ready">ready</Select.Option>
+          <Select.Option value="accepted">accepted</Select.Option>
+        </Select>
+        <Input placeholder="如 local-main" value={library} onChange={(e) => setLibrary(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleRefresh(true); }} style={{ width: 140 }} size="small" />
+        <Checkbox checked={aggregate} onChange={(e) => setAggregate(e.target.checked)}>聚合同类同状态相邻记录</Checkbox>
+        <Select value={pageSize} onChange={(v) => { setPageSize(v); }} style={{ width: 90 }} size="small">
+          <Select.Option value={30}>30/页</Select.Option>
+          <Select.Option value={50}>50/页</Select.Option>
+          <Select.Option value={100}>100/页</Select.Option>
+          <Select.Option value={200}>200/页</Select.Option>
+        </Select>
+      </Flex>
+      <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+        {formatTableSummary({ total: historyTotal, displayed: displayItems.length, aggregated: aggregate })} / 本页原始 {rawItems.length} 条 / 每页 {historyPageSize} 条
+      </Text>
+      <Table columns={cols} dataSource={displayItems} rowKey={(r, i) => r.job_id || `jh-${i}`} size="small"
+        loading={historyLoading} scroll={{ x: 1000, y: 500 }} locale={{ emptyText: '暂无 Job 历史记录' }}
+        pagination={{
+          current: historyPage, pageSize: historyPageSize, total: historyTotal,
+          onChange: (p) => refreshJobHistory({ page: p, limit: pageSize }),
+          showSizeChanger: false, showTotal: (t) => `共 ${t} 条`,
+        }}
+      />
+    </Card>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Sidecar Modal
+   ═══════════════════════════════════════════════════════════ */
+const SidecarModal = () => {
+  const { tokenRef, setStatus, sidecarVisible, sidecarLocator, sidecarItem, sidecarInfo, setSidecarInfo, closeSidecar, refreshRecords } = React.useContext(AppCtx);
+  const [content, setContent] = useState('');
+  const [autoRescan, setAutoRescan] = useState(true);
+  const [summary, setSummary] = useState('等待操作');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (sidecarInfo) {
+      setContent(sidecarInfo.exists
+        ? formatSidecarContent(sidecarInfo.content, buildSidecarTemplate(sidecarItem))
+        : buildSidecarTemplate(sidecarItem));
+      setSummary(sidecarInfo.exists ? '文件读取成功' : '本地暂无 Sidecar 文件，您可以直接编辑并保存以创建。');
+    }
+  }, [sidecarInfo, sidecarItem]);
+
+  const loadSidecar = async () => {
+    if (!sidecarLocator) return;
+    try {
+      setSummary('正在加载...');
+      const params = new URLSearchParams(sidecarLocator);
+      const data = await fetchJSON(`/api/v1/admin/metadata/sidecar?${params}`, tokenRef.current);
+      setSidecarInfo(data);
+    } catch (err) {
+      setSummary(err.message);
+      setStatus(`读取失败: ${err.message}`, 'err');
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const trimmed = content.trim();
+      JSON.parse(trimmed);
+      await fetchJSON('/api/v1/admin/metadata/sidecar', tokenRef.current, { method: 'PUT', body: JSON.stringify({ locator: sidecarLocator, content: trimmed }) });
+      await loadSidecar();
+      setSummary('保存成功');
+      if (autoRescan) {
+        const data = await fetchJSON('/api/v1/admin/rescan', tokenRef.current, { method: 'POST', body: JSON.stringify({ library_id: sidecarLocator.library_id || '' }) });
+        setStatus(`Sidecar 已保存，并已触发重扫任务：${data.job_id}`, 'ok');
+      } else {
+        setStatus('Sidecar 文件已成功保存到磁盘', 'ok');
+      }
+      refreshRecords();
+    } catch (err) {
+      setSummary(`JSON 格式错误或保存失败：${err.message}`);
+      setStatus('文件保存失败，请检查格式', 'err');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await fetchJSON('/api/v1/admin/metadata/sidecar', tokenRef.current, { method: 'DELETE', body: JSON.stringify({ locator: sidecarLocator }) });
+      await loadSidecar();
+      setSummary('文件已删除');
+      if (autoRescan) {
+        const data = await fetchJSON('/api/v1/admin/rescan', tokenRef.current, { method: 'POST', body: JSON.stringify({ library_id: sidecarLocator.library_id || '' }) });
+        setStatus(`Sidecar 已移除，并已触发重扫任务：${data.job_id}`, 'ok');
+      } else {
+        setStatus('Sidecar 文件已被删除', 'ok');
+      }
+      refreshRecords();
+    } catch (err) {
+      setSummary(err.message);
+      setStatus(`删除失败: ${err.message}`, 'err');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const info = sidecarInfo || {};
+  const loc = sidecarLocator || {};
+
+  return (
+    <Modal
+      title="编辑 .venera.json（Sidecar）"
+      open={sidecarVisible}
+      onCancel={closeSidecar}
+      width={980}
+      footer={null}
+      destroyOnClose
+    >
+      <Text type="secondary">书库 {loc.library_id || '-'} / 类型 {loc.root_type || '-'} / 路径 {loc.root_ref || '-'}</Text>
+
+      <Row gutter={16} style={{ marginTop: 16, marginBottom: 16 }}>
+        <Col xs={24} md={8}>
+          <Card size="small"><Statistic title="文件路径" valueRender={() => <Text className="mono" style={{ fontSize: 12 }}>{info.display_path || info.sidecar_ref || '-'}</Text>} /></Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card size="small"><Statistic title="当前状态" valueRender={() => {
+            if (!info.exists && !info.writable) return <Pill text="缺失 / 只读" kind="err" />;
+            if (!info.exists && info.writable) return <Pill text="缺失 / 可写" kind="warn" />;
+            if (info.exists && info.writable) return <Pill text="已存在 / 可写" kind="ok" />;
+            return <Pill text="已存在 / 只读" kind="warn" />;
+          }} /></Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card size="small"><Statistic title="存储后端" valueRender={() => <Text>{(info.backend_kind || '-') + (info.writable ? '' : '（受保护）')}</Text>} /></Card>
+        </Col>
+      </Row>
+
+      <Space style={{ marginBottom: 12 }}>
+        <Button onClick={loadSidecar}>重新读取</Button>
+        <Button onClick={() => { setContent(buildSidecarTemplate(sidecarItem)); setSummary('已自动生成模板结构'); }}>应用模板</Button>
+      </Space>
+
+      <div style={{ marginBottom: 12 }}>
+        <Checkbox checked={autoRescan} onChange={(e) => setAutoRescan(e.target.checked)}>保存或删除后，自动触发该书库的 Rescan 任务</Checkbox>
+      </div>
+
+      <TextArea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        className="mono"
+        rows={12}
+        spellCheck={false}
+        placeholder="在此处直接编辑 JSON 内容..."
+        style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
+      />
+
+      <Flex justify="space-between" align="center" style={{ marginTop: 12 }}>
+        <Space>
+          <Button type="primary" onClick={handleSave} loading={saving} disabled={!info.writable}>保存 Sidecar 文件</Button>
+          <Popconfirm title="危险操作" description="确认要彻底删除 Sidecar 配置文件吗？" onConfirm={handleDelete} okText="确认删除" okType="danger">
+            <Button danger loading={deleting} disabled={!info.writable || !info.exists}>删除文件</Button>
+          </Popconfirm>
+        </Space>
+        <Text type="secondary">{summary}</Text>
+      </Flex>
+    </Modal>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   App Component
+   ═══════════════════════════════════════════════════════════ */
+const App = () => {
+  // ─── UI State ───
+  const [themeMode, setThemeMode] = useState(preferredTheme());
+  const [activeTab, setActiveTab] = useState(loadPreferredTab());
+  const [polling, setPolling] = useState(true);
+  const [statusState, setStatusState] = useState({ text: '系统已就绪，等待操作', type: 'info' });
+  const [token, setToken] = useState(localStorage.getItem('venera_admin_token') || '');
+
+  // ─── EH Bot State ───
+  const [ehbotStatus, setEhbotStatus] = useState(null);
+  const [ehbotConfig, setEhbotConfig] = useState(null);
+  const [ehbotJobs, setEhbotJobs] = useState([]);
+
+  // ─── Metadata State ───
+  const [metaJobs, setMetaJobs] = useState([]);
+  const [metaJobsLoading, setMetaJobsLoading] = useState(false);
+  const [sources, setSources] = useState([]);
+  const [sourceDir, setSourceDir] = useState('');
+
+  // ─── Records State ───
+  const [recordItems, setRecordItems] = useState([]);
+  const [recordTotal, setRecordTotal] = useState(0);
+  const [recordPage, setRecordPage] = useState(1);
+  const [recordPageSize, setRecordPageSize] = useState(50);
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [selectedRecords, setSelectedRecords] = useState({});
+
+  // ─── Job History State ───
+  const [historyItems, setHistoryItems] = useState([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(100);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // ─── Sidecar State ───
+  const [sidecarVisible, setSidecarVisible] = useState(false);
+  const [sidecarLocator, setSidecarLocator] = useState(null);
+  const [sidecarItem, setSidecarItem] = useState(null);
+  const [sidecarInfo, setSidecarInfo] = useState(null);
+
+  // ─── Refs ───
+  const tokenRef = useRef(token);
+  const pollingRef = useRef(polling);
+  const recordQueryRef = useRef({ page: 1, limit: 50, library_id: '', state: '', search: '' });
+  const historyQueryRef = useRef({ page: 1, limit: 100, kind: '', trigger: '', status: '', library_id: '' });
+
+  useEffect(() => { tokenRef.current = token; }, [token]);
+  useEffect(() => { pollingRef.current = polling; }, [polling]);
+
+  // ─── Status Helper ───
+  const setStatus = useCallback((text, kind = '') => {
+    const typeMap = { ok: 'success', err: 'error', warn: 'warning' };
+    setStatusState({ text: text || '系统已就绪，等待操作', type: typeMap[kind] || 'info' });
+  }, []);
+
+  // ─── Theme ───
+  useEffect(() => {
+    localStorage.setItem('venera_admin_theme', themeMode);
+  }, [themeMode]);
+
+  // ─── Tab ───
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+    localStorage.setItem('venera_admin_tab', tab);
+  }, []);
+
+  // ─── Token ───
+  const saveToken = useCallback(() => {
+    localStorage.setItem('venera_admin_token', token.trim());
+    setStatus('配置已保存', 'ok');
+  }, [token, setStatus]);
+
+  // ─── API Functions ───
+  const refreshEhbotStatus = useCallback(async () => {
+    try {
+      const data = await fetchJSON('/api/v1/admin/ehbot/status', tokenRef.current);
+      setEhbotStatus(data);
+    } catch (err) {
+      setEhbotStatus(null);
+    }
+  }, []);
+
+  const loadEhbotConfig = useCallback(async () => {
+    try {
+      const data = await fetchJSON('/api/v1/admin/ehbot/config', tokenRef.current);
+      setEhbotConfig(data);
+    } catch (_) {}
+  }, []);
+
+  const refreshEhbotJobs = useCallback(async () => {
+    try {
+      const data = await fetchJSON('/api/v1/admin/ehbot/jobs', tokenRef.current);
+      setEhbotJobs(data.items || []);
+    } catch (_) {}
+  }, []);
+
+  const refreshMetaJobs = useCallback(async () => {
+    setMetaJobsLoading(true);
+    try {
+      const data = await fetchJSON('/api/v1/admin/metadata/jobs', tokenRef.current);
+      setMetaJobs(data.items || []);
+    } catch (_) {}
+    finally { setMetaJobsLoading(false); }
+  }, []);
+
+  const refreshSources = useCallback(async () => {
+    try {
+      const data = await fetchJSON('/api/v1/admin/metadata/sources', tokenRef.current);
+      setSources(data.items || []);
+      setSourceDir(data.directory || '');
+    } catch (err) {
+      setStatus(`加载数据源失败：${err.message}`, 'err');
+    }
+  }, [setStatus]);
+
+  const refreshRecords = useCallback(async (overrides) => {
+    if (overrides) recordQueryRef.current = { ...recordQueryRef.current, ...overrides };
+    const q = recordQueryRef.current;
+    setRecordsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(q.page || 1), limit: String(q.limit || 50),
+        library_id: q.library_id || '', state: q.state || '', search: q.search || '',
+      });
+      const data = await fetchJSON(`/api/v1/admin/metadata/records?${params}`, tokenRef.current);
+      setRecordItems(data.items || []);
+      setRecordTotal(Number(data.total || 0));
+      setRecordPage(Number(data.page || q.page || 1));
+      setRecordPageSize(Number(data.page_size || q.limit || 50));
+    } catch (err) {
+      setStatus(err.message, 'err');
+    } finally {
+      setRecordsLoading(false);
+    }
+  }, [setStatus]);
+
+  const refreshJobHistory = useCallback(async (overrides) => {
+    if (overrides) historyQueryRef.current = { ...historyQueryRef.current, ...overrides };
+    const q = historyQueryRef.current;
+    setHistoryLoading(true);
+    try {
+      const params = new URLSearchParams({
+        kind: q.kind || '', trigger: q.trigger || '', status: q.status || '',
+        library_id: q.library_id || '', page: String(q.page || 1), limit: String(q.limit || 100),
+      });
+      const data = await fetchJSON(`/api/v1/admin/jobs?${params}`, tokenRef.current);
+      setHistoryItems(data.items || []);
+      setHistoryTotal(Number(data.total || 0));
+      setHistoryPage(Number(data.page || q.page || 1));
+      setHistoryPageSize(Number(data.page_size || q.limit || 100));
+    } catch (err) {
+      setStatus(`Job 历史加载失败：${err.message}`, 'err');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [setStatus]);
+
+  // ─── Sidecar ───
+  const openSidecar = useCallback(async (record) => {
+    const locator = record.locator;
+    setSidecarLocator(locator);
+    setSidecarItem(record);
+    setSidecarInfo(null);
+    setSidecarVisible(true);
+    try {
+      const params = new URLSearchParams(locator);
+      const data = await fetchJSON(`/api/v1/admin/metadata/sidecar?${params}`, tokenRef.current);
+      setSidecarInfo(data);
+    } catch (err) {
+      setStatus(`读取失败: ${err.message}`, 'err');
+    }
+  }, [setStatus]);
+
+  const closeSidecar = useCallback(() => setSidecarVisible(false), []);
+
+  // ─── Boot ───
+  useEffect(() => {
+    Promise.all([
+      loadEhbotConfig(), refreshEhbotStatus(), refreshEhbotJobs(),
+      refreshSources(), refreshMetaJobs(), refreshJobHistory(), refreshRecords(),
+    ]).then(() => setStatus('控制面板初始化完成', 'ok'));
+  }, []);
+
+  // ─── Polling ───
+  useEffect(() => {
+    const fast = setInterval(() => {
+      if (!pollingRef.current) return;
+      refreshEhbotStatus();
+      refreshEhbotJobs();
+      refreshMetaJobs();
+      refreshJobHistory();
+    }, 3000);
+    const slow = setInterval(() => {
+      if (!pollingRef.current) return;
+      refreshRecords();
+    }, 8000);
+    return () => { clearInterval(fast); clearInterval(slow); };
+  }, [refreshEhbotStatus, refreshEhbotJobs, refreshMetaJobs, refreshJobHistory, refreshRecords]);
+
+  // ─── Context ───
+  const ctx = {
+    tokenRef, setStatus,
+    ehbotStatus, ehbotConfig, ehbotJobs, refreshEhbotStatus, refreshEhbotJobs, loadEhbotConfig,
+    metaJobs, metaJobsLoading, refreshMetaJobs,
+    sources, sourceDir, refreshSources,
+    recordItems, recordTotal, recordPage, recordPageSize, recordsLoading, refreshRecords,
+    selectedRecords, setSelectedRecords,
+    historyItems, historyTotal, historyPage, historyPageSize, historyLoading, refreshJobHistory,
+    polling, setPolling,
+    openSidecar, closeSidecar,
+    sidecarVisible, sidecarLocator, sidecarItem, sidecarInfo, setSidecarInfo,
+  };
+
+  const tabItems = [
+    { key: 'bot', label: 'EH Bot', children: <EHBotPanel /> },
+    { key: 'metadata', label: 'Metadata', children: <MetadataPanel /> },
+    { key: 'jobs', label: 'Job History', children: <JobHistoryPanel /> },
+  ];
+
+  return (
+    <ConfigProvider theme={{ algorithm: themeMode === 'dark' ? darkAlgorithm : defaultAlgorithm }}>
+      <AppCtx.Provider value={ctx}>
+        <Layout style={{ minHeight: '100vh' }}>
+          <Header style={{
+            height: 'auto', lineHeight: 'normal', padding: '16px 24px',
+            position: 'sticky', top: 0, zIndex: 20,
+            backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+          }}>
+            <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
+              <div>
+                <Title level={4} style={{ margin: 0 }}>Venera Metadata Admin</Title>
+                <Text type="secondary">管理 metadata store、外部数据源，以及手动补全任务。</Text>
+              </div>
+              <Flex gap={8} wrap="wrap" align="center">
+                <Text type="secondary">Bearer Token</Text>
+                <Password value={token} onChange={(e) => setToken(e.target.value)} placeholder="填写服务 Token" style={{ width: 200 }} size="small" />
+                <Button size="small" onClick={saveToken}>保存配置</Button>
+                <Button size="small" onClick={() => setThemeMode(t => t === 'dark' ? 'light' : 'dark')}>
+                  {themeMode === 'dark' ? '切换到浅色' : '切换到深色'}
+                </Button>
+                <Button size="small" onClick={() => { window.location.href = window.location.pathname; }}>切换到原版</Button>
+              </Flex>
+            </Flex>
+          </Header>
+          <Content style={{ padding: '24px', maxWidth: 1600, margin: '0 auto', width: '100%' }}>
+            <Alert
+              message={statusState.text}
+              type={statusState.type}
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            <Tabs activeKey={activeTab} onChange={handleTabChange} items={tabItems} />
+          </Content>
+        </Layout>
+        <SidecarModal />
+      </AppCtx.Provider>
+    </ConfigProvider>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Mount
+   ═══════════════════════════════════════════════════════════ */
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
 </script>
 </body>
